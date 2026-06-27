@@ -1,0 +1,91 @@
+"""metric.py — the FROZEN scorer for {{CAMPAIGN_TITLE}}.
+
+FROZEN: the scoring math here is the campaign's single source of truth. Do NOT edit it to change a
+number without re-validation + user sign-off (see docs/program.md). You change what FEEDS the metric
+(registration, params, preprocessing, decoder, design, …), never how it is computed.
+
+Primary metric: {{PRIMARY_METRIC}}  ({{PRIMARY_DIRECTION}} = better).
+
+Run `python scripts/metric.py --selftest` before trusting any ranking — it must pass (it gates
+experiment 000). The self-test is what catches a silent convention/sign/units slip.
+"""
+from __future__ import annotations
+
+import argparse
+import numpy as np
+
+# Direction of improvement, taken from the campaign metric. Drives every "is this better?" comparison
+# below so a lower-is-better metric (residual, chi-square, error) needs no hand-edited asserts.
+PRIMARY_DIRECTION = "{{PRIMARY_DIRECTION}}"   # "higher" or "lower" — filled at campaign setup
+HIGHER_IS_BETTER = PRIMARY_DIRECTION.strip().lower().startswith("high")
+
+
+def _better(a: float, b: float) -> bool:
+    """True if score `a` beats score `b` under this metric's direction ({{PRIMARY_DIRECTION}} = better)."""
+    return a >= b if HIGHER_IS_BETTER else a <= b
+
+
+def compute_metric(prediction, target, **kwargs) -> float:
+    """Return {{PRIMARY_METRIC}} comparing `prediction` to `target`. {{PRIMARY_DIRECTION}} = better.
+
+    TODO(campaign): implement the FROZEN scoring math. Keep it pure (no I/O, no global state) and
+    deterministic. Assert finiteness of the result; a metric computed on a non-finite or
+    non-converged input is noise, not data.
+    """
+    raise NotImplementedError(
+        "Implement the FROZEN scoring math in compute_metric(), then make --selftest pass."
+    )
+
+
+def _no_skill_floor(target, **kwargs) -> float:
+    """The metric value a scrambled / random prediction should collapse to (the no-skill floor).
+
+    TODO(campaign): define what 'no skill' means for this metric (e.g. predicting the mean, a random
+    state, or zeros). Used by the null-control check below.
+    """
+    raise NotImplementedError("Define the no-skill floor for the null-control self-test.")
+
+
+def selftest() -> None:
+    """Freeze the scorer behind asserted invariants. MUST pass before experiment 000.
+
+    Two universal checks (add domain-specific ones):
+      1. PERFECT case — prediction == target scores at the optimal end of the metric.
+      2. NULL control — a scrambled / random prediction collapses to the no-skill floor. A 'win' that
+         survives scrambling is scoring leakage, not signal.
+    """
+    rng = np.random.default_rng(0)
+
+    # TODO(campaign): build a small, known (prediction, target) pair for this campaign.
+    target = rng.standard_normal((8, 8))
+    perfect = target.copy()
+    scrambled = rng.standard_normal(target.shape)
+
+    s_perfect = compute_metric(perfect, target)
+    assert np.isfinite(s_perfect), "metric returned a non-finite value on the perfect case"
+
+    # 1. Perfect prediction is optimal (direction-aware: set by PRIMARY_DIRECTION above).
+    s_scrambled = compute_metric(scrambled, target)
+    assert _better(s_perfect, s_scrambled), (
+        "perfect prediction did not score better than a scrambled one "
+        f"(perfect={s_perfect}, scrambled={s_scrambled}) — check the sign/convention"
+    )
+
+    # 2. Null control: scrambled input collapses to the no-skill floor (within tolerance).
+    floor = _no_skill_floor(target)
+    assert abs(s_scrambled - floor) < 0.1 * (abs(floor) + 1.0), (
+        f"scrambled input did not collapse to the no-skill floor (got {s_scrambled}, floor {floor}) "
+        "— possible scoring leakage"
+    )
+
+    print("metric selftest: PASS")
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description="FROZEN metric for {{CAMPAIGN_TITLE}}")
+    ap.add_argument("--selftest", action="store_true", help="run the asserted invariants and exit")
+    args = ap.parse_args()
+    if args.selftest:
+        selftest()
+    else:
+        ap.print_help()

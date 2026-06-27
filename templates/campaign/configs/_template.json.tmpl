@@ -1,0 +1,18 @@
+{
+  "_comment": "TEMPLATE config for {{CAMPAIGN_TITLE}}. DO NOT RUN. Copy to exp<NN>_<slug>.json and override per experiment (ONE lever changed vs current best). Use ABSOLUTE paths so the config is reproducible regardless of working directory.",
+  "exp_name": "exp{{NN}}_{{SLUG}}",
+  "seed": {{DEFAULT_SEED}},
+
+  "_narrative": "--- written at the HYPOTHESIZE step; auto-logged to results/logbook.md ---",
+  "_hypothesis": "why this change should move {{PRIMARY_METRIC}} the right way",
+  "_predicted": "expected {{PRIMARY_METRIC}} ~ <point> in [lo, hi]; basis = units / bound / prior run",
+
+  "_inputs": "--- data / problem inputs ---",
+  {{INPUT_PATH_FIELDS}},
+
+  "_method": "--- the LEVERS for this experiment ---",
+  {{METHOD_FIELDS}},
+
+  "_run": "--- run / cost controls (obey the caps in docs/program.md) ---",
+  {{RUN_FIELDS}}
+}

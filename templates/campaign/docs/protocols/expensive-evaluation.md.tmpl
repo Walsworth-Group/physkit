@@ -1,0 +1,41 @@
+# Protocol — Expensive evaluations ({{CAMPAIGN_TITLE}})
+
+Fires when **each evaluation is costly** — a long simulation, an FEM/CFD solve, a hardware run, a large
+training job. When evaluations are cheap, ignore this and exploit the speed (replicate freely). When they
+are expensive, the real figure of merit is **spending the evaluation budget well**, not just the final
+quality — so track and economize it deliberately. Draws on `docs/SIMULATION_VALIDATION.md` §5.
+
+## Track the evaluation budget as a first-class metric
+- **Count expensive evaluations** (sim calls / hardware runs / training jobs) and report them alongside the
+  quality metric. "Reached quality Q in N evaluations" — N is half the result.
+- **Benchmark sample-efficiency against a strong classical baseline** (e.g. NSGA-II, Bayesian optimization,
+  a random/grid search) on *both* final quality *and* evaluation count. "Fewer expensive evaluations than
+  {{CLASSICAL_BASELINE}}" is the physics-relevant win; quality alone, ignoring budget, hides the cost.
+- Log per-evaluation cost (wall-clock / $ / sample) so the budget is auditable.
+
+## Spend the budget well
+- **Tier by fidelity (scout → confirm → extended).** Screen candidates with the cheapest evaluation that
+  discriminates; spend full-fidelity evaluations only on survivors. Never conclude from toy-scale alone —
+  but never burn a full run where a cheap one would have filtered the candidate.
+- **Pre-screen with a cheaper proxy** where one exists — a surrogate, a reduced-order model, a coarser grid,
+  a digital twin — then confirm winners at full fidelity. (Validate the proxy against the true evaluator;
+  surrogate errors mislead the search — `SIMULATION_VALIDATION.md` §6.)
+- **Diminishing-returns stopping.** Detect convergence and **stop**, rather than burning a fixed budget
+  regardless. Define the stop up front: {{STOP_CRITERION}} (e.g. "< {{MIN_DELTA}} improvement over the last
+  {{PATIENCE}} evaluations"). A quality-based stop complements the hard run caps.
+- **Don't default to the biggest/hottest configuration.** Test model size / temperature / resolution as
+  levers — a smaller, cheaper setting sometimes wins on constraint satisfaction and consistency.
+
+## Don't waste an expensive evaluation
+- **Predict before you run** (a-priori bound) so the evaluation is a real test, not a fishing trip — and so
+  a surprising result is flagged immediately.
+- **In-loop feasibility gate:** reject a candidate that won't converge / is infeasible *before* paying for a
+  full evaluation of it (a non-converging solve scored anyway just optimizes noise).
+- **Save the expensive output** (`protocols/artifacts.md` quicker-check artifacts) so a result can be
+  re-checked without re-running, and the verifier can work from saved artifacts on a long run.
+- **For hardware / irreversible evaluations:** confirm before any destructive action; interleave/randomize
+  A/B comparisons against drift; pre-screen with a forward model. (See `program.md` hardware section.)
+
+## Record
+Log the running evaluation count + budget and the sample-efficiency comparison in the JOURNAL / scoreboard;
+note the stopping decision and its trigger when you stop a direction.

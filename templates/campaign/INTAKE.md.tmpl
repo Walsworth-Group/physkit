@@ -1,0 +1,61 @@
+# Campaign Intake — {{CAMPAIGN_TITLE}}
+
+> **Optional input form.** This is an alternative to the live interview: a pre-filled questionnaire you can
+> edit in a real text editor (easier than long terminal answers — paste references and equations freely).
+> The agent fills what it can detect/harvest and leaves blanks where it needs you; you edit, then the agent
+> **reads it back and asks only about what's still blank or ambiguous.** Blanks mean "ask me" or "you
+> decide" — both handled gracefully. This same form is the **framing artifact** shared with `frame-problem`,
+> so filling it once avoids a double-interview.
+>
+> Delete the form once the campaign is scaffolded, or keep it as the record of how the campaign was framed.
+
+## 1. Goal & the decision it drives
+- **Goal (concretely):** {{GOAL_PROPOSED}}
+- **The decision/outcome this serves:** {{DECISION_PROPOSED}}
+- **Explicitly out of scope / not claimed:** {{OUT_OF_SCOPE}}
+
+## 2. Loosely-held expectations (so we can test them)
+- **What I expect to find / suspect is true:** <…>
+- **What I'd try first if I were doing this by hand:** <…>
+- **Where this sits vs the literature (what's known, what gap this fills):** {{LIT_POSITIONING}}
+
+## 3. Physics inventory (proposed — correct it)
+Effects that could matter, tagged. The agent proposes; you fix. *(→ graduates to `docs/PHYSICS.md`.)*
+| Effect | accounted-for / negligible-by-scale / out-of-scope / deferred / unknown | Why (number where "negligible") |
+|---|---|---|
+| {{EFFECT_1}} | {{TAG_1}} | {{WHY_1}} |
+| <…> | <…> | <…> |
+- **A-priori bound on the key answer (ceiling/floor/order):** {{APRIORI_BOUND}}
+- **Domain of validity / key assumptions:** {{DOMAIN_ASSUMPTIONS}}
+
+## 4. The metric (proposed — co-design)
+- **Primary metric + direction:** {{PRIMARY_METRIC_PROPOSED}}  ({{PRIMARY_DIRECTION}} = better)
+- **How it's computed / scorer:** {{SCORER_PROPOSED}}
+- **Guardrail(s) (necessary-not-sufficient):** {{GUARDRAIL_PROPOSED}}
+- **Hard bounds / known ceilings:** {{BOUNDS_PROPOSED}}
+
+## 5. Levers & what's frozen (proposed)
+- **Levers (what the loop may change):** {{LEVERS_PROPOSED}}
+- **FROZEN (never edit without sign-off — scoring math, core physics, data):** {{FROZEN_PROPOSED}}
+- **READ-ONLY / MUTABLE:** {{TIERS_PROPOSED}}
+
+## 6. Data
+- **Source(s) + provenance (path / instrument / generator + seed):** {{DATA_PROPOSED}}
+- **Is it fixed, or will more arrive?** <…>
+
+## 7. Compute & time
+- **Per-evaluation cost (the real constraint):** {{EVAL_COST}}
+- **Compute budget / wall-clock available:** <…>
+- **Is each evaluation expensive enough to need the `expensive-evaluation` protocol?** {{EXPENSIVE_EVAL_FLAG}}
+
+## 8. Verification — application-specific (capture now)
+The field-standard checks, known artifacts/gotchas, and benchmark comparisons for *this* problem.
+*(→ seeds `VERIFICATION_PLAN.md` / the tailored `SIMULATION_VALIDATION.md`.)*
+- **Checks that establish a result is right here:** {{APP_VERIFICATION_TASKS}}
+- **Known gotchas / artifacts to guard against:** {{KNOWN_GOTCHAS}}
+- **Validation data (held out — for `validation`, not calibration):** {{VALIDATION_DATA}}
+
+## 9. Logistics
+- **Version control:** {{GIT_CHOICE}}  *(offered, not imposed — snapshots are the reproducibility baseline either way; see `docs/reference/version-control.md`)*
+- **Literature search:** {{LITERATURE_LEVEL}}  (off / only-when-stuck / extensive)
+- **Anything else the agent should know:** <…>

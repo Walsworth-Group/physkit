@@ -1,0 +1,237 @@
+"""run_campaign.py — the experiment runner for {{CAMPAIGN_TITLE}}.
+
+Runs ONE experiment from a config and writes the full reproducible record. This file is MUTABLE — add
+forwards / decoders / preprocessors / search strategies here; it is the plumbing, not the FROZEN
+scoring math (that lives in scripts/metric.py).
+
+Usage:
+    python scripts/run_campaign.py --baseline                       # experiment 000 (the floor gate)
+    python scripts/run_campaign.py --config configs/exp007_foo.json # one experiment
+
+Every run MUST leave behind, for reproducibility:
+    configs/exp<NN>_<slug>.json  ·  a results/scoreboard.tsv row  ·  results/result_<NN>.json
+    ·  at least one figure in results/images/  ·  a tee'd log in results/diagnostics/
+    ·  a reproducibility snapshot in results/snapshots/exp<NN>_<slug>/ (the config + a copy of scripts/)
+    ·  an entry appended to results/logbook.md (this script appends the FACTS automatically; the agent
+       completes the narrative slots — Analysis / Verification / NEXT — afterward)
+A result is not "saved" until it has a scoreboard row, a result_<NN>.json, its figure, AND its snapshot.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as _dt
+import json
+import shutil
+import sys
+from pathlib import Path
+
+import numpy as np
+
+import metric  # the FROZEN scorer (compute_metric, selftest)
+
+ROOT = Path(__file__).resolve().parent.parent
+RESULTS = ROOT / "results"
+DIAG = RESULTS / "diagnostics"
+IMAGES = RESULTS / "images"
+SCOREBOARD = RESULTS / "scoreboard.tsv"
+SNAPSHOTS = RESULTS / "snapshots"
+LOGBOOK = RESULTS / "logbook.md"
+
+
+class _Tee:
+    """Mirror stdout to a per-run log so a result never lives only in the console."""
+
+    def __init__(self, log_path: Path):
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._log = open(log_path, "w", encoding="utf-8")
+        self._stdout = sys.stdout
+
+    def write(self, s):  # noqa: D401
+        self._stdout.write(s)
+        self._log.write(s)
+
+    def flush(self):
+        self._stdout.flush()
+        self._log.flush()
+
+
+def _utc_stamp() -> str:
+    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def load_config(path: Path) -> dict:
+    """Load and lightly validate an experiment config (the reproducible record)."""
+    cfg = json.loads(Path(path).read_text(encoding="utf-8"))
+    assert "exp_name" in cfg, "config is missing 'exp_name'"
+    return cfg
+
+
+def snapshot_experiment(cfg: dict, config_path: Path | None = None) -> Path:
+    """Preserve everything needed to reproduce this experiment even after the code/config later change.
+
+    BASELINE requirement, every experiment (see docs/protocols/artifacts.md): copy the mutable code
+    (scripts/) and the config into results/snapshots/<exp_name>/, plus a manifest with the command line
+    and key library versions. A shared script edited later would otherwise make this experiment
+    irreproducible.
+    """
+    dst = SNAPSHOTS / cfg["exp_name"]
+    dst.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(ROOT / "scripts", dst / "scripts",
+                    ignore=shutil.ignore_patterns("__pycache__"), dirs_exist_ok=True)
+    if config_path is not None:
+        shutil.copy2(config_path, dst / "config.json")
+    else:
+        (dst / "config.json").write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    (dst / "manifest.txt").write_text(
+        f"argv: {' '.join(sys.argv)}\npython: {sys.version.split()[0]}\nnumpy: {np.__version__}\n"
+        f"utc: {_utc_stamp()}\n",
+        encoding="utf-8",
+    )
+    return dst
+
+
+def run_experiment(cfg: dict) -> dict:
+    """Execute the method described by `cfg` and return its prediction + any intermediates.
+
+    TODO(campaign): this is where the LEVERS live — registration / forward / preprocessing / decoder /
+    design / training, dispatched on fields in `cfg`. Keep side effects isolated; return arrays.
+    """
+    raise NotImplementedError("Implement run_experiment() — dispatch the method from the config.")
+
+
+def load_target(cfg: dict):
+    """Load the evaluation target (the data the metric scores against).
+
+    TODO(campaign): for a fixed-data campaign, read the experimental data here (READ-ONLY).
+    """
+    raise NotImplementedError("Implement load_target() — load the data the metric scores against.")
+
+
+def guardrail(prediction, cfg: dict) -> dict:
+    """Compute the co-tracked guardrail ({{GUARDRAIL_METRIC}}); logged, NOT primary.
+
+    TODO(campaign): implement the necessary-but-not-sufficient check (sanity / overfit / robustness).
+    Return a dict of named diagnostics.
+    """
+    return {}  # TODO
+
+
+def save_figure(label: str, prediction, target, residual=None) -> Path:
+    """Save the standard per-experiment visualization (see docs/protocols/artifacts.md).
+
+    TODO(campaign): draw the panel(s) that make a result inspectable at a glance. Always save a
+    visualization of a notable result, even a tangent.
+    """
+    IMAGES.mkdir(parents=True, exist_ok=True)
+    out = IMAGES / f"{label}_summary.png"
+    # TODO(campaign): matplotlib figure -> out
+    return out
+
+
+def append_scoreboard_row(row: dict) -> None:
+    """Append ONE tab-separated row to results/scoreboard.tsv, in the header's column order.
+
+    Append-only; never delete or rename a column mid-campaign. A column missing from `row` is written
+    blank rather than shifting the schema.
+    """
+    header_line = None
+    for line in SCOREBOARD.read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#"):
+            header_line = line
+            break
+    assert header_line, "scoreboard.tsv has no header row"
+    cols = header_line.split("\t")
+    with open(SCOREBOARD, "a", encoding="utf-8") as f:
+        f.write("\t".join(str(row.get(c, "")) for c in cols) + "\n")
+
+
+def append_logbook(cfg: dict, exp_id: str, label: str, score: float, diags: dict) -> None:
+    """Append this experiment's entry to the append-only logbook (results/logbook.md).
+
+    The FACTS are filled automatically (metric, guardrail, artifact paths, and the hypothesis/prediction
+    read from the config); the agent completes the narrative slots (Analysis / Verification / NEXT)
+    afterward. Append-only: this never edits or reads the rest of the file.
+    """
+    entry = (
+        f"\n## {exp_id} - {label} - {_utc_stamp()}\n"
+        f"**Hypothesis**: {cfg.get('_hypothesis', '(set _hypothesis in the config)')}\n"
+        f"**Predicted**: {cfg.get('_predicted', '(set _predicted in the config)')}\n"
+        f"**Change**: {cfg.get('_comment', '')}\n"
+        f"**Result**: {{PRIMARY_METRIC}} = {score:.4f}; {{GUARDRAIL_METRIC}} = {diags}\n"
+        f"**Analysis**: \n**Verification**: \n**Disputes & responses**: \n**Status**: open\n"
+        f"**Artifacts**: results/result_{exp_id}.json . results/images/{label}_* . results/snapshots/{label}/\n"
+        f"**NEXT**: \n"
+    )
+    with open(LOGBOOK, "a", encoding="utf-8") as f:
+        f.write(entry)
+
+
+def evaluate_and_record(cfg: dict, prediction, target) -> dict:
+    """Score with the FROZEN metric, run the guardrail, and write result_<NN>.json (+ figure)."""
+    score = metric.compute_metric(prediction, target)
+    assert np.isfinite(score), "primary metric is non-finite — refuse to record a noise result"
+    diags = guardrail(prediction, cfg)
+
+    label = cfg["exp_name"]
+    residual = None  # TODO(campaign): prediction - target, if meaningful
+    fig = save_figure(label, prediction, target, residual)
+
+    result = {
+        "exp_name": label,
+        "{{PRIMARY_METRIC}}": float(score),
+        "guardrail": diags,
+        "utc": _utc_stamp(),
+        "config": cfg,
+    }
+    head = label.split("_", 1)[0]                       # "exp<NN>" from "exp<NN>_<slug>"
+    exp_id = (head[3:] if head.startswith("exp") else head) or "000"   # the number only, not slug digits
+    if exp_id.isdigit():
+        exp_id = exp_id.zfill(3)                         # zero-pad numeric ids (exp1 -> 001) so files sort/align
+    (RESULTS / f"result_{exp_id}.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+
+    append_scoreboard_row({
+        "exp_id": exp_id,
+        "timestamp": result["utc"],
+        "description": cfg.get("_comment", ""),
+        "{{PRIMARY_METRIC}}": f"{score:.4f}",
+        # TODO(campaign): fill the lever / guardrail / diagnostic + run-numeric columns from cfg + diags
+        # (run numerics = e.g. epochs, best_epoch, iterations, wall_clock, n_free_params, seed, n_reps)
+        "notes": "",
+    })
+    append_logbook(cfg, exp_id, label, score, diags)
+    print(f"[{label}] {{PRIMARY_METRIC}} = {score:.4f}  (figure: {fig.name}; logged to logbook.md)")
+    return result
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Experiment runner for {{CAMPAIGN_TITLE}}")
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--config", type=Path, help="run one experiment from this config")
+    g.add_argument("--baseline", action="store_true", help="run experiment 000 (the floor gate)")
+    ap.add_argument("--selftest", action="store_true", help="run the metric selftest first")
+    args = ap.parse_args()
+
+    if args.selftest:
+        metric.selftest()
+
+    if args.baseline:
+        # TODO(campaign): the simplest defensible baseline (see docs/protocols/baselines.md). It also
+        # validates the data/scoring chain end-to-end. Expected floor is in docs/program.md.
+        cfg = {"exp_name": "exp000_baseline", "_comment": "baseline gate"}
+    else:
+        cfg = load_config(args.config)
+
+    stem = cfg["exp_name"]
+    sys.stdout = _Tee(DIAG / f"{stem}_{_utc_stamp()}.log")
+    print(f"=== {stem} :: {{CAMPAIGN_TITLE}} ===")
+
+    snapshot_experiment(cfg, args.config if not args.baseline else None)
+    print(f"snapshot -> results/snapshots/{stem}/")
+
+    target = load_target(cfg)
+    prediction = run_experiment(cfg)
+    evaluate_and_record(cfg, prediction, target)
+
+
+if __name__ == "__main__":
+    main()

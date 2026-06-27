@@ -1,0 +1,21 @@
+# Protocol — Journal consolidation ({{CAMPAIGN_TITLE}})
+
+Fires when `results/JOURNAL.md` grows past ~150 lines (or {{CONSOLIDATE_TRIGGER}}). Keeps the working
+memory readable without losing the record.
+
+## What to do
+1. **The full record is safe — so trim freely.** Every entry already lives verbatim in
+   `results/logbook.md` (append-only) and the numbers in `results/scoreboard.tsv`. Consolidation only
+   prunes the JOURNAL *working window*; it loses nothing.
+2. **Graduate settled findings.** Any finding confirmed by multiple experiments AND an independent
+   verification (CONFIRMED) moves to `results/DISCOVERIES.md`.
+3. **Keep the live window.** Retain {{KEEP_WINDOW}} (e.g. the last ~10–15 experiments plus any open
+   thread, PROVISIONAL / QUESTIONABLE-ASSUMPTION finding, or unresolved dispute). **Drop** the older
+   entries from the JOURNAL entirely — they remain in the logbook; optionally leave a one-line pointer
+   (exp id → outcome).
+4. **Preserve the NEXT pointer** at the top so the loop resumes cleanly.
+
+**Append-only files are never edited or trimmed:** `results/logbook.md`, `results/scoreboard.tsv`, and
+the `results/diagnostics/` logs hold the full record permanently. Negative-result lessons and dispute
+records live there forever — keep the open ones in the JOURNAL window until resolved, but trimming the
+window never loses them.

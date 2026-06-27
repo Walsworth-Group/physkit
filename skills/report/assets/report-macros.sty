@@ -1,0 +1,31 @@
+% report-macros.sty — minimal, portable physics macros.
+% Deliberately siunitx / physics / braket FREE (those are not always installed),
+% so a report compiles on a base TeX Live with no package installs. Vendor this file alongside the .tex.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{report-macros}[2026/06/26 v0.1 portable physics macros (no siunitx/physics/braket)]
+\RequirePackage{amsmath}
+\RequirePackage{bm}
+\RequirePackage{mathtools}
+
+% --- Units (siunitx-free) ----------------------------------------------------
+%  \unit{nm} -> roman, thin-spaced;  \qty{5}{nm} -> "5 nm"
+\providecommand{\unit}[1]{\,\mathrm{#1}}
+\providecommand{\qty}[2]{#1\,\mathrm{#2}}
+
+% --- Bra-ket (braket/physics-free) ------------------------------------------
+\providecommand{\ket}[1]{\left\lvert #1 \right\rangle}
+\providecommand{\bra}[1]{\left\langle #1 \right\rvert}
+\providecommand{\braket}[2]{\left\langle #1 \middle| #2 \right\rangle}
+\providecommand{\ketbra}[2]{\left\lvert #1 \right\rangle\!\left\langle #2 \right\rvert}
+\providecommand{\expval}[1]{\left\langle #1 \right\rangle}
+
+% --- Calculus (physics-free) -------------------------------------------------
+\providecommand{\dd}{\mathrm{d}}
+\providecommand{\dv}[2]{\frac{\mathrm{d} #1}{\mathrm{d} #2}}
+\providecommand{\pdv}[2]{\frac{\partial #1}{\partial #2}}
+
+% --- Vectors / misc ----------------------------------------------------------
+\providecommand{\vb}[1]{\bm{#1}}                       % bold vector
+\providecommand{\abs}[1]{\left\lvert #1 \right\rvert}
+\providecommand{\order}[1]{\mathcal{O}\!\left(#1\right)}
+\endinput

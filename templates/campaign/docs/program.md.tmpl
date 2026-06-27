@@ -1,0 +1,393 @@
+# Autonomous Research Loop — {{CAMPAIGN_TITLE}}
+
+The **slim core** of the {{CAMPAIGN_KIND}} campaign protocol — what the agent re-reads **every
+iteration**. Rarely-fired procedures live in `docs/protocols/`. **Run continuously until manually
+stopped.**
+
+> This loop folds scientific-rigor best practices directly into each iteration: a-priori bounding of
+> expectations, uncertainty/error-type tracking, independent verification of every promotion, model
+> parsimony and tie-breaking, simulation-gap caution, and full provenance logging.
+> Items tagged **[PROPOSED]** are machine-suggested additions awaiting your review — keep or cut each.
+> Everything untagged is settled campaign doctrine.
+
+## Operating stance (applies to EVERY decision in the loop)
+- **Critically evaluate every decision.** {{DECISION_EXAMPLES}} — each is a hypothesis, not a given.
+  State why before you commit.
+- **Assume you are wrong until independently proven right.** A number that converged, looks clean, or
+  matches your hope is *suspect*, not *confirmed*. The burden of proof is on the positive result.
+- **Prefer the minimally sufficient model/design.** Reach for the simplest {{MODEL_NOUNS}} that
+  explains the data; add a parameter/term only when it earns its keep against the {{SPREAD_NOUN}}
+  spread, is physically/theoretically motivated, AND generalizes. (Near-universal — apply by default.)
+- **Use precise notation and units everywhere.** Name the quantity, its units, and its scale.
+  {{UNITS_EXAMPLE_LINE}}. Ambiguous notation is how sign/convention bugs survive (see
+  `docs/CONVENTIONS.md`).
+- **Track uncertainty as a first-class output.** No bare point estimates — every metric you act on
+  carries a spread (see Rigor). A result without an error bar is not yet a result.
+- **Honesty is non-negotiable.** Report only numbers you actually computed from a real run — never
+  estimate or fabricate. Truth matters more than a win: communicate openly even when results disappoint,
+  keep every promise, and never fabricate a citation (full integrity doctrine: docs/PRINCIPLES.md).
+
+## Mission
+{{MISSION_STATEMENT}} — by optimizing {{LEVER_SUMMARY}}, maximizing the single FROZEN metric
+**`{{PRIMARY_METRIC}}`** ({{PRIMARY_DIRECTION}} = better) on {{EVAL_TARGET}}, with
+{{GUARDRAIL_SUMMARY}} co-tracked as a guardrail (necessary-but-not-sufficient). **Run continuously
+until manually stopped.**
+
+## The ONE metric (FROZEN — never edited mid-campaign)
+`{{PRIMARY_METRIC}}` = {{METRIC_DEFINITION}}. {{PRIMARY_DIRECTION}} = better. Computed by
+`{{FROZEN_SCORER_PATH}}` (FROZEN). **You change what FEEDS the metric, never how it is computed.**
+- **Hard bounds:** {{METRIC_HARD_BOUNDS}}.
+- **Plausible a-priori range:** {{METRIC_PLAUSIBLE_RANGE}} — predict before you run; a result OUTSIDE
+  this range is a red flag to investigate, not a triumph.
+- **Baseline (exp 000):** {{BASELINE_DESCRIPTION}} → the floor to beat. Measure it; don't assume it.
+  Also keep the **trivial/degenerate reference** scores (all-zeros / constant / mean / a trivial physical
+  state): a result that loses to a trivial answer is not a win, and a *non-physical* trivial answer that
+  wins flags a metric/units error (protocols/baselines.md).
+[[OPTIONAL — metric has theoretical ceilings (e.g. an upper bound any decoder can reach under a fixed forward):
+- **Ceilings:** {{CEILING_LIST}}. A score above its own ceiling is impossible → a bug or a metric
+  leak, not a breakthrough. Distinguish **ceiling moves** (the bound itself rose — physical) from
+  **gap-to-ceiling moves** (a freer model closed the gap — often overfitting; must pass the guardrail).
+]]
+
+### Metric integrity — don't move the goalposts, don't unfairly punish a valid model
+The metric is **gameable**: the most dangerous wins are where you changed *what the metric sees*, not how
+well the system is recovered. Two opposite failures share one root cause — a mismatch between what is
+measured and true performance:
+
+**(1) The metric unfairly FLATTERS a result (goalpost-moving).** Before trusting ANY score, ask:
+- Did this experiment change anything the metric/guardrail *consumes* ({{METRIC_INPUTS}}) in a way that
+  flatters the number without improving true performance? A score is comparable to baseline only if the
+  metric saw the same kind of input.
+- Is it apples-to-apples with exp 000 — same {{COMPARABILITY_AXES}}, same scoring path? If not, part of
+  the delta is the change in measurement, not the method.
+- **[PROPOSED]** Null-control: feed the scorer a scrambled/random input; it must collapse to its no-skill
+  floor. A "win" that survives scrambling is leakage, not signal.
+
+**(2) A guardrail unfairly PUNISHES a valid run.** A *structurally incompatible* check — one hard-wired
+to an assumption an allowed lever legitimately changed — measures the *mismatch*, not a real failure.
+When you suspect this:
+- **FLAG it** in the JOURNAL + scoreboard notes — never silently accept the penalty or work around it.
+- **Build a FAIR evaluation** that reflects the run's actual settings and re-score. The fix must be more
+  *faithful* to what was tested, never merely more *lenient* — if you can't tell which, you're probably
+  gaming it; keep it flagged.
+- **Mark resulting findings PROVISIONAL** until the fairness is independently reviewed/verified; only
+  then may they graduate to DISCOVERIES.
+- **Hard boundary:** you may adapt the **mutable guardrails / diagnostics** for fairness; you may NEVER
+  edit the FROZEN primary metric, the data, or known ground truth.
+
+## The Experiment Loop
+```
+Experiment 000 (ONCE, before the loop): BASELINE GATE
+   {{BASELINE_COMMAND}}
+   -> establishes {{PRIMARY_METRIC}} ≈ {{BASELINE_VALUE}} (the floor) AND validates the
+      {{VALIDATION_CHAIN}} chain end-to-end. Record in scoreboard + JOURNAL. (protocols/baselines.md)
+
+WHILE not interrupted:
+  1. HYPOTHESIZE & PREDICT — Pick ONE lever (below). BEFORE running, write the EXPECTED
+                    {{PRIMARY_METRIC}} (a point value AND a plausible range) and WHY, grounded in
+                    units, physical bounds, and prior runs. The prediction is the control on your bias.
+  2. IMPLEMENT    — {{IMPLEMENT_VERB}}; new config configs/exp<NN>_<slug>.json (copy _template.json). ONE
+                    lever per experiment.
+  3. {{RUN_STEP_NAME}}  — {{RUN_COMMAND}}   (the FROZEN metric; OBEY the caps below).
+  4. EVALUATE     — {{PRIMARY_METRIC}} (PRIMARY) + {{SECONDARY_METRICS}} via {{EVAL_WRITER}}.
+  5. {{SANITY_STEP}}    — {{GUARDRAIL_CHECK}} (logged, NOT primary).
+  6. LOG          — append a row to results/scoreboard.tsv (schema below).
+  7. ANALYZE      — Did {{PRIMARY_METRIC}} move by MORE than the {{SPREAD_NOUN}} spread? Land inside
+                    your predicted range (if not, STOP and explain before moving on)? Did the
+                    guardrail hold? Is the effect statistical or systematic?
+  8. ARTIFACTS    — EVERY experiment: save {{ARTIFACT_LIST}}, a cheap visualization, AND the
+                    reproducibility bundle (config + code snapshot) under results/snapshots/exp<NN>_<slug>/.
+                    Noteworthy results get additional visualizations. (protocols/artifacts.md)
+  9. UPDATE       — the runner already appended this experiment's FACTS to results/logbook.md; COMPLETE
+                    that entry's narrative (Analysis / Verification / NEXT) + add its results/INDEX.md row
+                    + a one-line note in the results/JOURNAL.md steering view; graduate settled findings
+                    to DISCOVERIES.md only after independent verification; update docs/PHYSICS.md if a
+                    finding changes the physics.
+ 10. CONSOLIDATE  — if JOURNAL > ~150 lines, trim to recent + open threads (protocols/journal_consolidation.md).
+ 11. CHECKPOINT   — if exp_id % {{CHECKPOINT_EVERY}} == 0, run protocols/checkpoint.md.
+ 12. REPEAT
+```
+
+## Bound expectations BEFORE you run (a-priori prediction)
+Predicting the answer first turns each run into a real test instead of a fishing trip, and it is the
+fastest way to catch bugs, leakage, and good-news-too-good results.
+- **Compute a defensible range in advance** from physical units, known system properties, and the
+  literature — not from hope. {{APRIORI_BOUND_NOTES}}.
+- **Respect physical bounds and scales.** {{PHYSICAL_BOUNDS_NOTES}}. A fitted parameter that runs to a
+  non-physical value is a result *about the model being wrong*, not a free win.
+- **Update the bounds as understanding improves** — but treat any result that lands OUTSIDE your
+  predicted range as a red flag deserving extra scrutiny. **Do not move on until you understand the
+  source of the surprise.** "It went up more than I thought it could" is the single most common
+  signature of a leak or an accounting error.
+- **Calibrate disagreement with the literature by its weight.** A conflict with a few high-uncertainty
+  papers may mean your data wins; a conflict with a well-established, tightly-measured value means
+  assume the error is yours until proven otherwise — quantify the *magnitude* (how many σ, what
+  fractional difference), not just the sign.
+
+## {{RUN_NOUN}} Caps (HARD, never exceed)
+| Tier | Target | HARD MAX | When |
+|------|--------|----------|------|
+| **Scout** | {{SCOUT_TARGET}} | {{SCOUT_MAX}} | Default for any new idea |
+| **Confirmation** | {{CONF_TARGET}} | {{CONF_MAX}} | Promising scouts, every {{CONF_CADENCE}} exps |
+| **Extended** | {{EXT_TARGET}} | {{EXT_MAX}} | Primary still improving at confirmation length |
+
+Cost unit = {{COST_UNIT}}.
+[[OPTIONAL — experiments are cheap/fast (seconds–minutes, e.g. a closed-form solve or short fit):
+Experiments here are CHEAP ({{COST_NOTE}}) — **never judge an idea from a single run.** Exploit the
+speed: replicate with seeds/perturbed params and report the spread (see Rigor).
+]]
+
+## The levers (what the agent CAN change — change ONE per experiment)
+{{LEVERS_LIST}}
+
+Roughly orthogonal families: {{LEVER_CATEGORIES}}. After a plateau, escalate to an ORTHOGONAL lever —
+do not keep tweaking one knob.
+
+### Choosing among levers and models (parsimony + tie-breaking)
+- **Could another model/parameterization explain the data equally well?** If two options fit
+  comparably they are degenerate on this metric — prefer the simpler, and design a discriminating test
+  rather than declaring a winner by a coin-flip-sized margin.
+- **When two options tie within the spread, break the tie deliberately** on the cost that matters
+  here: {{TIEBREAK_COSTS}} (computational time, parameter complexity, robustness across conditions,
+  interpretability). Don't add a knob you can't justify.
+- **A freer model that wins only by adding flexibility is the gap-to-ceiling trap.** Extra capacity
+  that closes the gap without raising the ceiling is usually overfitting.
+
+### Idea sources — novel ideas welcome, cite the borrowed ones
+You are explicitly **encouraged to pursue well-founded novel ideas that go beyond the published
+literature** — the campaign is not limited to known approaches. When a hypothesis DOES come from a
+specific source (a paper, a doc, the user), **cite that source** on the JOURNAL `Hypothesis` line (and in
+`LITERATURE.md` if it exists). Tracking where each idea came from is part of the record.
+
+## FROZEN / out of scope (NEVER change; NEVER ask for)
+- **FROZEN** (no edit without re-validation + user sign-off): the scoring math `{{FROZEN_SCORER_PATH}}`;
+  {{FROZEN_LIST}}; the experimental data (read-only).
+- **READ-ONLY** (use, don't edit): {{READONLY_LIST}}.
+- **MUTABLE**: {{MUTABLE_LIST}} (+ `configs/` — a new file per experiment).
+
+Do NOT pause to request more data, a different metric, or a radically different objective. Work
+strictly within the levers above.
+
+[[OPTIONAL — hardware-in-the-loop campaign (the loop drives real instruments):
+## Hardware safety & irreversibility
+- **Respect hardware limits as HARD constraints.** {{HARDWARE_LIMITS}}. A setpoint outside the safe
+  range is out of scope, never a lever — never exceed it to chase a number.
+- **Confirm before any hard-to-reverse or destructive action** (anything that could damage the sample
+  or instrument, or consume a limited resource). Hardware runs are expensive and often irreversible —
+  plan each one; you cannot cheaply re-run. Pre-screen candidates with a forward model / digital twin
+  where one exists.
+- **Beat drift: interleave/randomize comparisons** (A-B-A) rather than all-A-then-all-B, so calibration
+  or condition drift is not read as an effect; keep key parameters fixed and fair between compared runs.
+- **Rule out measurement artifacts before claiming a real effect** — re-check calibration and baseline
+  first. The primary metric carries statistical AND systematic error; never act on a single read.
+- **Log the full instrument + environment state every run** (settings, calibration, firmware,
+  conditions — the "thermostat in the box").
+]]
+
+## Decision / promotion
+- **PRIMARY** (cross-experiment ranking, "current best"): `{{PRIMARY_METRIC}}`. {{PRIMARY_REPORT_RULE}}
+- **SECONDARY guardrail**: `{{GUARDRAIL_METRIC}}` — used for {{GUARDRAIL_USE}}.
+- **Diagnostic**: {{DIAGNOSTIC_METRICS}}.
+
+**Promotion rule.** A config becomes "current best" ONLY if it (1) improves `{{PRIMARY_METRIC}}` by
+more than the {{SPREAD_NOUN}} spread, (2) does not materially worsen `{{GUARDRAIL_METRIC}}`, (3) is no
+less parsimonious without justification, AND (4) survives independent verification (next section).
+{{PROMOTION_CONFIRM_RULE}}
+[[OPTIONAL — metric has ceilings:
+Distinguish **ceiling moves** (forward/registration/preprocessing raised the bound — real, physical)
+from **gap-to-ceiling moves** (a freer decoder closed the gap — check the guardrail, often overfitting).
+]]
+On promotion to current-best, update `configs/RECOMMENDED.json` to point at the promoted config and save
+the full artifact set (protocols/artifacts.md). Keep the artifacts for each successive best so the
+progression is inspectable.
+
+## Independent verification — assume the result is WRONG and try to REFUTE it
+Convergence is not correctness. Before any finding is graduated to DISCOVERIES.md or accepted as
+current-best, it must be independently re-derived. **The campaign's verification plan
+(`docs/VERIFICATION_PLAN.md`, or the tailored `SIMULATION_VALIDATION.md` for sim-heavy work) lists the
+application-specific checks decided at setup** — `verify` reads them; `correctness-suite` encodes the
+checkable ones as standing regression gates.
+- **Validate every fit even when it converged cleanly** — re-run from the config, recompute the metric
+  from scratch, confirm it reproduces within tolerance.
+- **Falsify with code, not prose, and confirm the numbers are real.** Write verification scripts and
+  controls (edge cases, randomized inputs, counterexamples) rather than arguing in text; and confirm
+  every reported number was actually produced by the evaluation — re-run it (e.g. re-run inference on the
+  test set), never trust a number that was only stated.
+- **Spawn an independent agent to refute it.** Use the **`{{VERIFY_SKILL}}`** skill: it dispatches a
+  fresh agent instructed to *assume the result is wrong* — re-runs the experiment, recomputes
+  `{{PRIMARY_METRIC}}` and the guardrail, replicates with perturbed params, checks for metric
+  contamination{{VERIFY_EXTRA_CHECKS}}, and returns CONFIRMED / PROVISIONAL / QUESTIONABLE ASSUMPTION /
+  REFUTED / INCONCLUSIVE
+  with evidence. A promotion is not real until this returns CONFIRMED. Run that verifier on a model **at
+  least as capable** as the loop — a *different* capable model is ideal (more mechanism diversity), **never
+  weaker** (a weak verifier yields false CONFIRMs). Mechanical sub-tasks the loop delegates — search,
+  citation checks, figure generation, validation — can run on a lighter model, since a deterministic gate
+  or your own read catches a slip.
+- **Scale verification to the run cost.** When an experiment is **fast**, reproduce it fully and add
+  multiple seeds + a statistical test. When it is **long/expensive** and a full re-run isn't practical,
+  the verifier instead scrutinizes the **code and the conclusions/logic** and re-checks the **saved
+  artifacts** (models / data / logs) rather than re-running from scratch — which is why those artifacts
+  must be saved (see "Where everything is saved"). The verify skill adapts its depth to the runtime.
+- **Verify the FAIRNESS of any adapted evaluation.** If a result relied on an adapted guardrail (see
+  "The opposite failure" above), the verifier must judge whether the adaptation was *faithful* or
+  merely *lenient*. Such findings stay PROVISIONAL until that judgment returns "faithful".
+- **Record disputes — append-only.** Log every issue the verifier (or the user) raises in the
+  experiment's JOURNAL `Disputes & responses` line, each with your response. **Never delete a raised
+  issue; rebut it if you disagree.** These records are part of the project's scientific integrity.
+
+## Rigor — replicate before you conclude
+- **Replicate with perturbed parameters AND, for any stochastic step, multiple seeds** to tell a real,
+  robust effect from run-to-run noise. A change smaller than the replicate spread is not a result.
+- **Could the effect be a seed/init artifact?** Confirm with multiple seeds/inits before ANY hard
+  conclusion, positive or negative.
+- **Track error and separate its kinds.** Report each metric with a spread; distinguish *statistical*
+  error (shrinks with more seeds/frames — run more) from *systematic* error (a convention, pose, or
+  calibration bias — more runs won't help; find and fix the cause). {{SYSTEMATIC_AXIS_NOTE}}
+- **Use a statistical test, not eyeballing, for close calls.** Compare per-{{UNIT}} distributions
+  (paired) rather than two point means; "different" must clear the spread.
+- **[PROPOSED] Define and report effect size.** State the minimum meaningful Δ`{{PRIMARY_METRIC}}`
+  (≥ 2× the replicate std) up front, and report deltas as `Δ ± spread`.
+- **This is REQUIRED before** (a) graduating a finding to DISCOVERIES.md, or (b) permanently writing
+  off an approach. One run never justifies either.
+
+## Decision-making guidelines
+- **Primary up, guardrail holds** → log, queue a confirmation / seed-repeat.
+- **Only {{CHEAP_SUBGROUP}} improved** → cheap/near-trivial; not a real win, keep exploring.
+- **Primary up, guardrail degraded** → suspect {{OVERFIT_MODE}}; second seed / control.
+- **Flat/ambiguous** → after 2–3 inconclusive scouts, move to an ORTHOGONAL lever.
+[[OPTIONAL — the campaign has a data/distribution choice that must be held fixed:
+- **{{DATA_CHOICE_WARNING}}** — changing {{DATA_DISTRIBUTION}} changes the target; hold it fixed unless
+  deliberately studying it (log the change loudly), at most a couple of early experiments.
+]]
+
+## Before writing off OR accepting a result (every result is suspect until cross-checked)
+**Before WRITING OFF an idea (a flat or negative result):** could it be implemented differently
+(parameterization, init, regularizer, optimizer, or the ORDER of steps)? Is there a bug/confound (a
+sign/convention slip, a pose/parameter mismatch, a degenerate setting)? Did it interact badly with a
+fixed choice that should co-vary (test the pair, not the part)? Was the effect within replicate noise?
+**A crash is a bug, not a verdict** — fix it and re-run before judging the idea. And don't over-dismiss
+weak signal as noise: real effects can be small/noisy, so gather more evidence before concluding "just noise."
+
+**Before ACCEPTING a positive result, ask the same, plus:** Did the experiment move the goalposts
+(re-check Metric integrity)? Did it land inside the range you predicted? Is it a ceiling move
+(physical) or a gap-to-ceiling move (suspect)? Does the guardrail pass? Does it generalize across the
+whole {{GENERALIZATION_AXIS}}, not a lucky subset? Confirm with ≥2–3 independent experiments AND an
+independent-agent verification before calling a method "best" or writing a DISCOVERY.
+
+### Mind the simulation-to-experiment gap
+{{SIM_GAP_NOTE}} Treat any guardrail resting on simulation/synthetic data as necessary-not-sufficient.
+Be especially wary of methods tuned against synthetic labels — they can learn the simulator's
+idiosyncrasies. Prefer gains that show up as *physical* improvements on the real data. When a
+conclusion depends on the simulation being faithful, say so explicitly and, where cheap, test
+sensitivity to its assumptions.
+
+### After a major discovery — re-open shelved directions
+A real win often changes what else is possible. When you confirm a new best, ask which
+previously-negative or untried directions might now behave differently, and budget a short
+re-exploration pass.
+
+## Getting Unstuck
+If {{STUCK_N}}+ experiments without a primary gain: re-read {{REANCHOR_DOCS}}; check whether the
+guardrail is also stuck (capacity/data-limited) or still moving (generalization-limited); escalate to
+the biggest unexploited structural lever ({{STRUCTURAL_LEVERS}}).
+- **Diagnose before you pivot.** Name the failure type (idea-wrong / implementation-capped /
+  fixed-choice-fought / near-miss) and take the **smallest jump** the diagnosis justifies along the
+  refine↔pivot spectrum — escalate to an orthogonal lever only once the current family is exhausted, but
+  do escalate decisively when it is. A crash is a bug (`debug`), not a verdict; a near-miss is a
+  gather-more signal, not a dead end. Full diagnosis: `docs/reference/pivoting.md`.
+
+[[OPTIONAL — literature search enabled (the user opted in to literature search):
+### Literature search rule
+**Intensity: {{LITERATURE_LEVEL}}.** Run a **web literature search** (6–10 queries covering the current
+bottleneck + the closest published analogues + any new techniques since the last search), then update
+`LITERATURE.md` (add/supersede sections, re-rank the Priority Roadmap, update the date) and log it in
+JOURNAL.md.
+- **When to search** depends on the intensity: *only-when-needed* → search when stuck; *extensive* →
+  also search proactively at the start of a new direction and periodically, not only when stuck.
+- Literature ideas are suggestions, not mandates — and you are encouraged to go beyond them with your own
+  well-founded novel ideas (see "Idea sources" above). Cite the source of any borrowed idea, verified
+  against the source (title, authors, year, venue, id); never fabricate a citation — flag it if you can't
+  confirm it.
+- **Be token-efficient.** Prefer the **arXiv** version of a paper — read its HTML (`ar5iv.org/abs/<id>`
+  or `arxiv.org/abs/<id>`) or LaTeX source for clean equations rather than a publisher PDF (paywalls,
+  access failures, heavy formatting). When only a PDF exists, convert it with a scientific-PDF→markdown
+  tool (e.g. `marker`, `nougat`, `docling`, or `pymupdf4llm`) and read only the relevant sections; cache
+  the converted text so you don't re-fetch/re-convert.
+]]
+
+## Logging Protocol
+### `results/scoreboard.tsv` (schema)
+`{{SCOREBOARD_COLUMN_LIST}}`
+PRIMARY = `{{PRIMARY_METRIC_COL}}`. This is the campaign's **quantitative record** (the JOURNAL is the
+narrative one): every experiment's numbers live here — the primary metric, every supplemental
+metric/sanity score, and the experiment-type **run numerics** (e.g. epochs trained + best epoch,
+iterations, wall-clock). Append-only; never delete or rename a column mid-campaign (it breaks
+comparability), and keep the PRIMARY column position stable. A new column requires the run-writer to
+emit it first. The `verified` column carries the independent-verification verdict (blank until run).
+(The full per-experiment breakdown is also saved to `results/result_<NN>.json`.)
+
+### `results/JOURNAL.md` (steering view)
+A lean view only — the NEXT pointer, open threads, and one line per recent experiment. Full narratives
+are NOT copied here; trimming it loses nothing.
+
+### `results/logbook.md` (append-only — the full narrative record)
+Every experiment's full entry, verbatim, forever. The **runner auto-appends the facts** of each entry
+(Hypothesis/Predicted from the config, Result, artifact paths); you **complete its narrative** (Analysis
+/ Verification / NEXT). **Append-only; never read in full** — grep or read a slice for a specific old
+detail.
+
+### `results/DISCOVERIES.md`
+Write only after multiple consistent experiments confirm a finding on `{{PRIMARY_METRIC}}` (guardrail
+noted) AND an independent verification returns CONFIRMED. When a discovery changes the physical
+understanding, also update `docs/PHYSICS.md` (equations, the effect, references consulted).
+
+### `results/INDEX.md`
+The navigable map of the campaign — one row per experiment linking it to its config, snapshot, result,
+figures, and status. Maintain it every experiment (loop step 9): the scoreboard holds the numbers, the
+index holds the pointers, so anything is findable from one place.
+
+### Where everything is saved (verify each is written every run)
+Per experiment — the **label** is the config stem `exp<NN>_<slug>`, which prefixes every artifact — ALL
+of these must exist: `configs/<label>.json` · a `scoreboard.tsv` row · `results/result_<NN>.json` ·
+`results/images/<label>_*` (the basic figure) · `results/snapshots/<label>/` (config + code copy) · a
+`results/logbook.md` entry · an INDEX row · a JOURNAL entry.
+**A result is not "saved" until it has a scoreboard row, a `result_<NN>.json`, its figure, AND its
+reproducibility snapshot.** Verify after each run; if a run died before writing them, treat it as
+not-done and re-run.
+- **Tee every run's stdout to a file:** `... > results/diagnostics/<stem>_<UTCstamp>.log 2>&1`. Never
+  rely on console scrollback surviving.
+- **Any diagnostic that yields an actionable number MUST be persisted the same turn** (append a line
+  to `results/diagnostics/<name>.jsonl` and record it + the producing script in JOURNAL.md). A console
+  print alone does not count as saved. Version diagnostic scripts; don't overwrite them in place.
+- **Log the conditions you were NOT varying** (the "thermostat in the box"): exact config, command
+  line, wall-clock, comparison baseline, and [PROPOSED] environment provenance (key library versions,
+  host, RNG seeds).
+- **Reproducibility is the invariant — every experiment (baseline).** For every experiment, the
+  *documentation of what was done* AND the *exact code + data to redo it* are preserved and **self-contained**
+  in a per-experiment snapshot `results/snapshots/<label>/` (config + the mutable code that produced it +
+  a manifest: command line, key library versions, RNG seed / data hash). A result is not "saved" until both
+  exist. Pin the *code* behind the number, not just the params — shared scripts get edited later. **Git is
+  optional** (recommended for shared/large projects); the per-experiment snapshot is the reproducibility
+  baseline either way (see `docs/reference/version-control.md`). Detail: protocols/artifacts.md.
+  {{CODE_SNAPSHOT_RULE}}
+- **Name everything by its experiment.** Every artifact — config, snapshot, result JSON, figure,
+  diagnostic log, saved model/data — is keyed by `<label>` (figures `results/images/<label>_*`), so every
+  file traces to one experiment and to its row in `results/INDEX.md`. No orphan files.
+- **Save quicker-check artifacts, not just the recipe.** Also save the expensive-to-recreate outputs
+  (model weights, generated datasets, computed operators) so a result can be *re-checked* quickly — and
+  so the verifier can check a long run — without rebuilding the pipeline. Key them by `<label>`; note
+  their location in `results/INDEX.md` (detail: protocols/artifacts.md).
+
+## Protocol Index
+| Protocol | Fires when | File |
+|----------|-----------|------|
+| Dataset / inputs | Fresh tree / new data | `protocols/dataset.md` |
+| Metric spec | Reasoning about the primary | `protocols/metric.md` |
+| Baseline gate | Experiment 000 | `protocols/baselines.md` |
+| Save artifacts | Every experiment, step 8 | `protocols/artifacts.md` |
+| Journal consolidation | JOURNAL > ~150 lines | `protocols/journal_consolidation.md` |
+| Periodic checkpoint | Every {{CHECKPOINT_EVERY}} exp | `protocols/checkpoint.md` |
+| Expensive evaluations | Each eval is costly (long sim / hardware / big train) | `protocols/expensive-evaluation.md` |
+{{EXTRA_PROTOCOL_ROWS}}
+
+(For a fixed-data campaign where `protocols/dataset.md` was deleted, drop the Dataset row above.)

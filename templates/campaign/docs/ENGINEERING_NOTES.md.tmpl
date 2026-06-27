@@ -1,0 +1,42 @@
+# Engineering Notes — {{CAMPAIGN_TITLE}}
+
+The **append-only record of engineering "why" decisions** — the reasoning behind non-obvious choices, the
+conditions each rests on, and what would make you revisit it. This is distinct from:
+- **`CONVENTIONS.md`** — the *rules* themselves (sign conventions, units, naming); this holds *why* a rule
+  was chosen.
+- **the experiment `JOURNAL` / `logbook`** — *what happened* per experiment; this holds *why a choice was
+  made*, which often spans experiments.
+
+Where `record-decision` entries land. **Append-only:** never rewrite history — supersede an old entry with
+a new one and link them. Record a decision when it is non-obvious and consequential and a future reader
+would otherwise have to reverse-engineer it (a method/library/parameterization choice, an approximation a
+result rests on, a non-obvious convention, an accepted trade-off, the *why* of a non-obvious verification
+check). Skip the obvious.
+
+> Each entry uses the five fields: **decision · alternatives · why · conditions · revisit-if.**
+> (Template + guidance: the `record-decision` skill.)
+
+---
+
+## ED-001 — <one-line title>
+**Date:** {{DATE}} · **Status:** active · **Area:** <method / model / convention / tooling / approximation>
+
+**Decision.** <what was chosen, concretely>
+
+**Alternatives considered.**
+- <Option B> — <why not, one line>
+- <do-nothing / Option C> — <one line>
+
+**Why this one.** <reasoning + trade-off, tied to the real constraints (compute, accuracy, fabrication,
+time, interpretability) and the evidence if any>
+
+**Conditions it depends on.** <the assumptions/regime that make this right — a parameter range, a data
+property, a compute budget, a deadline>
+
+**Revisit-if.** <the concrete trigger that should reopen this — e.g. "if we leave the dilute regime", "if
+the mesh exceeds 1e6 cells", "if validation data arrives">
+
+<!-- Related: see PHYSICS inventory entry / JOURNAL exp<NN> / [[other ED-###]] -->
+
+---
+<!-- Append ED-002, ED-003, … below. Never edit a closed entry; supersede it and link. -->

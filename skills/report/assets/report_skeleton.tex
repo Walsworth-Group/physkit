@@ -1,0 +1,108 @@
+% =====================================================================
+%  report_skeleton.tex — REVTeX skeleton for the `report` skill (capstone/shareable default).
+%
+%  COMPILE:  latexmk -pdf report_skeleton.tex
+%  REQUIRES (vendored alongside this file; no installs needed):
+%     revtex4-2.cls , apsrev4-2.bst , report-macros.sty , refs.bib , figs/
+%  NO LOCAL TeX?  ->  zip this folder and upload to Overleaf (full TeX, zero installs).
+%
+%  Substyle: two-column journal look = `reprint`. For a one-column DRAFT, swap `reprint` -> `preprint`.
+%  Quick INTERNAL drafts may instead use a plain `article` template (this skeleton is the capstone form).
+% =====================================================================
+\documentclass[
+  aps, prx,            % APS / Physical Review X substyle
+  reprint,             % two-column; use `preprint` for a one-column draft
+  amsmath, amssymb,    % load AMS the REVTeX-recommended way (as class options)
+  nofootinbib,
+  superscriptaddress,
+]{revtex4-2}
+
+\usepackage{graphicx}
+\usepackage{booktabs}          % + REVTeX's own \ruledtabular for journal tables
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{report-macros}     % vendored: siunitx/physics/braket-free macros
+
+\graphicspath{{figs/}}
+
+\begin{document}
+
+% ---- 1. Title / authors / abstract ----------------------------------------
+\title{\textsf{<Title — the claim, concretely>}}
+\author{<Author>}
+\affiliation{<Affiliation / lab>}
+\date{\today}
+
+\begin{abstract}
+% Headline result WITH its number + the one or two key evidence deltas. Honest:
+% lead with what is actually shown; state the band, not the optimistic edge.
+<abstract>
+\end{abstract}
+
+\maketitle
+
+% ---- 2. Introduction & objective ------------------------------------------
+\section{Introduction and objective}\label{sec:intro}
+% The problem; the goal and the decision it drives; what is claimed; position vs the literature
+% (what gap this fills, what NOT to claim).
+
+% ---- 3. Problem framing & scope  (from `frame-problem`) --------------------
+\section{Problem framing and scope}\label{sec:scope}
+% The physics MODEL: which effects are INCLUDED vs EXCLUDED, and WHY (the physics inventory —
+% negligible by scale / out of scope / deferred). Key assumptions and the domain of validity.
+% The decomposition / approach taken to the problem.
+
+% ---- 4. Physical & model parameters  (master parameter table) -------------
+\section{Physical and model parameters}\label{sec:params}
+% EVERY parameter that entered the result, with provenance + justification + uncertainty.
+\begin{table}[t]
+  \caption{\label{tab:params}%
+    All parameters entering the result. Provenance: user-given / fitted / first-principles /
+    simulation / assumed / literature. Justification is given per parameter in the text below.}
+  \begin{ruledtabular}
+  \begin{tabular}{l l l l l}
+    Symbol & Meaning & Value (unit) & Provenance & Uncertainty \\
+    \colrule
+    $<>$ & <> & $<>\unit{<>}$ & <fit/first-principles/sim/...> & $<\pm>$ \\
+    $<>$ & <> & $<>$          & <user-given>                   & --- \\
+  \end{tabular}
+  \end{ruledtabular}
+\end{table}
+% Then a paragraph each for the few parameters that matter most: the physics, the governing
+% equation, how the value was pinned (derivation / fit anchors / simulation), and the evidence.
+
+% ---- 5. Methods, pipeline & derivations -----------------------------------
+\section{Methods}\label{sec:methods}
+% End-to-end pipeline so it can be re-run. Derive what is specific to this work; cite standard
+% results rather than re-deriving. Define the metric / figure of merit precisely.
+
+% ---- 6. Verification & validation  (the report-time check + ledger) -------
+\section{Verification and validation}\label{sec:verify}
+% How correctness was established: the verification plan executed — analytic limits, numerical
+% convergence, independent-method parity, and any APPLICATION-SPECIFIC checks. Include the
+% VERIFICATION LEDGER: which load-bearing claims/values were re-checked, how, and the result.
+% Flag anything resting on a QUESTIONABLE ASSUMPTION or that is PROVISIONAL.
+
+% ---- 7. Results & evidence ------------------------------------------------
+\section{Results and evidence}\label{sec:results}
+% The evidence ledger (each claim -> its delta and source); the headline-result figure; what each
+% lever bought; uncertainty bands on every reported quantity.
+
+% ---- 8. (optional) Promising alternatives ---------------------------------
+% \section{Promising alternatives}\label{sec:alts}  % brief: the road not taken and why.
+
+% ---- 9. Reproducibility ----------------------------------------------------
+\section{Reproducibility}\label{sec:repro}
+% Exact configs, commands, seeds, data provenance, environment, and file pointers to regenerate
+% the headline result.
+
+% ---- 10. Limitations & open questions -------------------------------------
+\section{Limitations and open questions}\label{sec:limits}
+% Honest accounting: the known ceiling, unresolved disputes, and every provisional /
+% assumption-dependent claim marked as such.
+
+% ---- 11. References (verified by cite-check) -------------------------------
+\bibliographystyle{apsrev4-2}
+\bibliography{refs}   % refs.bib — every entry confirmed against the real source
+
+\end{document}

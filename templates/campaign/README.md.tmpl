@@ -1,0 +1,47 @@
+# {{PROJECT_TITLE}}
+
+{{ONE_PARAGRAPH_PROBLEM_STATEMENT}}
+
+## Approach
+
+{{APPROACH_SUMMARY}} — an autonomous research campaign that optimizes the single frozen primary
+metric **`{{PRIMARY_METRIC}}`** ({{PRIMARY_DIRECTION}} = better) under fixed constraints, logging every
+experiment for full reproducibility.
+
+## Status
+
+| Stage | What | State |
+|-------|------|-------|
+{{STAGE_TABLE_ROWS}}
+
+## How this campaign runs
+
+This is an autonomous research loop. The agent re-reads [`docs/program.md`](docs/program.md) every
+iteration and: hypothesizes a change to one lever, predicts the metric, runs it, evaluates the frozen
+metric + guardrail, logs a scoreboard row, and graduates confirmed findings to `DISCOVERIES.md` only
+after independent verification. Experiments are numbered `exp000` (the baseline gate), `exp001` (first
+method), then `exp002`, `exp003`, … — zero-padded to three digits so they sort correctly.
+
+- **The loop / charter:** [`docs/program.md`](docs/program.md)
+- **Conventions & units (bug-prevention reference):** [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md)
+- **Scoreboard (ledger):** [`results/scoreboard.tsv`](results/scoreboard.tsv)
+- **Working memory / settled findings:** [`results/JOURNAL.md`](results/JOURNAL.md) · [`results/DISCOVERIES.md`](results/DISCOVERIES.md)
+
+## Repository map
+
+{{REPO_MAP}}
+
+## Environment
+
+{{ENVIRONMENT_NOTES}}
+
+## Quick start
+
+{{QUICKSTART_COMMANDS}}
+
+## Background docs
+
+- Campaign loop: [`docs/program.md`](docs/program.md)
+- Conventions/units: [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md)
+- Governing physics: [`docs/PHYSICS.md`](docs/PHYSICS.md)
+{{EXTRA_BACKGROUND_DOC_LINKS}}

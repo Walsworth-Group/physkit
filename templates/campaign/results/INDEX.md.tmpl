@@ -1,0 +1,23 @@
+# Campaign Index — {{CAMPAIGN_TITLE}}
+
+A navigable map of the campaign: every experiment traceable to its config, code snapshot, result,
+figures, and status. **The setup skill creates this file; the loop agent MAINTAINS it** — add a row for
+every experiment (see the loop's UPDATE step in `docs/program.md`). The scoreboard holds the *numbers*;
+this index holds the *pointers* so a human or a fresh agent can find anything from one place.
+
+## Key documents
+- Loop charter: [`docs/program.md`](../docs/program.md) · Physics: [`docs/PHYSICS.md`](../docs/PHYSICS.md)
+  · Conventions: [`docs/CONVENTIONS.md`](../docs/CONVENTIONS.md)
+- Ledger: [`scoreboard.tsv`](scoreboard.tsv) · Journal (working window): [`JOURNAL.md`](JOURNAL.md) ·
+  Logbook (append-only full record — grep, don't read whole): [`logbook.md`](logbook.md) · Discoveries:
+  [`DISCOVERIES.md`](DISCOVERIES.md)
+
+## Naming & traceability
+Every artifact is named/keyed by the experiment label **`exp<NN>_<slug>`** so it traces back to its row
+here: `configs/exp<NN>_<slug>.json`, `results/snapshots/exp<NN>_<slug>/`, `results/result_<NN>.json`,
+`results/images/exp<NN>_<slug>_*`, diagnostics logs. No orphan files.
+
+## Experiments
+| exp | label | description | config | snapshot | result | figures | {{PRIMARY_METRIC}} | status |
+|-----|-------|-------------|--------|----------|--------|---------|--------------------|--------|
+| 000 | exp000_baseline | baseline gate | configs/exp000_baseline.json | results/snapshots/exp000_baseline/ | results/result_000.json | results/images/exp000_baseline_* | (floor) | baseline |

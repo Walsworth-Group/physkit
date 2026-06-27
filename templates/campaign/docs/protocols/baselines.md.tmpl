@@ -1,0 +1,36 @@
+# Protocol — Baseline gate (Experiment 000) ({{CAMPAIGN_TITLE}})
+
+Fires ONCE, before the loop. Experiment 000 does two jobs: it establishes the **floor** every later
+method must beat, AND it validates the full {{VALIDATION_CHAIN}} chain end-to-end (so a later "win"
+isn't an artifact of a broken pipeline).
+
+## Baseline method(s)
+{{BASELINE_METHODS}}
+<!-- The simplest defensible method(s) — e.g. a closed-form / least-squares / matched-filter / naive
+     solution. No learned or heavily-tuned components. This is the no-skill-to-low-skill reference. -->
+
+## Trivial / degenerate references (record these too)
+Also compute and record `{{PRIMARY_METRIC}}` for the **trivial/degenerate solutions** — all-zeros /
+constant / mean predictor / a fully-saturated or otherwise trivial physical state — so every later
+result can be checked against them. Two rules follow from these:
+- A method that scores **worse than a trivial reference is not a win**, however "optimized" it looks.
+- If a **non-physical** trivial answer (e.g. all-zeros) scores *better* than a plausible result, treat
+  it as a **flag that the metric/units may be incongruent** (scrutinize scaling / normalization / ranges
+  / the metric definition) — not as a target to beat.
+
+## Run it
+```
+{{BASELINE_COMMAND}}
+```
+
+## Gate criteria (STOP and debug if violated)
+{{GATE_CRITERIA}}
+<!-- The expected baseline value/range and the sanity checks that prove the chain is sound (e.g. a
+     known input maps to a known output; the metric collapses on a null input; units come out right).
+     If the baseline is wildly off the expected range, the pipeline is wrong — fix it before
+     experiment 0. A floor you can't trust makes every later delta meaningless. -->
+
+## Record
+{{FLOOR_RECORD_RULE}}
+<!-- Append the exp000 row to results/scoreboard.tsv and write the JOURNAL entry. This value is the
+     "current best" until a verified promotion replaces it. -->

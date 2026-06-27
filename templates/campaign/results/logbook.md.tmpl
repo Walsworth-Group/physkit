@@ -1,0 +1,34 @@
+# Logbook — {{CAMPAIGN_TITLE}} (append-only; the full narrative record)
+
+The complete, permanent history of the campaign: one entry per experiment, in order, **verbatim and
+never trimmed**. The runner (`scripts/run_campaign.py`) **auto-appends the facts** of each entry; the
+agent **completes the narrative slots** (Analysis / Verification / NEXT) of that same entry right after.
+This archive is what lets `results/JOURNAL.md` stay a short steering view.
+
+**Rules — read these once, then never read the rest of this file:**
+- **Append only — never touch a PAST entry.** New entries are appended at the bottom (automatically, by
+  the runner). You complete the narrative of the **current** entry; once you move to the next experiment,
+  no earlier entry is ever edited, compressed, reordered, or deleted (including disputes, negative
+  results, and refuted findings).
+- **Never read this file in full.** It grows without bound, and loading it whole would bloat the working
+  context — which defeats its purpose. Consult it only by **targeted search** (grep for an exp id or a
+  term) or by reading a **specific slice** when you genuinely need an old detail.
+- **Entry format:** `## <exp_id> - <label> - <UTC>`, then Hypothesis / Predicted / Change / Result
+  (auto-filled by the runner) and Analysis / Verification / Disputes & responses / Status / Artifacts /
+  NEXT (the agent completes).
+- The numbers live in `scoreboard.tsv`, settled findings in `DISCOVERIES.md`, the navigation map in
+  `INDEX.md`; this file is the full *narrative*.
+
+**Completing the current entry** (fill the slots the runner left blank, before moving on):
+- **Analysis** — inside the predicted range? guardrail hold? ceiling-move vs gap-to-ceiling? statistical
+  vs systematic? real win or overfit?
+- **Verification** — the `{{VERIFY_SKILL}}` verdict: CONFIRMED / PROVISIONAL / QUESTIONABLE ASSUMPTION /
+  REFUTED / INCONCLUSIVE, with key evidence.
+- **Disputes & responses** — every issue raised by the verifier OR the user, each with your response;
+  never delete one (rebut if you disagree). Format:
+  `date — raised by <verifier|user>: <issue> → response: <agree + fix | counter-argument>`.
+- **Status** — confirmed | PROVISIONAL (rests on an adapted eval) | QUESTIONABLE ASSUMPTION (shaky
+  premise) | open.
+- **NEXT** — the orthogonal lever to try next.
+
+---

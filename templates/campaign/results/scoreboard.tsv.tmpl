@@ -1,0 +1,13 @@
+# scoreboard.tsv — the PERMANENT ledger for {{CAMPAIGN_TITLE}}. One row per experiment.
+# RULES: tab-separated; append-only. Never delete or rename a column mid-campaign (it breaks
+#   comparability with earlier rows). Keep the PRIMARY column ({{PRIMARY_METRIC_COL}}) position stable.
+#   Add campaign-specific columns AFTER the lever columns and BEFORE `notes`; a new column requires the
+#   run-writer ({{EVAL_WRITER}}) to emit it. exp_id: 000 = baseline gate, 001 = first method, then 002,003,…;
+#   sub-runs 000a/000b; non-config probes prefixed `#`. `verified` = independent-agent verdict (blank
+#   until run). `notes` carries "NEW BEST", "CONFIRMS expN", "PROVISIONAL — adapted eval", etc.
+# This is the campaign's QUANTITATIVE record (the JOURNAL is narrative). Every experiment's numbers live
+#   here: the primary metric, every supplemental metric / sanity score (DIAGNOSTIC columns), and the
+#   experiment-type RUN numerics (e.g. epochs trained + best epoch for ML; iterations / wall-clock /
+#   n_free_params for fits; seed / n_reps). If a *_COLUMNS group is empty for this campaign, remove it
+#   AND its adjacent tab so the header has no blank column.
+exp_id	timestamp	description	{{LEVER_COLUMNS}}	{{PRIMARY_METRIC_COL}}	{{PRIMARY_SPREAD_COL}}	{{GUARDRAIL_COL}}	{{DIAGNOSTIC_COLUMNS}}	{{RUN_COLUMNS}}	verified	notes

@@ -1,0 +1,26 @@
+# Literature — {{CAMPAIGN_TITLE}}
+
+_Last updated: {{DATE}}_
+
+Curated references and the prioritized idea roadmap. Updated whenever the agent runs a literature
+search (see the "Literature search rule" in `docs/program.md`). Literature ideas are *suggestions* —
+they do not override the agent's own hypotheses unless it is stuck.
+
+> Sourcing: prefer the **arXiv** version of each paper (read `ar5iv.org/abs/<id>` HTML or the LaTeX
+> source for clean equations; avoid publisher PDFs). When only a PDF exists, convert it with a
+> scientific-PDF→markdown tool (`marker` / `nougat` / `docling` / `pymupdf4llm`) and cache the result.
+
+## Priority Roadmap
+
+| Idea | Source | Expected impact | Effort | Status (tried? outcome) |
+|------|--------|-----------------|--------|-------------------------|
+| {{SEED_IDEA}} | {{SEED_SOURCE}} | {{SEED_IMPACT}} | {{SEED_EFFORT}} | not tried |
+
+## Techniques by topic
+
+### {{TOPIC}}
+- [{{SEED_CITATION}}] — [what it offers, how it maps to our levers]
+
+## Recommended next-experiment sequence
+
+{{NEXT_SEQUENCE}}

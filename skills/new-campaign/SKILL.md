@@ -1,0 +1,291 @@
+---
+name: new-campaign
+description: Interview a researcher and scaffold a new autonomous-research ("autoresearch") campaign in the physical sciences. Use when the user wants to START or SET UP a new campaign, optimization loop, fitting/decoder campaign, forward-model-improvement campaign, generative-design search, ML-training campaign, or hardware-in-the-loop tuning loop — phrasings like "start a new campaign", "set up an autoresearch loop", "scaffold a campaign to optimize X", "I want to build a loop that improves Y", or "create the program.md / metric / scoreboard for a new project". Conducts a structured interview (goal, metric, physics, data, levers, constraints, compute, time), co-designs the FROZEN metric, determines which archetype(s) apply, then generates a complete ready-to-run campaign tree (program.md charter, protocols, configs, results ledger, and light code stubs) from the kit templates and validates that nothing is left unfilled. NOT for running an existing loop, verifying a result (verify), or writing the end-of-campaign report (final-report).
+---
+
+# new-campaign — interview, then scaffold a campaign
+
+Your job is to turn a *fuzzy research goal* into a *running, rigorous, well-documented campaign*. The
+deliverable is scaffolding that encodes the campaign's intent so the loop-running agent can't drift
+from it: a FROZEN metric, an experiment loop, levers, guardrails, logging, verification, and reporting.
+
+**Stance for the interview** (from `docs/PRINCIPLES.md` §1):
+- **Fill from sources first; ask only when unsure. Never ask what you can check.** Before asking
+  anything, harvest every answer you can definitively obtain from what's already available: the
+  conversation so far, any documents / paper manuscripts the user says describe their setup, data/config
+  files in the target directory, and anything you can detect directly (Step 0.5). Ask the user only
+  about genuine gaps.
+- **When a value came from a source but you're unsure it applies, ask a short question naming the
+  source** — e.g. *"should I use the experimental parameters described in Reed et al. for this
+  problem?"* — rather than asking the user to supply it from scratch.
+- State assumptions explicitly; present multiple interpretations when ambiguous; push back when a
+  simpler scope exists; and **co-design the metric** rather than inventing it. Narrow the purpose — a
+  campaign explores one idea or one slice, not a whole project.
+
+## When to invoke
+- The user wants to start / set up / scaffold a new campaign or optimization loop.
+- An existing project needs the autoresearch structure (program.md + metric + scoreboard) added.
+
+Do NOT use this to run an already-scaffolded loop, to verify a finding (`verify`), or to write
+the final report (`final-report`).
+
+## Inputs
+- The **target directory** where the campaign should be created (ask if not given; default: the current
+  working directory). Never overwrite existing files without explicit confirmation.
+- Optionally, a one-line goal the user already typed — use it to seed, not skip, the interview.
+- Optionally, a **framing artifact** from `frame-problem` (a `FRAMING.md` or a filled `INTAKE.md`) — if one
+  exists, compose it (below) rather than re-interviewing.
+
+## Two ways to gather the inputs
+**(a) Live interview** (default) — Step 1 below, topic by topic. **(b) Intake-form mode** — for a user who
+prefers editing a form to answering in the terminal: emit a pre-filled `INTAKE.md` (from
+`${CLAUDE_PLUGIN_ROOT}/templates/campaign/INTAKE.md.tmpl`), filling every field you can detect/harvest and
+leaving blanks where you need them; the user edits it in an editor; you read it back and ask only about the
+blanks/ambiguities. Either way the result is the same campaign spec (Step 2). Offer the form when the
+interview would be long or the user is on a slow channel.
+
+## Compose `frame-problem` — don't re-interview the physics
+`frame-problem` owns physics scoping (inventory + verification plan + decomposition) and writes a durable
+**framing artifact**. If one exists (or you ran `frame-problem` for this goal in-session), **read it and
+*confirm, don't re-ask*** — carry its physics inventory, a-priori bounds, verification plan, and step
+decomposition straight into the spec, and only fill the campaign-only gaps (metric co-design, levers/frozen,
+data, compute, archetype). If no framing artifact exists and the problem has real physics, **run
+`frame-problem` first** (or fold its three outputs into the interview) rather than duplicating the work.
+Within a session this is shared context; across sessions the persisted artifact carries it. No
+double-interview.
+
+## Step 0 — read the kit before interviewing
+Read these so your questions and fills are grounded (paths are under the plugin root):
+- `${CLAUDE_PLUGIN_ROOT}/docs/PRINCIPLES.md` — the doctrine every campaign inherits.
+- `${CLAUDE_PLUGIN_ROOT}/docs/CORE.md` — the always-on spine + the general skills it routes to
+  (`frame-problem`, `verify`, `simulation-design`, `correctness-suite`, `report`, …) that this campaign composes.
+- `${CLAUDE_PLUGIN_ROOT}/templates/ARCHETYPE_CHEATSHEET.md` — the campaign archetypes (A–I) and their patterns.
+- `${CLAUDE_PLUGIN_ROOT}/templates/PLACEHOLDERS.md` — the fill convention + canonical placeholder list.
+- Skim `${CLAUDE_PLUGIN_ROOT}/templates/campaign/` — what you will fill (now including `INTAKE.md`,
+  `docs/PROJECT_ORIENTATION.md`, `docs/ENGINEERING_NOTES.md`, `docs/VERIFICATION_PLAN.md`,
+  `docs/protocols/expensive-evaluation.md`), and `${CLAUDE_PLUGIN_ROOT}/examples/program-files/` — real
+  filled charters for altitude/voice.
+
+## Step 0.5 — harvest sources and detect the environment (before asking anything)
+Collect what already answers the interview, so you only ask about real gaps:
+- **Read everything the user pointed to** — setup docs, paper manuscripts, prior notes — plus any data
+  and config files already in the target directory. Extract concrete values (geometry, parameters,
+  units, data shapes) and **note each value's source** so you can cite it (and ask "use the value from
+  <source>?" if its applicability is uncertain). For papers, prefer the **arXiv** version and convert
+  any PDF with a scientific-PDF→markdown tool to save tokens (see `docs/PRINCIPLES.md` §2).
+- **Detect, don't ask, what you can check:** the compute (CPU cores, RAM, and GPU — e.g. run
+  `nvidia-smi`), the available Python/toolchain, and the data files present and their shapes.
+Carry these harvested facts into the interview.
+
+## Step 1 — the interview (topic by topic)
+Go one topic at a time; confirm understanding before moving on. For each topic, **fill what the sources
+already answer and ask only the gaps.** Use the **AskUserQuestion** tool for categorical forks; use
+free-form dialogue for the metric and physics narrative. Capture every answer — you will need it to
+fill the templates.
+
+**Always ask these — never skip them, even if you think you could infer them:** the internet/literature
+level (topic 11) and the user's own ideas to try / avoid (topic 12). Two more are effectively always-ask
+because you cannot measure them: the time budget (topic 8) and the environment (topic 9).
+
+**Always determine — for EVERY project — whether there is a simulation component** (a forward model,
+device-performance simulation, synthetic/simulated training data, an evaluator/simulator, or a
+surrogate). **Most campaigns have one** — assume YES unless it's a clear exception (direct experimental
+control, or training/fitting purely on real experimental data). If there is one, apply the V&V doctrine
+(`docs/SIMULATION_VALIDATION.md`) and wire its gates into the core docs (Step 3).
+
+1. **Goal & the core decision.** What is the campaign trying to achieve, and what *decision* does its
+   result drive? Force a narrow scope. If the goal needs several coupled pieces, flag it for the
+   multi-stage plan (topic 11).
+2. **Archetype(s) — which APPLY (none, one, or several).** Decide which of the archetypes apply
+   to this campaign; it may be zero, one, or multiple (a campaign can be both forward-model *and*
+   generative-design; a **discovery loop (G)** scored *through* a forward model; or **active design (H)**
+   used to **discriminate models (I)**). **Inherit and merge** the metric / lever / FROZEN / failure-mode
+   guidance from *every* archetype you deem relevant — do not force a single best-fit. State which apply
+   and why, and let the user correct it. If several apply in sequence rather than at once, that is a
+   multi-stage campaign (topic 11). Archetypes G (`discovery-loop`), H (`experiment-design`), and I
+   (`model-selection`) each have a dedicated operational skill.
+3. **The metric — build it together (the most important topic).** Co-design the single FROZEN primary:
+   its name, direction (higher/lower = better), precise definition + units, the FROZEN scorer it lives
+   in, hard bounds, and the **a-priori plausible range** (predict before running — encode the bounding
+   discipline). Then the baseline (exp 000) value/method, any theoretical ceilings, the guardrail
+   (necessary-but-not-sufficient), and diagnostics. Pin down what FEEDS the metric vs what is FROZEN.
+   These — primary, guardrail, diagnostics — plus the experiment-type **run numerics** (e.g. epochs +
+   best epoch for ML; iterations / wall-clock / n_free_params for fits) become the columns of
+   `results/scoreboard.tsv`, the campaign's quantitative ledger (separate from the narrative journal).
+4. **Physics / system knowledge.** Capture (from sources wherever possible) everything needed to model
+   the system:
+   - **Physical objects & geometry** — dimensions, arrangement/layout, material(s), and quantities.
+     *E.g. for an ASI fit from NV-magnetometry data: the lattice geometry and spacing, island
+     dimensions, the material, the sample orientation relative to the measured NV axis, the bias-field
+     orientation, and the pixel size / field-of-view.*
+   - **Experimental / measurement geometry** — what is measured, by what instrument, in what frame, at
+     what standoff/resolution.
+   - **Governing physics** — the foundational equations, simulation methods/approximations, the common
+     techniques for this problem, and the system's typical behavior *through the lens of this problem*
+     (degeneracies, symmetries, regimes — e.g. that magnetization-from-field is non-unique, or how an
+     ASI traverses a hysteresis loop). Source from user info, provided literature, or (if enabled) a
+     targeted search.
+   - **Conventions** — units/sign/ordering (→ `docs/CONVENTIONS.md`) and known artifacts / recurring
+     bugs to guard against. (Capture the **simulation methods/approximations** here too — the
+     always-determine simulation check above decides whether the V&V plan in Step 3 applies.)
+   Author two reference docs from this: **`docs/PHYSICS.md`** (the governing physics — its length varies
+   with the problem; equations in math blocks with precise, defined notation; a *living doc* updated when
+   discoveries change the physics; **includes the physics inventory** — every relevant effect tagged
+   accounted-for / negligible-by-scale / out-of-scope / deferred / unknown, *with a reason*, from the
+   `frame-problem` artifact) and, when the system has significant physical objects/geometry,
+   **`docs/SYSTEM.md`** (apparatus/sample parameters, with sources). Link both from the README. Record
+   anything you had to ask — the next agent shouldn't have to. *(If a `frame-problem` artifact exists,
+   confirm its inventory rather than rebuilding it.)*
+4b. **Verification — capture the application-specific checks (now).** Decide *how a result will be known to
+   be right* before the loop runs: the analytic limits, invariants, convergence, independent-method parity,
+   and especially the **field-standard checks, known artifacts, and gotchas for THIS problem** — the part
+   generic doctrine can't supply. Mark verification vs validation (held-out data; calibration ≠ validation).
+   These author **`docs/VERIFICATION_PLAN.md`** (or, for sim-heavy campaigns, the tailored
+   `docs/SIMULATION_VALIDATION.md`), which `verify` reads and `correctness-suite` encodes as regression
+   gates. *(Inherit these from the `frame-problem` verification plan if one exists.)*
+5. **Data / inputs.** Source; fixed experimental data vs generated/simulated; splits to hold fixed;
+   formats, shapes, paths. (Fixed-data campaign → the dataset protocol collapses to a "verify exists,
+   READ-ONLY" note.)
+6. **Levers vs FROZEN.** What the agent MAY change (the orthogonal lever families) vs what is FROZEN
+   (scoring math, core physics, geometry, data) vs READ-ONLY vs MUTABLE code.
+7. **Experimental / hardware constraints.** Fairness rules; for a hardware-in-the-loop campaign, the
+   **hardware safety limits** (hard constraints), irreversibility, and what actions need confirmation.
+8. **Compute resources & time budget.** **Detect** the available hardware rather than asking (CPU
+   cores, RAM, GPU via `nvidia-smi`). If it is relevant to the problem (e.g. a GPU for ML), **record it
+   explicitly in the scaffolding** (the README Environment section and a note in `program.md`) so future
+   agents don't overlook available resources. Ask the user only for what you can't measure — chiefly the
+   **time budget** (per-run and overall-loop). Use this to fill the run caps **archetype-specifically**
+   (epochs for ML; replication depth for a cheap closed-form fit; expensive/irreversible runs for
+   hardware). **Tiered scout/confirmation caps only make sense when** the problem supports a cheaper
+   *partial* evaluation (fewer epochs, a partial dataset) AND the full evaluation is genuinely long
+   (>10 min, especially >60 min); otherwise fill a single-tier budget. When tiering applies, consider
+   **three tiers**: a very short *smoke* check (does the code run at all?), a short *scout* (is the idea
+   promising?), and a longer *confirmation/validation* run. If you can't tell whether the eval suits
+   partial runs, ask; otherwise just propose the scheme.
+9. **Environment & version control.** Ask which environment the user wants; **default to proposing a fresh
+   virtual environment** (a new venv/conda env). Record the choice + setup commands in the README
+   Environment / Quick-start. **Offer git, don't impose it:** recommend it for shared/large/long-lived
+   projects, but make clear the **per-experiment snapshot is the reproducibility baseline either way** — a
+   small solo campaign can skip git without losing reproducibility (`docs/reference/version-control.md`).
+   Record the choice; never make git a precondition for starting.
+10. **Existing code & tools.** What runnable code/data already exists to reuse, and which libraries to
+    prefer (mature/free over from-scratch — `docs/PRINCIPLES.md` §5/§9).
+11. **Internet / literature level (ALWAYS ASK — 3 options).** This sets **ongoing** literature use during
+    the loop: **none** (no ongoing searches — remove the literature-search rule), **only when needed**
+    (search when stuck — the default), or **extensive** (proactively search at setup to seed
+    `PHYSICS.md`/`LITERATURE.md`, and periodically thereafter, not only when stuck). Independently, if the
+    user **provided any starting literature**, summarize it in `LITERATURE.md` and keep the file — even
+    when ongoing search is *none*. For needed/extensive, prefer arXiv and convert PDFs efficiently
+    (`docs/PRINCIPLES.md` §2).
+12. **User's own ideas (ALWAYS ASK).** Ask the user (a) any ideas/directions they would like you to
+    **try**, and (b) anything that should **NOT** be tried (out of scope, known dead ends, forbidden
+    approaches). Record the *to-try* ideas as the opening JOURNAL **NEXT** items (attributed to the
+    user), and fold the *do-not-try* items into the `program.md` FROZEN / out-of-scope section. User
+    ideas are inputs, not a ceiling — you remain encouraged to propose well-founded novel ideas of your
+    own (`docs/PRINCIPLES.md` §2).
+13. **Multi-stage plan — propose it proactively.** Many complex tasks are best done as **several
+    sequential loops**, not one: validating and improving on a simpler subcase first usually yields a
+    more powerful, better-validated final result. Actively **design a staged plan and propose it.**
+    Forward-model-before-decoder is one case; others include optimizing on *idealized/simpler physics*
+    first (to set a baseline and a solid procedure while the physics is simple) before the real system,
+    or inserting a stage that **produces an experimental protocol for the user to carry out** (e.g. a
+    gauss-meter measurement) whose results feed the next stage.
+    *Example — permanent-magnet array from measured surface fields:* (1) optimize the arrangement with
+    *idealized* magnets — establishes a baseline and a solid optimizer while the physics is simple;
+    (2) design a measurement protocol the user runs to characterize their real magnets' imperfections;
+    (3) optimize the arrangement of the *imperfect* magnets, building on (1) and the data from (2).
+    Give each stage its own `program_<NAME>.md` / `configs_<NAME>/` / `results_<NAME>/`, and confirm the
+    staging with the user.
+
+## Step 2 — write the campaign spec and get sign-off (anti-drift checkpoint)
+Before generating anything, write a concise **campaign spec**: the archetype(s) that apply, the FROZEN
+metric (with bounds + a-priori range), baseline, guardrail/diagnostics, levers, FROZEN/READ-ONLY/MUTABLE,
+constraints, caps (and whether tiering applies), the data plan, the detected compute + chosen
+environment, the multi-stage plan (if any), and the values you'll use for the key placeholders. Cite
+the source for any value pulled from a document/paper/data. Show it to the user and get explicit
+sign-off (or corrections). This is the checkpoint that keeps the build aligned with the original intent.
+
+## Step 3 — generate the campaign tree
+Copy `${CLAUDE_PLUGIN_ROOT}/templates/campaign/` into the target directory and fill it from the spec,
+obeying `PLACEHOLDERS.md`:
+- **Resolve every `{{PLACEHOLDER}}`** with prose at the same altitude as the surrounding boilerplate
+  (read the `examples/program-files/` charters for voice). Where the user deferred a value, write an
+  explicit TODO noting the deferral — never a silent guess.
+- **Resolve every `[[OPTIONAL — … ]]` block:** DELETE it if it doesn't apply (keeps the slim core
+  slim); KEEP-WITH-A-NOTE a universal section that's merely not-yet-wired (mark it `(DEFERRED)`).
+  Include the hardware-safety block only for archetype E. **The ceiling blocks are a SET** — ceilings
+  appear in the Metric, Decision/promotion, and Before-accepting sections (and `metric.md`); keep or
+  delete them all together. For a fixed-data campaign, delete `protocols/dataset.md` (leave the READ-ONLY
+  note) AND drop its row from the `program.md` Protocol Index.
+- **Resolve every `[PROPOSED]` tag:** present each speculative discipline to the user to keep or cut;
+  drop the tag on kept ones, delete cut ones.
+- **Strip the `.tmpl` suffix** on write (`program.md.tmpl` → `docs/program.md`, etc.).
+- **Code stubs:** fill `scripts/metric.py` (the FROZEN scorer + `--selftest`) and
+  `scripts/run_campaign.py` (the runner). These are intentionally light — leave the TODO hooks for the
+  agent to implement the physics in-loop, but wire the names/metric so `--selftest` is the gate for
+  exp 000.
+- **Author the new orientation/verification/engineering docs:** fill **`docs/PROJECT_ORIENTATION.md`** (the
+  goal, the decision it drives, the loosely-held expectations, and the numbered goal-linked task hierarchy —
+  graduating the `frame-problem` decomposition); **`docs/VERIFICATION_PLAN.md`** (the application-specific
+  checks from topic 4b — the gate `verify`/`correctness-suite` consume); and seed **`docs/ENGINEERING_NOTES.md`**
+  (empty but for its header — the append-only "why" record where `record-decision` entries land). Put the
+  user's *ideas to try* as the opening `PROJECT_ORIENTATION` tasks + JOURNAL NEXT items.
+- **Author the campaign-specific reference docs the interview surfaced:** fill `docs/CONVENTIONS.md` and
+  `docs/PHYSICS.md` (the governing physics — equations in math blocks, precise notation; **include the
+  physics inventory** — effects accounted-for/not + why); add a
+  `docs/SYSTEM.md` when there are significant physical objects/geometry (dimensions, layout, material,
+  sample/measurement-axis/bias-field orientations, pixel size/FoV — each with its source). Record the
+  **detected compute** and the **chosen environment + setup commands** in the README (Environment /
+  Quick-start) and note the available compute in `program.md`. Register any new docs in the README.
+- **Literature (per the topic-11 level)** — the ongoing-search rule and the `LITERATURE.md` file are
+  decided separately:
+  - *Ongoing-search rule in `program.md`:* for **none**, resolve the `[[OPTIONAL — literature search
+    enabled]]` block as DELETE; for **only-when-needed** / **extensive**, keep it and fill
+    `{{LITERATURE_LEVEL}}` with the chosen intensity (search-when-stuck vs proactive-and-periodic).
+  - *`LITERATURE.md` itself:* keep it and **seed it with summaries of any literature the user provided**
+    (prefer arXiv; convert PDFs; cache) — even when ongoing search is *none*. DELETE the file ONLY when
+    ongoing search is *none* AND the user provided no starting literature. When kept under *none*, treat
+    it as a **static** reference — keep the summaries + references, drop the roadmap / next-search sections.
+- **Simulation validation (conditional on topic 4):** if the campaign has a simulation aspect, author
+  `docs/SIMULATION_VALIDATION.md` for it — a tailored V&V&UQ plan from
+  `${CLAUDE_PLUGIN_ROOT}/docs/SIMULATION_VALIDATION.md` — and wire its gates into the **core docs**: a
+  **verify-before-validate gate** (the simulator must pass code + solution verification before any
+  simulator-based result is trusted) plus the **sim-to-experiment guardrail** in `program.md`; the
+  simulator's **assumptions, domain of validity, and V&V status** in `docs/PHYSICS.md`; and keep
+  *calibration ≠ validation* (hold out independent validation data). Register it in the README and the
+  `program.md` Protocol Index.
+- **Seed the index and the user's directions:** fill `results/INDEX.md` with its exp 000 row (the loop
+  agent maintains it thereafter). Put the user's *ideas to try* (topic 12) as the opening JOURNAL
+  **NEXT** items, attributed to the user; fold the *do-not-try* items into `program.md`'s FROZEN /
+  out-of-scope list.
+- **Multi-campaign / multi-stage:** if this project will host more than one loop (including a staged
+  plan from topic 11), append the `_<NAME>` suffix to `docs/program_<NAME>.md`, `configs_<NAME>/`,
+  `results_<NAME>/`; otherwise keep the plain names.
+- Seed `results/scoreboard.tsv` with its header; leave `results/logbook.md` (append-only full record),
+  `results/JOURNAL.md` (the working window), and `results/DISCOVERIES.md` with their intros + the first
+  **NEXT** pointer (queue exp 000). The logbook, scoreboard, and `diagnostics/` logs are **append-only and
+  never read in full** — that's what keeps the record complete without bloating the loop's context. (If
+  the user wants hard separation, the logbook / diagnostics can be redirected to a path outside the
+  campaign tree; default is in-tree for reproducibility.)
+
+## Step 4 — validate (deterministic gate)
+Run the bundled validator on the generated tree and FIX anything it flags:
+```
+python "${CLAUDE_PLUGIN_ROOT}/skills/new-campaign/scripts/validate_campaign.py" <target_dir>
+```
+It fails if any literal `{{…}}`, dangling `[[OPTIONAL`, or stray `[PROPOSED]` remains, or if a required
+file is missing. A generated campaign with an unresolved token is not done.
+
+## Step 5 — hand off
+Tell the user what was created (the tree), point them at `docs/program.md` as the loop the agent now
+re-reads every iteration, and state the first action: **implement `scripts/metric.py` + make
+`--selftest` pass, then run experiment 000 (the baseline gate).** The campaign is then ready to run
+continuously.
+
+## Notes
+- This skill SCAFFOLDS; it does not run the loop. After hand-off, the loop-running agent executes
+  `docs/program.md`.
+- Never overwrite existing files without confirmation; if the target dir already has a campaign, treat
+  it as a multi-campaign add (suffix) or stop and ask.
+- The metric and core physics you scaffold are FROZEN by construction — say so to the user, and make
+  the `--selftest` real before exp 000 so a convention/sign slip can't corrupt the whole campaign.

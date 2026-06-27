@@ -1,0 +1,80 @@
+% =====================================================================
+%  draft_article.tex — plain `article` DRAFT template for the `report` skill.
+%
+%  Use this for fast internal drafts, or as a fallback when REVTeX (revtex4-2.cls) is unavailable and
+%  cannot be vendored. One column, base packages only — compiles on any standard TeX install with no
+%  package-install approvals. For the polished/shareable physics capstone, use report_skeleton.tex.
+%
+%  COMPILE:  latexmk -pdf draft_article.tex
+%  REQUIRES (alongside this file): report-macros.sty, refs.bib, figs/
+% =====================================================================
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage[numbers,sort&compress]{natbib}   % base; swap to biblatex if preferred
+\usepackage[hidelinks]{hyperref}
+\usepackage{report-macros}     % vendored: siunitx/physics/braket-free macros
+
+\graphicspath{{figs/}}
+
+\title{\textbf{<Title — the claim, concretely>}}
+\author{<Author> \\ \small <Affiliation / lab>}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+% Headline result WITH its number + the one or two key evidence deltas. Honest: lead with what is shown;
+% state the band, not the optimistic edge.
+<abstract>
+\end{abstract}
+
+\section{Introduction and objective}\label{sec:intro}
+% Problem; goal and the decision it drives; what is claimed; position vs the literature.
+
+\section{Problem framing and scope}\label{sec:scope}
+% Physics INCLUDED vs EXCLUDED and WHY (the inventory); key assumptions; domain of validity; decomposition.
+
+\section{Physical and model parameters}\label{sec:params}
+% EVERY parameter that entered the result, with provenance + justification + uncertainty.
+\begin{table}[t]
+  \centering
+  \caption{All parameters entering the result. Provenance: user-given / fitted / first-principles /
+    simulation / assumed / literature.}
+  \label{tab:params}
+  \begin{tabular}{lllll}
+    \toprule
+    Symbol & Meaning & Value (unit) & Provenance & Uncertainty \\
+    \midrule
+    $<>$ & <> & $<>\unit{<>}$ & <fit/first-principles/sim/...> & $<\pm>$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+% Paragraph each for the few parameters that matter most: physics, governing equation, how pinned, evidence.
+
+\section{Methods}\label{sec:methods}
+% End-to-end pipeline so it can be re-run. Derive what is specific; cite standard results. Define the metric.
+
+\section{Verification and validation}\label{sec:verify}
+% The verification plan executed (analytic limits, convergence, independent-method parity, app-specific
+% checks) + the VERIFICATION LEDGER (which load-bearing claims/values were re-checked, how, result).
+% Flag anything resting on a QUESTIONABLE ASSUMPTION or PROVISIONAL.
+
+\section{Results and evidence}\label{sec:results}
+% Evidence ledger (each claim -> delta + source); headline figure; per-lever deltas; uncertainty bands.
+
+\section{Reproducibility}\label{sec:repro}
+% Exact configs, commands, seeds, data provenance, environment, file pointers for the headline result.
+
+\section{Limitations and open questions}\label{sec:limits}
+% Known ceiling; unresolved disputes; every provisional / assumption-dependent claim marked as such.
+
+\bibliographystyle{plainnat}
+\bibliography{refs}   % every entry confirmed against the real source (cite-check)
+
+\end{document}
