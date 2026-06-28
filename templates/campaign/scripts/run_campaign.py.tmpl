@@ -152,15 +152,20 @@ def append_logbook(cfg: dict, exp_id: str, label: str, score: float, diags: dict
     read from the config); the agent completes the narrative slots (Analysis / Verification / NEXT)
     afterward. Append-only: this never edits or reads the rest of the file.
     """
+    # One bold-labelled field per line, as a Markdown bullet list, so fields render on separate lines
+    # (a single newline renders as a space in Markdown, which would collapse them into one paragraph).
     entry = (
         f"\n## {exp_id} - {label} - {_utc_stamp()}\n"
-        f"**Hypothesis**: {cfg.get('_hypothesis', '(set _hypothesis in the config)')}\n"
-        f"**Predicted**: {cfg.get('_predicted', '(set _predicted in the config)')}\n"
-        f"**Change**: {cfg.get('_comment', '')}\n"
-        f"**Result**: {{PRIMARY_METRIC}} = {score:.4f}; {{GUARDRAIL_METRIC}} = {diags}\n"
-        f"**Analysis**: \n**Verification**: \n**Disputes & responses**: \n**Status**: open\n"
-        f"**Artifacts**: results/result_{exp_id}.json . results/images/{label}_* . results/snapshots/{label}/\n"
-        f"**NEXT**: \n"
+        f"- **Hypothesis**: {cfg.get('_hypothesis', '(set _hypothesis in the config)')}\n"
+        f"- **Predicted**: {cfg.get('_predicted', '(set _predicted in the config)')}\n"
+        f"- **Change**: {cfg.get('_comment', '')}\n"
+        f"- **Result**: {{PRIMARY_METRIC}} = {score:.4f}; {{GUARDRAIL_METRIC}} = {diags}\n"
+        f"- **Analysis**: \n"
+        f"- **Verification**: \n"
+        f"- **Disputes & responses**: \n"
+        f"- **Status**: open\n"
+        f"- **Artifacts**: results/result_{exp_id}.json . results/images/{label}_* . results/snapshots/{label}/\n"
+        f"- **NEXT**: \n"
     )
     with open(LOGBOOK, "a", encoding="utf-8") as f:
         f.write(entry)

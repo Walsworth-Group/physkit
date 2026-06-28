@@ -13,9 +13,12 @@ This archive is what lets `results/JOURNAL.md` stay a short steering view.
 - **Never read this file in full.** It grows without bound, and loading it whole would bloat the working
   context — which defeats its purpose. Consult it only by **targeted search** (grep for an exp id or a
   term) or by reading a **specific slice** when you genuinely need an old detail.
-- **Entry format:** `## <exp_id> - <label> - <UTC>`, then Hypothesis / Predicted / Change / Result
-  (auto-filled by the runner) and Analysis / Verification / Disputes & responses / Status / Artifacts /
-  NEXT (the agent completes).
+- **Entry format:** a `## <exp_id> - <label> - <UTC>` header, then **one bold-labelled field per line as a
+  bullet** — `- **Hypothesis**: …`, `- **Predicted**: …`, `- **Change**: …`, `- **Result**: …` (auto-filled
+  by the runner), then `- **Analysis**: …`, `- **Verification**: …`, `- **Disputes & responses**: …`,
+  `- **Status**: …`, `- **Artifacts**: …`, `- **NEXT**: …` (the agent completes). **Keep each field on its
+  own bullet line — never collapse them into one paragraph** (a single newline renders as a space in
+  Markdown, so separate bullets are what make the entry readable).
 - The numbers live in `scoreboard.tsv`, settled findings in `DISCOVERIES.md`, the navigation map in
   `INDEX.md`; this file is the full *narrative*.
 
