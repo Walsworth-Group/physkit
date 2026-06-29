@@ -118,7 +118,7 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 |---|---|
 | `{{PROMOTION_CONFIRM_RULE}}` | Extra confirmation needed to promote (e.g. "confirm with a 2nd seed"). |
 | `{{SPREAD_NOUN}}` | Name for the replicate spread (e.g. "seed/param", "seed-to-seed"). |
-| `{{VERIFY_SKILL}}` | The verify skill to invoke (e.g. `/autoresearch:verify`). |
+| `{{VERIFY_SKILL}}` | The verify skill to invoke (e.g. `/physkit:verify`). |
 | `{{VERIFY_EXTRA_CHECKS}}` | Archetype-specific extra checks the verifier must do, as a clause FRAGMENT appended to "checks for metric contamination" (e.g. ", recomputes the ceilings, and checks the ceiling-vs-gap trap"). Don't repeat "metric contamination". |
 | `{{SYSTEMATIC_AXIS_NOTE}}` | A standalone sentence on the dominant systematic-error axis for this campaign. It follows "…find and fix the cause)." — don't repeat that phrase. |
 | `{{OVERFIT_MODE}}` | The campaign's characteristic overfit mode (e.g. "sim-to-real / val overfit"). |
@@ -197,6 +197,7 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 | `{{STAGE_TABLE_ROWS}}` | README status-table rows. |
 | `{{REPO_MAP}}` | README repository map. |
 | `{{ENVIRONMENT_NOTES}}` | Environment/dependency notes. |
+| `{{PYTHON_CMD}}` | The python invocation for hook commands, from Step 0.5 detection (e.g. `py -3` on Windows, `python3` on macOS/Linux). Used in `.claude/settings.json`. |
 | `{{QUICKSTART_COMMANDS}}` | Quick-start commands. |
 | `{{EXTRA_BACKGROUND_DOC_LINKS}}` | Extra links to setup-authored reference docs. |
 | `{{NN}}` / `{{SLUG}}` | Experiment number & slug in config `exp_name`. |

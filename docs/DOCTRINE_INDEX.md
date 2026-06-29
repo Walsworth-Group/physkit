@@ -149,6 +149,10 @@ Items not yet built are listed so the index is a complete map of the intended ki
 | verification-plan | `templates/campaign/docs/VERIFICATION_PLAN.md.tmpl` | scaffold-template | 2 | new |
 | expensive-evaluation | `templates/campaign/docs/protocols/expensive-evaluation.md.tmpl` | protocol | 4,6 | new |
 | artifacts-protocol | `templates/campaign/docs/protocols/artifacts.md.tmpl` | protocol | 7 | ported+refined |
+| campaign-claude | `templates/campaign/CLAUDE.md.tmpl` | scaffold-template | 1,2,7 | new (always-on per-campaign doctrine + hard gates) |
+| discoveries-guard | `templates/campaign/scripts/guard_discoveries.py.tmpl` | scaffold-template | 2 | new (PreToolUse hook: blocks unverified DISCOVERIES write) |
+| hook-settings | `templates/campaign/.claude/settings.json.tmpl` | scaffold-template | 2 | new (wires the guard hook; uses `{{PYTHON_CMD}}`) |
+| claude-general | `templates/CLAUDE.general.md` | scaffold-template | 1,2,7 | new (copy to a project `CLAUDE.md` for everyday always-on doctrine) |
 
 ### Report assets
 

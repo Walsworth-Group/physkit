@@ -1,4 +1,4 @@
-# Auto Research Kit (`autoresearch`)
+# PhysKit (`physkit`)
 
 A Claude Code **plugin** for rigorous physical-science research. It has two layers:
 
@@ -8,7 +8,7 @@ A Claude Code **plugin** for rigorous physical-science research. It has two laye
 - **Campaign layer** — scaffolds and runs autonomous-research loops (hypothesize → run → evaluate → log
   → verify → repeat), with a frozen honesty/verification core.
 
-Once installed, the skills appear as `/autoresearch:<name>` in every project.
+Once installed, the skills appear as `/physkit:<name>` in every project.
 
 ## Install
 
@@ -20,13 +20,13 @@ claude --plugin-dir "<path-to-this-folder>"
 **Persistent install from this repo (GitHub):**
 ```
 /plugin marketplace add <OWNER>/<REPO>
-/plugin install autoresearch@autoresearch
+/plugin install physkit@physkit
 ```
 
 **Persistent install from a local/shared-drive copy:**
 ```
 /plugin marketplace add "<path-to-this-folder>"
-/plugin install autoresearch@autoresearch
+/plugin install physkit@physkit
 ```
 
 Then run `/reload-plugins` and confirm with `/plugin list`.
@@ -40,6 +40,6 @@ launch an autonomous campaign.
 .claude-plugin/   plugin.json + marketplace.json (the manifests)
 skills/           the 17 skills (general + campaign), each a SKILL.md
 docs/             always-on spine (CORE, PRINCIPLES) + on-demand reference docs
-templates/        campaign scaffold materialized by /autoresearch:new-campaign
+templates/        campaign scaffold materialized by /physkit:new-campaign
 examples/         illustrative filled program charters
 ```

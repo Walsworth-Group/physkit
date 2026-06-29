@@ -38,6 +38,9 @@ REQUIRED_GLOBS = [
     ("config template", "configs*/_template.json"),
     ("metric scorer", "scripts/metric.py"),
     ("runner", "scripts/run_campaign.py"),
+    ("always-on doctrine", "CLAUDE.md"),
+    ("discoveries guard hook", "scripts/guard_discoveries.py"),
+    ("hook settings", ".claude/settings.json"),
 ]
 
 

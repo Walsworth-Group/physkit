@@ -1,9 +1,9 @@
-# Getting Started — Auto Research Startup Kit
+# Getting Started — PhysKit
 
 A short guide to going from a research idea to a running, autonomous research campaign. This grows as
 the kit does; today it covers setup → interview → launching the loop.
 
-> The kit is a **Claude Code plugin** named `autoresearch`. Its skills appear as `/autoresearch:<name>`
+> The kit is a **Claude Code plugin** named `physkit`. Its skills appear as `/physkit:<name>`
 > once the plugin is loaded.
 
 The kit has **two layers**. A **general science toolkit** — skills like `frame-problem`, `verify`,
@@ -16,7 +16,7 @@ installing the plugin (full list at the bottom).
 
 ## 1. Install the kit
 
-The kit is a plugin; installing it makes its skills available as `/autoresearch:<skill>` in **every**
+The kit is a plugin; installing it makes its skills available as `/physkit:<skill>` in **every**
 session on that machine. `<KIT_DIR>` below is the full path to the `kit` folder (quote it — it has
 spaces); on the lab Windows machines that's
 `G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\Autoresearch paper\Auto Research Paper\kit`.
@@ -33,28 +33,35 @@ Re-run `/reload-plugins` after editing the kit. Coexists with `--dangerously-ski
 computer, no shared-drive dependency:
 ```
 /plugin marketplace add <OWNER>/<REPO>
-/plugin install autoresearch@autoresearch
+/plugin install physkit@physkit
 ```
 
 **Option C — Persistent install from a local / shared-drive copy.** If the machine can see the `kit`
 folder directly:
 ```
 /plugin marketplace add "<KIT_DIR>"
-/plugin install autoresearch@autoresearch
+/plugin install physkit@physkit
 ```
-Because the install is cached, after editing the kit run `/plugin marketplace update autoresearch` to
+Because the install is cached, after editing the kit run `/plugin marketplace update physkit` to
 pull the changes (Option A avoids this — it always reads live).
 
 Confirm any install with `/plugin list`, then `/reload-plugins` to activate immediately. After that,
-`/autoresearch:new-campaign` and the other skills are available in all projects, namespaced
-`/autoresearch:<skill>`.
+`/physkit:new-campaign` and the other skills are available in all projects, namespaced
+`/physkit:<skill>`.
+
+**Make the doctrine always-on (recommended for everyday use).** Installing the plugin makes the *skills*
+available, but Claude Code does **not** auto-load the kit's doctrine docs — so the frozen core isn't in
+context unless something pulls it in. For a general (non-campaign) project, copy
+`templates/CLAUDE.general.md` from the kit to a `CLAUDE.md` in your project folder; Claude Code auto-loads
+it every session, keeping the honesty/verification core in context. (For campaigns, `new-campaign`
+generates a campaign-specific `CLAUDE.md` for you — see §4.)
 
 ## 2. Start a campaign — the interview
 
 In that session, run:
 
 ```
-/autoresearch:new-campaign
+/physkit:new-campaign
 ```
 
 **What to expect.** The skill first harvests everything it can from what's already available — your
@@ -128,6 +135,11 @@ claude --dangerously-skip-permissions
 *(If you used the per-session `--plugin-dir` method instead of installing, add
 `--plugin-dir "<KIT_DIR>"` to this command too.)*
 
+**This fresh session is required, not optional.** Starting Claude *inside the campaign folder* is what
+auto-loads the campaign's `CLAUDE.md` (the always-on doctrine + hard gates) and activates the
+DISCOVERIES enforcement hook. **Do not run the loop in the same session that scaffolded the campaign** —
+it has neither. Confirm with `/context` that `CLAUDE.md` is loaded before you start.
+
 Then kick it off with a prompt like:
 
 > Read `docs/program.md` and the `results/` ledger, then run the autonomous research loop continuously
@@ -146,8 +158,8 @@ graduate to `results/DISCOVERIES.md`. Check in whenever you like — the ledger 
 
 ## Troubleshooting
 
-- **`/autoresearch:…` skills don't appear after install** → run `/reload-plugins`, and confirm with
-  `/plugin list` that `autoresearch` is enabled.
+- **`/physkit:…` skills don't appear after install** → run `/reload-plugins`, and confirm with
+  `/plugin list` that `physkit` is enabled.
 - **`scripts/metric.py --selftest` fails** → the metric isn't implemented yet, or there's a sign/units
   bug. Fix it before experiment 000 — the self-test exists precisely to catch this early.
 - **The loop keeps pausing for permission** → it wasn't launched with `--dangerously-skip-permissions`
@@ -159,7 +171,7 @@ graduate to `results/DISCOVERIES.md`. Check in whenever you like — the ledger 
 
 ---
 
-*The kit ships two layers of skills, all namespaced `/autoresearch:<name>`. **General science toolkit**
+*The kit ships two layers of skills, all namespaced `/physkit:<name>`. **General science toolkit**
 (usable in any session): `frame-problem`, `verify`, `simulation-design`, `correctness-suite`, `debug`,
 `dimensional-analysis`, `derive`, `record-decision`, `cite-check`, `report`. **Campaign layer**:
 `new-campaign` (scaffold + interview), `campaign-status` (periodic checkpoint), `handoff` (cold-resume),

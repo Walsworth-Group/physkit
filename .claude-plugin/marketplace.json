@@ -1,17 +1,17 @@
 {
-  "name": "autoresearch",
+  "name": "physkit",
   "owner": {
     "name": "Walsworth Group",
     "email": "walsworthgroup@gmail.com"
   },
   "metadata": {
-    "description": "Auto Research Kit: rigorous physics-research skills (framing, verification, simulation V&V, debugging, reporting) plus an autonomous-research campaign layer."
+    "description": "PhysKit: rigorous physics-research skills (framing, verification, simulation V&V, debugging, reporting) plus an autonomous-research campaign layer."
   },
   "plugins": [
     {
-      "name": "autoresearch",
+      "name": "physkit",
       "source": "./",
-      "description": "Auto Research Kit — general physics-research skills + an autonomous-campaign layer."
+      "description": "PhysKit — general physics-research skills + an autonomous-campaign layer."
     }
   ]
 }

@@ -1,7 +1,7 @@
 {
-  "name": "autoresearch",
-  "displayName": "Auto Research Kit",
-  "version": "0.3.0",
+  "name": "physkit",
+  "displayName": "PhysKit",
+  "version": "0.4.0",
   "description": "A dual-use toolkit for rigorous physical-science work: a general layer of skills for framing problems, verifying results, designing simulations, debugging, and reporting; and a campaign layer that scaffolds and runs autonomous-research loops. Honesty and independent verification are the frozen core.",
   "author": {
     "name": "Walsworth Group",

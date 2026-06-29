@@ -1,0 +1,36 @@
+<!--
+  CLAUDE.md — auto-loaded by Claude Code every session that starts in this campaign folder. This is the
+  ONLY reliable always-on context (a plugin's docs are NOT auto-loaded). It inlines the frozen core + the
+  HARD GATES so they survive long, compacting sessions. Keep it short; depth lives in docs/program.md.
+  START A FRESH SESSION IN THIS FOLDER to run the loop — a session that was already open when this file
+  was created did not auto-load it.
+-->
+# Campaign doctrine — {{CAMPAIGN_TITLE}} (always-on)
+
+You are running an autonomous research campaign. **Re-read `docs/program.md` at the start of EVERY
+experiment** — it is the charter; this file is only the non-negotiables that must never fall out of context.
+
+## Frozen core (never optimized away)
+- **Truth over excitement; methodology over results.** A well-evidenced negative is a success.
+- **Assume you are wrong until *independently* verified.** Convergence is not correctness.
+- **Never manipulate the frozen evaluation** — the metric `{{PRIMARY_METRIC}}`, its scorer, the data,
+  known ground truth, or locked values. Unlocked hyperparameters are legitimate levers.
+- **Context economy.** Keep the loaded core tiny; stream depth on demand.
+- **Record everything, including failures**; if it isn't in the record, it didn't happen.
+
+## HARD GATES (do not skip — these are the ones that get skipped under time pressure)
+1. **No promotion without independent verification.** Before you write or edit `results*/DISCOVERIES.md`,
+   you MUST have run **`{{VERIFY_SKILL}}`** for that finding — which **spawns an independent refuter
+   sub-agent** (a fresh agent, different/peer model, that never saw your reasoning) — and gotten
+   **CONFIRMED**. Quote the verdict line in the logbook entry. A finding that is PROVISIONAL / QUESTIONABLE
+   / INCONCLUSIVE does **not** graduate. *(A PreToolUse hook enforces this; don't fight it — run the verify.)*
+2. **One lever per experiment** so the effect is attributable (co-vary only deliberately, and say so).
+3. **Clear the noise floor.** A win must exceed measurement spread, not sit within it (report `Δ ± spread`).
+4. **A result isn't saved** until it has a scoreboard row, a `result_<NN>.json`, its figure, AND its snapshot.
+
+## When stuck
+A crash is a bug, not a bad idea — fix and re-run before judging the idea. Diagnose before pivoting.
+Anomalies and residuals are information; investigate before discarding.
+
+Skills available as `{{VERIFY_SKILL}}`, `/physkit:frame-problem`, `/physkit:debug`,
+`/physkit:correctness-suite`, `/physkit:campaign-status`, `/physkit:report`, … — invoke them.

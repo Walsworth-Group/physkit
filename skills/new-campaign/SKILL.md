@@ -220,6 +220,14 @@ obeying `PLACEHOLDERS.md`:
 - **Resolve every `[PROPOSED]` tag:** present each speculative discipline to the user to keep or cut;
   drop the tag on kept ones, delete cut ones.
 - **Strip the `.tmpl` suffix** on write (`program.md.tmpl` → `docs/program.md`, etc.).
+- **Always-on context + the enforcement hook (critical — this is what keeps the doctrine in context and
+  the verify gate un-skippable):** generate **`CLAUDE.md`** (from `CLAUDE.md.tmpl`) in the campaign root —
+  Claude Code auto-loads it every session, and it is the ONLY reliable always-on context (a plugin's
+  `docs/` are NOT auto-loaded, so the "always-loaded spine" lives here per-campaign). Also generate
+  **`.claude/settings.json`** (from its `.tmpl`) and **`scripts/guard_discoveries.py`** — the PreToolUse
+  hook that blocks a `DISCOVERIES.md` write when no independent verification ran recently. Fill
+  **`{{PYTHON_CMD}}`** with the python invocation detected in Step 0.5 (`py -3` on Windows, `python3` on
+  macOS/Linux) so the hook command runs on this machine.
 - **Code stubs:** fill `scripts/metric.py` (the FROZEN scorer + `--selftest`) and
   `scripts/run_campaign.py` (the runner). These are intentionally light — leave the TODO hooks for the
   agent to implement the physics in-loop, but wire the names/metric so `--selftest` is the gate for
@@ -276,11 +284,20 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/new-campaign/scripts/validate_campaign.py" 
 It fails if any literal `{{…}}`, dangling `[[OPTIONAL`, or stray `[PROPOSED]` remains, or if a required
 file is missing. A generated campaign with an unresolved token is not done.
 
-## Step 5 — hand off
-Tell the user what was created (the tree), point them at `docs/program.md` as the loop the agent now
-re-reads every iteration, and state the first action: **implement `scripts/metric.py` + make
-`--selftest` pass, then run experiment 000 (the baseline gate).** The campaign is then ready to run
-continuously.
+## Step 5 — hand off (and START A FRESH SESSION)
+Tell the user what was created (the tree). Then the **critical handoff rule: do NOT start the loop in
+THIS setup session.** The campaign's `CLAUDE.md` (always-on doctrine + hard gates) and the DISCOVERIES
+enforcement hook only take effect in a session that **starts in the campaign folder** — this setup
+session was already open when they were written, so it has loaded neither. Instruct the user to launch a
+fresh session from the campaign directory:
+```
+cd "<campaign dir>"
+claude --dangerously-skip-permissions
+```
+*(add `--plugin-dir "<KIT_DIR>"` if running the kit per-session rather than installed).* Point them at
+`docs/program.md` (re-read every iteration) and state the first action: **implement `scripts/metric.py` +
+make `--selftest` pass, then run experiment 000 (the baseline gate).** Have them confirm with `/context`
+that `CLAUDE.md` is loaded before the loop starts. The campaign is then ready to run continuously.
 
 ## Notes
 - This skill SCAFFOLDS; it does not run the loop. After hand-off, the loop-running agent executes

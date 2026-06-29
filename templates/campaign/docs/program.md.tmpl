@@ -338,7 +338,9 @@ detail.
 
 ### `results/DISCOVERIES.md`
 Write only after multiple consistent experiments confirm a finding on `{{PRIMARY_METRIC}}` (guardrail
-noted) AND an independent verification returns CONFIRMED. When a discovery changes the physical
+noted) AND an independent verification returns CONFIRMED. **A PreToolUse hook blocks this write unless an
+independent verify ran recently** — run `{{VERIFY_SKILL}}` (it spawns a refuter sub-agent), get CONFIRMED,
+and quote the verdict; this is hard gate #1 in `CLAUDE.md`. Don't fight the hook — satisfy it. When a discovery changes the physical
 understanding, also update `docs/PHYSICS.md` (equations, the effect, references consulted).
 
 ### `results/INDEX.md`
