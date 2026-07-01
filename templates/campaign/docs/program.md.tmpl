@@ -21,7 +21,11 @@ stopped.**
   source-authority ledger in `docs/ENGINEERING_NOTES.md` — and treat a fact you can only mark
   INFERRED/RECALLED as a gap to resolve **before** building an expensive run on it. When a faithful repro
   disagrees with a published number, find out *why* (your bug / the target's quirk / a wrong spec); never
-  reverse-engineer the original's bug just to match its table (protocols/baselines.md).
+  reverse-engineer the original's bug just to match its table (protocols/baselines.md). **Do not graduate a
+  load-bearing fact from INFERRED to PINNED without an explicit attempt to falsify it** — especially when a
+  cheaper discriminator is already in hand (a real campaign pinned a geometric "tilt" and built ~16
+  experiments on it while its own field-gradient-vs-bias discriminator, already computed, would have refuted
+  it).
 - **Prefer the minimally sufficient model/design.** Reach for the simplest {{MODEL_NOUNS}} that
   explains the data; add a parameter/term only when it earns its keep against the {{SPREAD_NOUN}}
   spread, is physically/theoretically motivated, AND generalizes. (Near-universal — apply by default.)
@@ -126,6 +130,12 @@ fastest way to catch bugs, leakage, and good-news-too-good results.
   predicted range as a red flag deserving extra scrutiny. **Do not move on until you understand the
   source of the surprise.** "It went up more than I thought it could" is the single most common
   signature of a leak or an accounting error.
+- **Settle statically-answerable questions with a cheap check BEFORE spending an expensive run.** A
+  surprising or non-monotonic scan result is often an analysis/selection artifact — e.g. a noisy
+  single-epoch checkpoint pick, an off-by-one, a stale cache — that is visible in an *existing* run's logs
+  at zero extra compute. Inspect that first; don't launch more multi-hour runs to "explore" a wiggle a
+  one-line log check would have explained. (A real campaign burned several GPU-hours on a φ-scan whose
+  non-monotonicity was just a checkpoint-selection artifact.)
 - **Calibrate disagreement with the literature by its weight.** A conflict with a few high-uncertainty
   papers may mean your data wins; a conflict with a well-established, tightly-measured value means
   assume the error is yours until proven otherwise — quantify the *magnitude* (how many σ, what
@@ -164,7 +174,9 @@ do not keep tweaking one knob.
 You are explicitly **encouraged to pursue well-founded novel ideas that go beyond the published
 literature** — the campaign is not limited to known approaches. When a hypothesis DOES come from a
 specific source (a paper, a doc, the user), **cite that source** on the JOURNAL `Hypothesis` line (and in
-`LITERATURE.md` if it exists). Tracking where each idea came from is part of the record.
+`LITERATURE.md` if it exists). Tracking where each idea came from is part of the record. **And when an idea
+comes from a *related solved problem*, note the analogy and what *transfers*** — the closest prior art's
+*approach*, not just its citation (a method that worked next door is often the fastest lever to try).
 
 ## FROZEN / out of scope (NEVER change; NEVER ask for)
 - **FROZEN** (no edit without re-validation + user sign-off): the scoring math `{{FROZEN_SCORER_PATH}}`;
@@ -222,6 +234,11 @@ column the **same turn** you promote — a row acting as current-best (or backin
 rule + the `campaign-status` check** — don't let a number become "best" on the scoreboard without the
 verdict beside it. Promotion compares only **within one `(metric_version, data_version)`** — never rank a
 row against one scored under a different metric or dataset version (re-score first; see Logging Protocol).
+**A non-CONFIRMED verdict does not promote a clean "best":** a PROVISIONAL / QUESTIONABLE ASSUMPTION row may
+act as working current-best only with its caveat recorded beside it — and **no claim-splitting**: a promoted
+config may not shed the unphysical part it rests on (a headline number is inseparable from its config; a
+fitted parameter outside its physical range blocks promotion until explained). Report each number with its
+**metric path** (the frozen PRIMARY vs any relaxed/auxiliary score).
 
 ## Independent verification — assume the result is WRONG and try to REFUTE it
 Convergence is not correctness. Before any finding is graduated to DISCOVERIES.md or accepted as
@@ -289,12 +306,21 @@ sign/convention slip, a pose/parameter mismatch, a degenerate setting)? Did it i
 fixed choice that should co-vary (test the pair, not the part)? Was the effect within replicate noise?
 **A crash is a bug, not a verdict** — fix it and re-run before judging the idea. And don't over-dismiss
 weak signal as noise: real effects can be small/noisy, so gather more evidence before concluding "just noise."
+**Was the test run in a regime where the competing hypotheses are actually DISTINGUISHABLE?** A null
+measured where the effect vanishes under *either* hypothesis proves nothing — e.g. testing a stiffness
+difference only in saturation, where both stiff and soft predict no canting. Rule the idea out only from a
+regime where it would have shown, had it been real.
 
 **Before ACCEPTING a positive result, ask the same, plus:** Did the experiment move the goalposts
 (re-check Metric integrity)? Did it land inside the range you predicted? Is it a ceiling move
 (physical) or a gap-to-ceiling move (suspect)? Does the guardrail pass? Does it generalize across the
 whole {{GENERALIZATION_AXIS}}, not a lucky subset? Confirm with ≥2–3 independent experiments AND an
 independent-agent verification before calling a method "best" or writing a DISCOVERY.
+**Fight confirmation bias explicitly** (the reflective decisions are the hardest to do honestly): state the
+result you hoped for, make the strongest case it's WRONG, name the one observation that would refute it (and
+check you ran it), and give a fair hearing to the unwelcome alternative conclusion (it's noise; a rival
+explains it too; it's an artifact). Generating failure modes is the reflective skill experts have and novices
+lack — practise it here. (Depth: `{{VERIFY_SKILL}}` §5c.)
 
 ### Mind the simulation-to-experiment gap
 {{SIM_GAP_NOTE}} Treat any guardrail resting on simulation/synthetic data as necessary-not-sufficient.
@@ -312,6 +338,14 @@ re-exploration pass.
 If {{STUCK_N}}+ experiments without a primary gain: re-read {{REANCHOR_DOCS}}; check whether the
 guardrail is also stuck (capacity/data-limited) or still moving (generalization-limited); escalate to
 the biggest unexploited structural lever ({{STRUCTURAL_LEVERS}}).
+- **Don't declare the campaign done prematurely.** "We've hit the ceiling / this is optimal / we're blocked
+  on new data" is a **load-bearing claim, not a stopping cue** — treat it like a positive result and try to
+  *refute* it: attempt to beat the supposed limit with an orthogonal lever or a freer model, and give the
+  reasoned argument for why any gain that appears is non-physical, *before* stopping. The loop runs until a
+  direction is genuinely exhausted or you are told to stop; a plateau is a pivot signal (escalate the lever),
+  not a finish line. "I've stopped finding gains" is not the same as "no gains exist." If you truly believe
+  you're at a limit, state it as a claim *with the falsification you attempted* — and keep exploring
+  orthogonal directions rather than idling.
 - **Diagnose before you pivot.** Name the failure type (idea-wrong / implementation-capped /
   fixed-choice-fought / near-miss) and take the **smallest jump** the diagnosis justifies along the
   refine↔pivot spectrum — escalate to an orthogonal lever only once the current family is exhausted, but
@@ -346,9 +380,10 @@ metric/sanity score, and the experiment-type **run numerics** (e.g. epochs train
 iterations, wall-clock). Append-only; never delete or rename a column mid-campaign (it breaks
 comparability), and keep the PRIMARY column position stable. A new column requires the run-writer to
 emit it first. The `verified` column carries the independent-verification verdict (blank until run).
-The **`metric_version` and `data_version`** columns tag the FROZEN metric and dataset this row was scored
-under: **a "current best"/ranking is only valid within one `(metric_version, data_version)` pair** — never
-compare across versions (the single most common silent landmine). When either changes, bump the tag and
+The **`tier`** column records the run-length tier (Scout / Confirmation / Extended) so cap-compliance stays
+machine-auditable on every row. The **`metric_version` and `data_version`** columns tag the FROZEN metric and
+dataset this row was scored under: **a "current best"/ranking is only valid within one `(metric_version,
+data_version)` pair** — never compare across versions (the single most common silent landmine). When either changes, bump the tag and
 **re-score saved contenders** under the new version before comparing; every row must carry both tags.
 (The full per-experiment breakdown is also saved to `results/result_<NN>.json`.)
 

@@ -8,7 +8,91 @@ Dates are UTC. Each entry cites the run/finding that motivated it (the kit's own
 
 ## [Unreleased]
 
-_Nothing yet._
+Second batch of keepers from the 2026-06-30 transcript review (`case-studies/transcript_review_2026-06-30.md`),
+plus the first improvements harvested from the Wieman 29-decisions map (`synthesis/WIEMAN_DECISIONS_MAP.md`).
+Each tightens the frozen honesty/verification core; none weakens it.
+
+### Skills & framing (from the Wieman 29-decisions map)
+- **New general skill `assess-idea`** (Wieman decision 9): honest feasibility/worth triage of a research idea
+  *before* committing — bounds it a priori, locates the crux + cheapest de-risking check, weighs worth, and
+  returns GO / DE-RISK-FIRST / NO-GO with confidence + assumptions. The anti-hype counterpart to `verify`
+  (licensed to say "no"). Standalone, and an **advisory** (never-blocking) pre-check composable by
+  `new-campaign`. Registered in `DOCTRINE_INDEX` / `CORE` routing / `GETTING_STARTED`. *(Front-end cluster
+  piece 1 of 3.)*
+- **New general skill `literature-review`** (Wieman decisions 1, 7): survey a field honestly — trajectory,
+  closest prior art, and the methods that *transfer* to your problem — **self-contained** (no `deep-research`
+  dependency, for frictionless adoption), arXiv-first, with a **mandatory `cite-check` gate** so no fabricated
+  reference survives; campaign-aware (writes `LITERATURE.md`, seeds `PHYSICS.md`). *(Front-end cluster piece
+  2 of 3; `research-direction` deferred — see `synthesis/FRONT_END_CLUSTER_DESIGN.md`.)*
+- **Predictive framework (W-PF)** made a first-class output of `frame-problem` (the mechanism + discriminating
+  thought-experiments at a justified complexity) with a `PHYSICS.md` "Predictive framework" section; its
+  revision log = the existing "Updates from discoveries" (placement provisional). Unifies Wieman decisions
+  5, 8, 19, 20, 23.
+- **Confirmation-bias reflection ritual (W-reflect)** — Wieman's reflection decisions 23–26 ("most important
+  and hardest"): a `verify` §5c ritual (state the hoped-for answer → argue it's wrong → name the refuting
+  observation → hear the resisted alternative), echoed in `campaign-status` and `program.md`; plus a
+  **non-count reflection trigger** (reflect on surprise / plateau / before a stop / on wall-clock, not only
+  every N experiments).
+- **Front-end / reflection refinements (Wieman 7, 8, 12, 14, 27)** — `frame-problem` flags the
+  crux/highest-uncertainty sub-steps with an acceptable-uncertainty bar (W-12) and enumerates candidate
+  approaches before committing (W-8); `campaign-status` re-plan prioritizes directions by importance ×
+  tractability × cost (W-14); `final-report` gains a "Broader implications & significance" section and the
+  `DISCOVERIES` entry template an Implications line (W-27); `program.md` "idea sources" now captures the
+  transferable method/analogy from a related solved problem (W-analogy). Closes out the applyable-anytime
+  Wieman keepers.
+
+### Added
+- **Machine-checkable `tier` field** (Scout/Confirmation/Extended) on every JOURNAL and scoreboard row, so
+  run-length cap-compliance stays auditable and can't silently drop off later entries. *(D3)*
+- **Wall-clock liveness self-check** for long runs in `expensive-evaluation.md.tmpl` — arm a monitor for any
+  run >~30–60 min (verify process alive AND log advancing; a stalled log is a dead run), don't wait to be
+  asked. *(E1)*
+- **"Known landmines / Do-not-repeat" block** in `ENGINEERING_NOTES.md.tmpl` — a pre-flight checklist
+  re-checked before any matching action (GPU/detached/irreversible) and surfaced to the user before
+  complying. *(E2)*
+- **Environment-pitfalls guidance** (Windows MAX_PATH → short venv paths + `core.longpaths`, `py -3.x` not
+  `python3`, shared-drive symlink limits) in `CONVENTIONS.md.tmpl` and `INSTALL_FOR_TESTERS.md`. *(F5/env)*
+- **`verify` §5b — provenance, authority, and irreversible actions**: resolve conflicting facts to the
+  highest-authority artifact (a derived statistic is weaker than its source); a fact acted on at
+  INFERRED/RECALLED is a claim to falsify; an irreversible action needs a CONFIRMED diagnosis. *(F1, F2, B4)*
+
+### Changed
+- **Degenerate-regime check** before writing off an idea (`program.md.tmpl`, `model-selection`): a null
+  measured where competing hypotheses are indistinguishable proves nothing. *(C3)*
+- **Frozen-infrastructure debugging**: an unphysical symptom (sign flip, mirrored artifact, structured
+  residual) now triggers re-verifying the FROZEN forward model/generator *first* — threaded into the `debug`
+  gotcha catalog and `frame-problem`'s "keep it living" (a persistent gap can be a bug in reference code, not
+  only model-form error). *(B2)*
+- **Promotion validates upstream preprocessing** (registration/pose/normalization must be non-degenerate on
+  the data it's applied to) in the checkpoint promotion checks and `verify`'s code-soundness step. *(B3)*
+- **No INFERRED→PINNED without a falsification attempt** (especially when a cheaper discriminator exists) in
+  `program.md.tmpl`'s operating stance and `verify`. *(B4)*
+- **Static-check-before-expensive-run** worked example (φ-scan artifact) added to `program.md.tmpl`'s
+  a-priori section. *(E3)*
+- **`debug`**: exhaust existing evidence (logs/recorded state) before building a reproduction harness; and
+  installed tooling must be verified non-intrusive. *(F4)*
+- **`handoff` + `GETTING_STARTED`**: flush converged designs/plans to a file at decision-lock points, not
+  session end. *(F3)*
+
+### Principles (doctrine)
+- **New Context 9 · "Operating unattended"** in `docs/PRINCIPLES.md` (+ always-on essence in `docs/CORE.md`
+  "Running unattended", coverage in `docs/DOCTRINE_INDEX.md`, and the paper master
+  `synthesis/PRINCIPLE_TAXONOMY.md`): **don't stop prematurely** (a "done/ceiling/blocked" conclusion is a
+  load-bearing claim, refuted like a positive result), autonomous-but-safe escalation, CONFIRMED-diagnosis
+  before an irreversible action, monitor-long-runs (a stalled log is a dead run), persist hazards/decisions
+  when they lock, enforce-don't-exhort, and every-human-correction-is-a-scaffolding-gap.
+- **Enforcement of "don't stop prematurely"** threaded into `program.md.tmpl` (Getting Unstuck), `verify`
+  (a ceiling/blocked claim is a load-bearing claim to refute; unfalsified ⇒ INCONCLUSIVE), and
+  `campaign-status` (flags a premature "done/blocked" as a resume signal).
+- **Additions to existing contexts** (all from the 2026-06-30 review): comparability-is-honesty +
+  record-carries-its-own-corrections (Ctx 1); validate-before-you-freeze + unphysical-symptom-implicates-
+  infrastructure (Ctx 2); exhaust-existing-evidence-before-a-repro-harness (Ctx 3); discriminate-where-
+  hypotheses-diverge + sharpened anchoring (Ctx 4); result-not-saved-until-verdict + reconstruct-from-full-
+  trail (Ctx 7).
+
+_Deferred / deliberate:_ multi-track campaign support (G2 branching + G3 cross-linked FROZEN/MUTABLE) is
+scoped as one workstream in `synthesis/BUILD_BACKLOG.md`; the stale-archive-digest flag (archive) stays queued.
+Ctx 9's overlap with Contexts 7–8 (organization) is flagged for a later editorial pass.
 
 ## [0.5.0] — 2026-06-30
 

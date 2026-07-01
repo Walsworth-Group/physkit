@@ -94,8 +94,8 @@ Items not yet built are listed so the index is a complete map of the intended ki
 
 | id | path | kind | frozen | addresses | status |
 |---|---|---|---|---|---|
-| core | `docs/CORE.md` | core-doc | true | 1,2,7,8 | new |
-| principles | `docs/PRINCIPLES.md` | reference-doc | true | 1–8 | new |
+| core | `docs/CORE.md` | core-doc | true | 1,2,7,8,9 | new |
+| principles | `docs/PRINCIPLES.md` | reference-doc | true | 1–9 | new |
 | doctrine-index | `docs/DOCTRINE_INDEX.md` | metadata | false | 7 | new |
 
 ### General reference docs (on-demand)
@@ -107,6 +107,7 @@ Items not yet built are listed so the index is a complete map of the intended ki
 | pivoting | `docs/reference/pivoting.md` | reference-doc | 3 | new |
 | version-control | `docs/reference/version-control.md` | reference-doc | 7 | new |
 | context-economy | `docs/reference/context-economy.md` | reference-doc | 7 | new |
+| coordinate-frames | `docs/reference/coordinate-frames.md` | reference-doc | 5 | new |
 | reporting-standards | — | reference-doc | 1 | absorbed into `report` skill (§standards) |
 | latex-toolchain | — | reference-doc | 1 | absorbed into `report` assets README |
 
@@ -124,6 +125,8 @@ Items not yet built are listed so the index is a complete map of the intended ki
 | cite-check | `skills/cite-check/SKILL.md` | 1 | new (lifted from final-report) |
 | report | `skills/report/SKILL.md` | 1 | new |
 | derive | `skills/derive/SKILL.md` | 2,5 | new (analytical/symbolic theory) |
+| assess-idea | `skills/assess-idea/SKILL.md` | 8,4,9 | new (feasibility/worth triage — Wieman decision 9; front-end cluster) |
+| literature-review | `skills/literature-review/SKILL.md` | 1,8 | new (understand the field, cited — Wieman decisions 1,7; front-end cluster) |
 
 ### Campaign skills (on-demand; `layer: campaign`)
 
@@ -188,10 +191,16 @@ Every principle context should have at least one `frozen` or always-loaded home 
 | 6 Discovery-loop | PRINCIPLES; `discovery-loop`, archetype G (cheatsheet), expensive-evaluation |
 | 7 Records & reproducibility | CORE (frozen: context economy); this index, `handoff`, `record-decision`, scaffold |
 | 8 Autonomy & collaboration | CORE (frozen-adjacent: clarify-the-goal); `new-campaign`, frame-problem |
+| 9 Operating unattended | CORE (Running unattended) + PRINCIPLES §9; `program.md` (Getting Unstuck + promotion), `campaign-status`, `expensive-evaluation`, ENGINEERING_NOTES (landmines), the CLAUDE.md gates + DISCOVERIES hook |
 
 **Open gaps:** none of the backlog tiers remain — Tiers 0–5 and the deferred discovery-loop/archetype G are
-all built. Remaining work is testing/iteration, not net-new artifacts.
+all built. Remaining work is testing/iteration, not net-new artifacts. *(Context 9 overlaps 7–8 by design;
+its organization vs those contexts is flagged for revisit.)*
 
 ## Changelog
+- **v0.2** — added **Context 9 · Operating unattended** to the coverage audit (home: CORE "Running
+  unattended" + PRINCIPLES §9; enforced via `program.md` / `campaign-status` / `expensive-evaluation` /
+  ENGINEERING_NOTES landmines / the CLAUDE.md gates). Bumped CORE `addresses` to `1,2,7,8,9` and PRINCIPLES
+  to `1–9`. From the 2026-06-30 review.
 - **v0.1** — initial index + metadata schema. Enumerates the full intended kit (built + planned) from
   `synthesis/BUILD_BACKLOG.md` and `SKILLS_AND_DOCS_OUTLINE.md`.

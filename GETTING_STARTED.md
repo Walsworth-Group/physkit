@@ -19,7 +19,7 @@ installing the plugin (full list at the bottom).
 The kit is a plugin; installing it makes its skills available as `/physkit:<skill>` in **every**
 session on that machine. `<KIT_DIR>` below is the full path to the `kit` folder (quote it — it has
 spaces); on the lab Windows machines that's
-`G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\Autoresearch paper\Auto Research Paper\kit`.
+`G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\physkit-dev\physkit-internal\kit`.
 Pick whichever fits where you are:
 
 **Option A — Quick test, no install (per session).** Best while iterating on the kit; reads the files
@@ -87,7 +87,9 @@ asking only about genuine gaps:
 - and whether the work should be split into **multiple sequential loops**.
 
 **Tips for a good result:** point it at the documents/papers that describe your setup (it prefers arXiv
-versions and reads them efficiently), and tell it where your data lives.
+versions and reads them efficiently), and tell it where your data lives. If a long planning discussion
+converges before the tree is generated, ask the agent to write the locked decisions to a file as they
+settle — a plan that lives only in the chat is lost if the session drops (`handoff` covers this habit).
 
 Before writing anything, it shows you a **campaign spec** for sign-off — your chance to correct course.
 Then it generates a complete campaign folder and validates that nothing is left blank:
@@ -177,7 +179,7 @@ graduate to `results/DISCOVERIES.md`. Check in whenever you like — the ledger 
 ---
 
 *The kit ships two layers of skills, all namespaced `/physkit:<name>`. **General science toolkit**
-(usable in any session): `frame-problem`, `verify`, `simulation-design`, `correctness-suite`, `debug`,
-`dimensional-analysis`, `derive`, `record-decision`, `cite-check`, `report`. **Campaign layer**:
+(usable in any session): `assess-idea`, `literature-review`, `frame-problem`, `verify`, `simulation-design`,
+`correctness-suite`, `debug`, `dimensional-analysis`, `derive`, `record-decision`, `cite-check`, `report`. **Campaign layer**:
 `new-campaign` (scaffold + interview), `campaign-status` (periodic checkpoint), `handoff` (cold-resume),
 `discovery-loop`, `experiment-design`, `model-selection`, and `final-report` (end-of-campaign report).*

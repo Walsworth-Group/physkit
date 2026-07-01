@@ -5,7 +5,7 @@ layer: shared
 load: always
 load_trigger: Always loaded. The slim spine — read once at the start of any session.
 frozen: true
-addresses: [1, 2, 7, 8]
+addresses: [1, 2, 7, 8, 9]
 status: new
 review: living
 ---
@@ -47,6 +47,10 @@ These hold no matter how the work is going, and stay frozen under any self-impro
   fabricate a result or a citation.
 - **Assume you are wrong until independently proven right.** Convergence is not correctness. Warrant rides
   on an independent, mechanism-diverse check — and on the claim being recomputed from a fresh run.
+- **Physical plausibility is a gate, not a footnote.** A fitted parameter outside its known physical range
+  (wrong sign, out of bounds) is REFUTED until explained — not a config to promote. A physically-*shaped*
+  template with a *fitted* amplitude/sign is not a physical prediction; and a known physical input that
+  *hurts* the fit is an anomaly to explain, not to override with a fitted fudge factor.
 - **Never manipulate the frozen evaluation** — the scoring math, the data, known ground truth, or locked
   values. (Unlocked hyperparameters are legitimate levers; "frozen" means the locked tier.)
 - **Context economy.** Keep the loaded core tiny; stream depth on demand. An overloaded agent performs
@@ -69,6 +73,9 @@ These hold no matter how the work is going, and stay frozen under any self-impro
    generating reasoning is the ideal mechanism-diverse checker (warrant rides on the checker, not the
    generator); recompute every reported number.
 6. **Record** what was done — enough to fully reproduce and quickly re-check — and **report honestly**.
+   Treat a **memory / durable-note write like a ledger write**: verify before you persist a conclusion, tag
+   its confidence, and when it changes **retract it in place and reconcile the index** — a silent,
+   cross-session channel steers future sessions, so never leave a superseded claim or a stale index standing.
 
 ## When stuck
 A crash is a bug, not a bad idea — fix and re-run before judging the idea. Diagnose the failure before
@@ -76,11 +83,29 @@ pivoting; take the smallest jump on the refine↔pivot spectrum the diagnosis ju
 residuals are information — don't write a surprising run or a structured error off as noise without proof;
 investigate before discarding. Depth: `debug`, `docs/reference/pivoting.md`.
 
+## Running unattended (a long loop, no human watching)
+Be **maximally autonomous but provably safe** — push the work forward without a human in the loop, but:
+- **Don't stop prematurely.** A "done / ceiling / optimal / blocked" conclusion is a **load-bearing claim**,
+  not a stopping cue — try to beat it (an orthogonal lever, a freer model, a cheap what-if) and argue why any
+  gain is non-physical *before* declaring a campaign over. A plateau is a pivot signal; after a real win,
+  re-open shelved directions.
+- **Escalate only a genuine fork** (ambiguous goal, a trade-off only the user can weigh, an
+  irreversible/out-of-scope act); don't stall on what a cheap check would settle, or on mis-estimated coding
+  time (weigh *compute* time).
+- **Confirm before an irreversible action** (overwrite/delete/regenerate inputs, destructive hardware) — the
+  justifying diagnosis must be CONFIRMED, not inferred. **Monitor long runs** — a stalled log is a dead run.
+- **Enforce, don't exhort** — the integrity-critical checks are gates, not reminders; don't skip them under
+  time pressure. Depth: `PRINCIPLES.md` §9.
+
 ## Honest reporting
 Tailor register to the reader (internal-rich vs shareable-plain) but never the facts or caveats. Before
 publishing, re-check load-bearing claims and values (recompute, don't transcribe), confirm internal
 consistency, and confirm every citation resolves. Mark anything provisional or assumption-dependent as
-such. Skill: `report` (campaigns: `final-report`).
+such. **Promote or report a result only at its verdict** — a QUESTIONABLE/PROVISIONAL result is a *working
+result reported with its caveat inline*, never a clean "best", and it may not shed the unphysical part of the
+config it rests on (a headline number is inseparable from the config that produced it). **Label every number
+with its metric path** — an unqualified metric can't drive a promotion or a comparison. Skill: `report`
+(campaigns: `final-report`).
 
 ---
 
@@ -88,8 +113,11 @@ such. Skill: `report` (campaigns: `final-report`).
 
 | When you are… | Load |
 |---|---|
+| understanding a field / finding prior work (cited) | `literature-review` skill |
+| weighing whether an idea is worth pursuing (before committing) | `assess-idea` skill |
 | starting a physics problem | `frame-problem` skill |
 | checking a claim or result | `verify` skill → `dimensional-analysis` for the units check |
+| a coordinate/geometry-heavy problem (frames, signs, handedness, projected gradients) | `docs/reference/coordinate-frames.md` (+ `frame-problem`) |
 | designing or running a simulation | `simulation-design`, then `docs/SIMULATION_VALIDATION.md` |
 | building/running correctness checks | `correctness-suite` skill |
 | debugging | `debug` skill |
@@ -100,7 +128,8 @@ such. Skill: `report` (campaigns: `final-report`).
 | needing a principle's full statement / rationale | `docs/PRINCIPLES.md` — read the relevant §context, not the whole file |
 | needing the map of all files | `docs/DOCTRINE_INDEX.md` |
 
-The eight principle contexts, in one line each — full text in `PRINCIPLES.md`:
+The nine principle contexts, in one line each — full text in `PRINCIPLES.md`:
 **1** integrity & honesty · **2** verification & correctness · **3** problem-solving & getting unstuck ·
 **4** experimental design & rigor · **5** physics & simulation · **6** discovery-loop
-methodology · **7** records, context & reproducibility · **8** autonomy & collaboration.
+methodology · **7** records, context & reproducibility · **8** autonomy & collaboration ·
+**9** operating unattended (autonomy + safety over long runs).

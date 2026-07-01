@@ -63,6 +63,11 @@ selection most often misleads.
 - **Don't let one model's misspecification masquerade as discrimination** — a rival can lose because it was
   implemented badly, not because it's wrong. Rule out the implementation (a `debug`/`verify` pass on each
   candidate) before declaring a mechanism refuted.
+- **Test where the models are actually DISTINGUISHABLE, not in a degenerate regime.** A negative result
+  measured where the candidates predict the *same* outcome proves nothing (e.g. comparing a stiff vs soft
+  magnet only in saturation, where both predict zero canting). Before writing off a hypothesis, confirm the
+  experiment sat in the regime where the models diverge — that is exactly what active mode's
+  "measure where they disagree most" buys you.
 
 ## Credit the mechanism, not just the metric
 A model-selection result is **explanatory**: the win is a recovered understanding of *why* the system
@@ -86,6 +91,7 @@ is weaker than an explanatory "B fits better *and* implies effect X, which we th
 - [ ] Models scored by an evidence/predictive criterion that **penalizes complexity** (Occam), not raw fit.
 - [ ] Priors and assumptions stated; the conclusion is robust to reasonable prior/criterion changes.
 - [ ] The front-runner is **absolutely adequate** (residuals unstructured), not just relatively best.
+- [ ] Any hypothesis written off was tested in a regime where the models are **distinguishable** (not a degenerate regime where both predict the same).
 - [ ] A flexible "none-of-the-above" was in the set; model-form error considered.
 - [ ] Each candidate's implementation was checked, so a loss reflects the *model*, not a bug.
 - [ ] (Active mode) experiments targeted maximum model disagreement; the model posterior is calibrated; a decisive stop was used.

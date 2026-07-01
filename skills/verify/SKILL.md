@@ -49,7 +49,9 @@ Different claims fail in different ways. Lead with the check that would actually
 - **A computed number / result → recompute it from a fresh run.** Re-run the producing computation and
   confirm the value matches — **every reported number, not just the headline**. A number that doesn't
   reproduce, or that was only ever stated once and never recomputed, is REFUTED. Convergence ≠ correctness:
-  re-derive the value, don't trust that the solver converged.
+  re-derive the value, don't trust that the solver converged. **Label which metric path each number is** (a
+  relaxed/auxiliary score vs the frozen primary metric); an unlabelled number can't be compared
+  apples-to-apples or drive a promotion.
 - **A fit or a prediction → interrogate the *nature* of the error (see below), not just its magnitude**,
   in addition to recomputing it.
 - **A claim / comparison → falsify it with code.** Write controls: verify against known examples (inputs
@@ -58,6 +60,12 @@ Different claims fail in different ways. Lead with the check that would actually
   state) and any prior known result — a result worse than a trivial answer is no win. *(Nuance: if a
   **non-physical** trivial answer scores better than a plausible result, that flags a metric/units problem,
   not a target to beat.)*
+- **A "we're done / at the ceiling / blocked / optimal" conclusion → treat it as a load-bearing positive
+  claim and try to REFUTE it.** A stopping decision is high-stakes — it ends the work — so it earns the same
+  adversarial scrutiny as a win: require an explicit attempt to beat the supposed limit (an orthogonal lever,
+  a freer model, a cheap what-if) and a reasoned argument for why any gain found is non-physical, before the
+  "done" stands. "I've stopped finding gains" is not "no gains exist"; an unfalsified ceiling is INCONCLUSIVE,
+  not CONFIRMED.
 
 ### 3 · Interrogate the nature of the error (fits & predictions)
 For any fit, regression, calibrated model, or learned predictor, **don't stop at the error magnitude —
@@ -83,9 +91,51 @@ for close calls — a difference smaller than the spread is not automatically no
 weak), but it's not automatically real either.
 
 ### 5 · Bounds & physicality
-Confirm the result is physically possible: within hard bounds (probabilities in [0,1], known ranges), no
-fitted parameter outside its physical range, nothing above its own ceiling. Anything impossible means a
-bug or a leak — REFUTED until explained.
+Confirm the result is physically possible: within hard bounds (probabilities in [0,1], known ranges), **no
+fitted parameter outside its physical range** (wrong sign, out of bounds), nothing above its own ceiling.
+Anything impossible means a bug or a leak — **REFUTED until explained, and never carried into a reported
+"best" config while it stands.** Three traps specific to physically-motivated fits:
+- **A physically-*shaped* template with a *fitted* amplitude/sign is not a physical prediction.** If the
+  first-principles value (the physical amplitude, scale = +1, …) is *not* what the fit chose — worse, if it
+  *hurts* the metric — the lever is an empirical corrector in physical clothing: grade it QUESTIONABLE
+  ASSUMPTION, don't credit it as first-principles.
+- **A known physical input that *hurts* the fit is an anomaly to explain, not to override with a fitted fudge
+  factor.** And **cross-fit agreement on the *same unphysical value* is not validation** — two fits agreeing
+  on the same wrong number are both wrong.
+- **Frame consistency (geometry-heavy claims).** For any result that crosses coordinate frames, run the
+  frame-consistency check in [`docs/reference/coordinate-frames.md`](../../docs/reference/coordinate-frames.md):
+  every quantity's frame declared, no symbol overloaded across frames, orientation/handedness resolved from an
+  independent reference (not the fit). Correct code with undeclared frames is still unverifiable.
+
+### 5b · Provenance, authority, and irreversible actions
+A result is only as trustworthy as the facts it rests on and the source those facts came from.
+- **When sources conflict, resolve a load-bearing fact to the highest-authority artifact** — parse the saved
+  model, probe the released data, run the shipped weights — not a lower-authority proxy (paper text, leftover
+  code) and *not a statistic you derived from the data* (a correlation you computed is weaker than the source
+  it came from). The authority ladder and the PINNED/REPORTED/INFERRED/RECALLED/REASONED tags are in
+  `docs/PRINCIPLES.md` Ctx 4.
+- **A fact acted on at INFERRED/RECALLED is itself a claim to verify.** Try to *falsify* it before it becomes
+  load-bearing — especially when a cheaper discriminator is already in hand. (A campaign that pins an
+  inferred quantity and builds on it, skipping an available refuting check, is the classic expensive error.)
+- **Before any irreversible action** (overwrite/delete/regenerate inputs, a hardware move), require the
+  justifying diagnosis to reach **CONFIRMED via the highest-authority artifact** — read the actual pipeline
+  source, don't act on a derived statistic. Gating a destructive step to the user on a below-CONFIRMED
+  diagnosis makes the human your only backstop; confirm first.
+
+### 5c · Reflect against your own confirmation bias (before you grade)
+The hardest error to catch is the one you are motivated not to see: once you have decided an answer is right,
+the pull is to suppress alternatives and read every new datum as confirmation. This is the chief threat to the
+reflective decisions, and generating failure modes is a *learnable* skill experts have and novices lack — so
+run the ritual explicitly, don't just intend to be objective:
+- **State the result you expected or hoped for** — name it, so the bias is visible.
+- **Make the strongest case that it is WRONG** — argue the other side as hard as you argued yours; list the
+  concrete ways it could fail.
+- **Name the single observation or control that would refute it** — then check whether you actually ran it.
+  If not, run it before concluding.
+- **Consider the alternative conclusion you are resisting**, especially an unwelcome one (the effect is noise;
+  a rival model fits too; the "win" is an artifact) — and give it a fair hearing.
+This is *your own* reflection; it complements — does not replace — the independent refuter (§4), whose value
+is precisely that it never shared your hope.
 
 ### 6 · Grade the verdict and surface the premise
 Return one of the five verdicts (defined below), state what is **certified vs conjectured** and over what
@@ -152,9 +202,12 @@ model **at least as capable** as the one that produced the result — a *differe
 `**Verification**:` line; log every concern the verifier raised — *even on CONFIRMED* — under
 `**Disputes & responses**:`, each with your response. **Never delete a raised issue; if you disagree, add a
 counter-argument.** Do the same for any concern the **user** raises. Then gate: CONFIRMED → may promote;
-PROVISIONAL / QUESTIONABLE ASSUMPTION → working result only, must NOT graduate to DISCOVERIES until the
-adaptation/assumption is reviewed; REFUTED → don't promote, add the refuting control as its own experiment;
-INCONCLUSIVE → run the named control before deciding.
+PROVISIONAL / QUESTIONABLE ASSUMPTION → **working result only** — must NOT graduate to DISCOVERIES, **nor be
+reported as "current-best" / "best" without its caveat carried inline**, until the adaptation/assumption is
+reviewed; REFUTED → don't promote, add the refuting control as its own experiment; INCONCLUSIVE → run the
+named control before deciding. **No claim-splitting:** a headline number is inseparable from the config that
+produced it — you may not promote "the number" while grading its config's physics QUESTIONABLE, nor let a
+promoted config keep a fitted parameter outside its physical range.
 
 **Clear the noise floor before promoting.** A delta only counts if it exceeds measurement jitter.
 Establish the **noise floor** — repeat the evaluation across seeds/perturbations (or re-runs of a
@@ -214,7 +267,9 @@ reproduce mode by run cost.
 > [CODE / FORWARD-MUTATING ONLY:
 > 10. **Code soundness.** Sign/convention slip (the #1 forward bug — see `docs/CONVENTIONS.md`), units error,
 >    geometry mismatch. `--selftest` still passes; no stale cache reused after a core change; no silently-added
->    free parameters (must be no freer).
+>    free parameters (must be no freer). **Upstream preprocessing:** the load-bearing transform feeding the
+>    metric (registration / pose / normalization) is non-degenerate on the data it's applied to — a degenerate
+>    step can pass the score while silently mis-handling specific inputs.
 > 11. **Multi-condition agreement.** Win holds at EVERY evaluated condition, not one. A one-condition win is an
 >    artifact. ]
 >
@@ -241,6 +296,10 @@ reproduce mode by run cost.
 - [ ] Every reported number recomputed from a fresh run (not transcribed).
 - [ ] Fit/prediction → residuals examined for structure vs random noise.
 - [ ] Falsified with code (known examples, edge cases, counterexamples); beats trivial baselines.
-- [ ] Result within physical bounds and its a-priori range.
+- [ ] Result within physical bounds and its a-priori range; **every fitted parameter inside its physical range** (a physically-shaped free-amplitude lever not credited as a physical prediction; a known input that *hurts* treated as an anomaly, not overridden with a fudge factor).
+- [ ] Every reported number **labelled with its metric path**; a cross-frame result passed the **frame-consistency check** (`docs/reference/coordinate-frames.md`).
+- [ ] QUESTIONABLE/PROVISIONAL **not promoted or reported as "best" without its caveat inline**; no claim-splitting (the number is inseparable from its config).
+- [ ] Load-bearing facts resolved to the highest-authority source (not a derived statistic); any INFERRED/RECALLED fact falsification-tested before it's relied on.
+- [ ] Any irreversible action was gated on a CONFIRMED diagnosis (highest-authority artifact read), not a derived statistic.
 - [ ] Substantial claim → an independent / mechanism-diverse route (often a fresh agent) agreed.
 - [ ] Verdict graded; load-bearing assumption named; disputes recorded append-only (campaign mode).

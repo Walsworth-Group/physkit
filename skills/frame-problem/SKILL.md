@@ -52,9 +52,37 @@ Rules that make the inventory honest:
   magnitude** the result must fall within (units, limits, known system properties). A later result outside
   this envelope is a bug or a discovery — and you decide which *before* celebrating. (`dimensional-analysis`.)
 - **State the domain of validity and the key assumptions** the model rests on.
+- **Anchor load-bearing facts, not just effects.** A system parameter or convention taken from a paper,
+  leftover code, or memory is a *description* of the system, not the system — pin each to the
+  highest-authority artifact you can parse/run and tag its provenance (`docs/PRINCIPLES.md` Ctx 4). An
+  unpinned load-bearing fact is a risk, like an unjustified "negligible."
 - **Keep it living.** A persistent gap between model and data, after the work checks out, points straight
-  at a **parked or missing effect** here (model-form error) — the inventory is where you look. Update it as
-  understanding changes; in a campaign it graduates into `PHYSICS.md`.
+  at a **parked or missing effect** here (model-form error) — the inventory is where you look — **or at a bug
+  in the FROZEN reference code / forward model itself** (a sign/convention error upstream masquerades as
+  missing physics); re-verify that infrastructure too, don't only add terms. Update it as understanding
+  changes; in a campaign it graduates into `PHYSICS.md`.
+
+### The predictive framework — the model you predict *with* (and revise)
+The inventory says *which effects are in play*; the **predictive framework** is the model that ties them into
+**predictions** — the mental model expert physicists actually reason from (Wieman's decisions 5, 8, 19, 20,
+23). Name it explicitly:
+- **The mechanism + the key variables and their relationships**, at a **complexity chosen to match the
+  problem** — the minimally-sufficient level, and *why this level and not more* (decision 5). (Laser-cooling
+  example: photon vs atom momentum, the light-scattering conversion between them, and the scattering rate's
+  dependence on light frequency and the Doppler shift.)
+- **The thought-experiments it licenses** — "if I change X, the framework predicts Y." These *are* your
+  a-priori predictions (decision 19) and a source of candidate solutions (decision 8); run them before you
+  run code.
+- **Enumerate candidate approaches before committing to one** (decision 8). The thought-experiments usually
+  suggest *several* possible levers or solutions — jot a short **divergent** list with a one-line pro/con
+  each, and *choose among them deliberately*, rather than running with the first idea that came to mind.
+- **Keep it revisable, and log the revisions.** When data disagrees with the framework's prediction (a
+  structured residual, an out-of-envelope result), decide whether the anomaly fits the framework's stated
+  domain or **the framework itself must change** (decisions 20 → 23) — then record what changed and why (the
+  laser-cooling example adds the AC Stark shift and its spatial variation across the beam). In a campaign this
+  revision log lives in `PHYSICS.md` (its "Updates from discoveries" section). *(Placement of the revision log
+  is provisional — reassess after a couple of campaigns whether it belongs in `PHYSICS.md` or the append-only
+  `ENGINEERING_NOTES.md`.)*
 
 ## 2 · Verification plan — how you'll know the answer is right (decided up front)
 
@@ -92,6 +120,10 @@ Break the work into small, agile sub-steps you can do one at a time. For each st
 - **Verify between steps proportional to risk, not after every trivial step.** Put a checkpoint where a
   later step *depends* on this one, or where an error would *compound*. A wrong foundation found at step two
   is cheap; found at step nine it's a rebuild.
+- **Flag the crux sub-steps and set an acceptable-uncertainty bar** (Wieman decision 12). Name the sub-steps
+  that are *hardest or most uncertain* — where the plan is most likely wrong — and decide *how sure you must
+  be* to proceed past each (the acceptable-uncertainty threshold at that stage). Risk concentrates there;
+  that's where the checkpoints and the early de-risking effort belong.
 - **Build the simplest sufficient version first**, then add the deferred effects from the inventory one at a
   time — each addition is a step, and ideally each is independently checkable. Validating a simpler subcase
   first usually yields a stronger, better-validated final result.
@@ -128,6 +160,9 @@ the **inventory → `PHYSICS.md`**, the **goal + steps → `PROJECT_ORIENTATION.
 - **`simulation-design` starts from this skill's inventory** and turns the verification plan into a full
   V&V&UQ plan *before any simulation code is written*.
 - **`dimensional-analysis`** does the bounding and dominant-term work in steps 1–2.
+- **`docs/reference/coordinate-frames.md`** — for a geometry-heavy problem, declare each coordinate frame
+  (name, origin, axes, handedness) in the inventory and pin how every transpose/handedness/sign ambiguity is
+  broken from an **independent** reference; `verify` runs the frame-consistency checklist downstream.
 - **`verify` / `correctness-suite`** consume the verification plan downstream.
 
 ## Worked mini-example (estimate, then frame)
@@ -150,6 +185,8 @@ the **inventory → `PHYSICS.md`**, the **goal + steps → `PROJECT_ORIENTATION.
 ## Before you call the frame done — checklist
 - [ ] Every effect that could matter is listed and tagged; each "not accounted-for" has a *reason* (a number where it's "negligible").
 - [ ] The answer is bounded a priori (ceiling / floor / order of magnitude).
+- [ ] The **predictive framework** is named (mechanism + variables + relationships, at a complexity justified for the problem) and the thought-experiments it licenses are stated — and it's set up to be *revised* (with a logged reason) when data disagrees.
+- [ ] Candidate approaches enumerated (divergent, pro/con) before committing; the crux/highest-uncertainty sub-steps flagged with an acceptable-uncertainty bar.
 - [ ] Key assumptions and the domain of validity are stated.
 - [ ] The verification plan is concrete and decided *before* computing — verification vs validation marked; calibration ≠ validation noted where relevant.
 - [ ] Application-specific checks / known gotchas captured.

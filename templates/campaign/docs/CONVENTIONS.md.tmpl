@@ -19,6 +19,13 @@ this template is a prompt list, not boilerplate.)
 - {{COORDINATE_CONVENTIONS}}
   <!-- Array index order (row/col vs x/y), pixel-center vs corner, the canonical ordering of any
        catalog/list, and how indices map to physical positions. -->
+- **Frame hygiene (name every frame; one symbol per axis per frame).** List each coordinate frame in play
+  (origin, axes, handedness) and give it a NAME; never reuse a symbol (e.g. `z`) across two frames; state the
+  frame of every gradient/derivative and projected component. **Resolve orientation/handedness from an
+  independent geometric reference, never the fit.** Depth + the frame-consistency checklist:
+  `docs/reference/coordinate-frames.md`.
+  <!-- Geometry-heavy campaigns: pin the transpose/handedness and any sign-unobservable (a quantity entering
+       as a square → only |x| is fixed) here, with how each ambiguity is broken (an independent reference). -->
 
 ## Data layout & key arrays
 - {{DATA_LAYOUT}}
@@ -27,3 +34,13 @@ this template is a prompt list, not boilerplate.)
 ## Known gotchas / past bugs
 - {{KNOWN_GOTCHAS}}
   <!-- The #1 recurring bug for this domain and how to detect it (e.g. a self-test that must pass). -->
+
+## Environment gotchas (fill for this machine; delete lines that don't apply)
+<!-- Recurring, turn-wasting environment traps — capture them once so no future session rediscovers them. -->
+- **Windows long paths (MAX_PATH):** deeply-nested install/repo paths (e.g. a long shared-drive or scratch
+  path) break pip wheels with long headers (TF/torch) and git object reads. Install heavyweight wheels into a
+  SHORT root (e.g. `C:\venvs\<name>`), and set `git config --global core.longpaths true`.
+- **Python launcher:** use `py -3.x` (or the venv's `python`), NOT `python3` (a Windows Store stub on many
+  machines).
+- **Shared-drive filesystem (Google Drive / OneDrive File Stream):** may not support symlinks/junctions
+  ("Incorrect function") — use a copy/sync step instead of a symlink.

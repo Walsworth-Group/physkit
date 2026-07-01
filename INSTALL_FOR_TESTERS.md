@@ -9,7 +9,7 @@ always in context.
 **Before you start:** make sure `claude` runs in your terminal and the PHYS shared drive is mounted. The kit
 lives at:
 
-`G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\Autoresearch paper\Auto Research Paper\kit`
+`G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\physkit-dev\physkit-internal\kit`
 
 *(If your shared drive isn't `G:`, change the drive letter.)*
 
@@ -18,14 +18,14 @@ lives at:
 ## Step 1 — Put the doctrine in your project
 1. Pick the project folder you'll work in.
 2. Copy this file from the kit:
-   `…\Auto Research Paper\kit\templates\CLAUDE.general.md`
+   `…\physkit-internal\kit\templates\CLAUDE.general.md`
 3. Paste it into your project folder and **rename the copy to `CLAUDE.md`**.
 
 ## Step 2 — Start Claude with the plugin (easiest — do this one)
 1. Open a terminal and `cd` into your project folder.
 2. Launch Claude with the kit attached — copy this **whole line, quotes included**:
    ```
-   claude --plugin-dir "G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\Autoresearch paper\Auto Research Paper\kit"
+   claude --plugin-dir "G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\physkit-dev\physkit-internal\kit"
    ```
    That loads the skills for the session **and** auto-loads your project `CLAUDE.md`. Skip to Step 4.
 
@@ -38,11 +38,11 @@ together:
 
 1. Add the marketplace (type the whole line, including quotes):
    ```
-   /plugin marketplace add "G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\Autoresearch paper\Auto Research Paper\kit"
+   /plugin marketplace add "G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\physkit-dev\physkit-internal\kit"
    ```
    ⚠️ If a box pops up titled **"Enter marketplace source:"**, type **only the path — no quotes, nothing
    after it** — then Enter:
-   `G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\Autoresearch paper\Auto Research Paper\kit`
+   `G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\physkit-dev\physkit-internal\kit`
 2. Install the plugin:
    ```
    /plugin install physkit@physkit
@@ -63,5 +63,12 @@ together:
 Work normally — skills trigger on their own, or call them explicitly: `/physkit:verify`,
 `/physkit:frame-problem`, `/physkit:report`. To stand up an autonomous research campaign, run
 `/physkit:new-campaign` (see `GETTING_STARTED.md`).
+
+## Windows gotchas (save yourself some time)
+- **Long paths:** the shared-drive path is long, so pip installs of big wheels (TensorFlow/PyTorch) and some
+  git operations can fail with "Filename too long". Fixes: `git config --global core.longpaths true`, and
+  install heavyweight packages into a venv at a SHORT path (e.g. `C:\venvs\physkit`).
+- **Use `py -3.x`**, not `python3` (which is often a non-functional Windows Store stub).
+- **Symlinks:** Google Drive File Stream doesn't support them — copy files instead of linking.
 
 Please flag anything confusing or broken — thanks for testing!

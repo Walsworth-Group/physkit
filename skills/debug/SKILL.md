@@ -24,6 +24,9 @@ cause is found.
 1. **Reproduce — deterministically.** Pin down expected vs actual, the exact inputs, and a command that
    triggers the failure every time. Seed every RNG and log the seed; an intermittent bug you can't reproduce
    on demand is a seed/environment lead, not a mystery. Note what changed recently (the top suspect).
+   **Exhaust existing evidence first:** logs, recorded state, saved artifacts, OS/event logs often already
+   contain the answer — read them before building a reproduction harness, *even when asked for a repro tool
+   first* (a workstation crash was diagnosed straight from the event log before any stress test was needed).
 2. **Reduce to the smallest failing case.** Shrink inputs, grid size, dimensions, number of steps until the
    failure is as small and fast as it can be. Small reproductions localize bugs; big ones hide them.
 3. **Check units, signs, and conventions *first*.** The cheapest and most common class of numerical bug.
@@ -62,12 +65,25 @@ The silent bugs that produce a plausible-but-wrong number (worse than a crash, b
   output; find the *first* one.
 - **Seed / nondeterminism** — unset RNG state making results irreproducible across runs/machines.
 - **Double-counting / missing factor** — a term added twice, or a Jacobian/volume element dropped.
+- **Frozen-infrastructure bug (upstream)** — a persistent *unphysical* symptom (a reversed sign, a
+  mirrored/flipped artifact, a structured residual that won't go away) can be a bug in the FROZEN forward
+  model / data generator *upstream*, not in the model you're tuning. Re-verify the frozen reference code (a
+  sign/convention round-trip against a trusted analytic reference; `correctness-suite`) **before** building
+  corrective physics on top of it — chasing the symptom with new terms (tilts, detrending, extra capacity)
+  buries the real bug. (A real campaign chased a training-data sign error as a physical "tilt" for ~50
+  experiments.)
 
 ## Fail loudly so the next bug is cheap
 After the fix, leave the code safer than you found it: assert physical invariants and array shapes/units at
 boundaries; guard against NaN/inf; check matrix conditioning before solving; confirm optimizers actually
 converged (report iterations / final residual). And **promote the bug to a regression check** — add the
 minimal failing case to `correctness-suite` so this exact bug can never silently return.
+
+**Tooling you install must be non-intrusive.** A monitor / watcher / auto-start process you add while
+debugging must run windowless/headless with no per-iteration side effects (no console pop-ups, no resource
+spikes) and be smoke-tested for that *before* you leave it running — debug infrastructure that itself
+misbehaves is a new bug (a per-second `nvidia-smi` monitor flashed console windows for hours before anyone
+noticed).
 
 ## When it isn't a bug
 The ladder is for when behavior *diverges from what the code should do*. If you reach the bottom and the

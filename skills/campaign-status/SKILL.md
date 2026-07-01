@@ -18,6 +18,11 @@ edits the scoreboard, results, configs, or anything FROZEN.
 - Every **N experiments** (the checkpoint cadence named in `docs/program.md`).
 - When the JOURNAL has grown long (~150+ lines) and needs consolidation.
 - On demand — "where do we stand?", "is the campaign healthy?", "run a checkpoint".
+- **Not only on a count.** Reflection is the campaign's error-correction step — don't let it wait for the
+  experiment counter. Also reflect after a **surprising result**, at a **plateau**, **before any "we're done /
+  at the ceiling / blocked" stopping decision** (Ctx 9), and after a long stretch of wall-clock with no
+  checkpoint. Schedule it, per Wieman's reflective-decision discipline (the reflection decisions are the most
+  important *and* the hardest, precisely because the immediate work crowds them out).
 
 ## Step 0 — learn the campaign
 Read `docs/program.md` (or `docs/program_<NAME>.md`) for the primary metric + direction, the guardrail,
@@ -34,6 +39,13 @@ expectations** shifted on the evidence (update them — that's success, not drif
 tasks still serving it, their status current? Has a **discovery unblocked a parked direction** that should
 re-open? Realigning here is the point of a checkpoint — the metric can climb while the campaign wanders
 off its goal.
+
+**Reflect against confirmation bias (the reflective decisions — the campaign's error-correction).** For the
+current best and the current direction, run the ritual explicitly, don't just intend to be objective: **state
+what you hoped/expected**, **argue the strongest case it's wrong**, **name the observation that would refute
+it** (and check you ran it), and **surface the alternative conclusion you've been resisting** (it's noise; a
+rival explains it too; it's an artifact). This is the hardest step to do honestly — the pull is to confirm
+what you already believe — and it's exactly where a scaffold earns its keep. (Depth: the `verify` §5c ritual.)
 
 ### 1. Health summary
 From `results/scoreboard.tsv`, `results/JOURNAL.md`, and `results/DISCOVERIES.md`:
@@ -71,6 +83,11 @@ Flag (don't silently fix) anything wrong:
 - **Comparability tags present** — every scoreboard row carries `metric_version` + `data_version`, and no
   "current best" ranks rows scored under *different* versions; a cross-version comparison is a silent error
   (re-score contenders under the current version first).
+- **No premature "done / blocked / at-ceiling."** If the JOURNAL or DISCOVERIES declares the campaign
+  finished, optimal, or blocked on new data, confirm an **adversarial attempt to beat it was actually made**
+  (an orthogonal lever tried, a reasoned why-any-gain-is-non-physical argument). An unfalsified "we're done"
+  is a flag to **resume**, not accept — surface it loudly and queue the orthogonal directions. A plateau with
+  the guardrail still moving (generalization-limited, not capacity-limited) especially means keep going.
 - **Dispute records are intact** (the JOURNAL's append-only verifier/user challenges) — never trimmed.
 - PROVISIONAL findings are tracked and not silently treated as settled.
 - The metric **self-test still passes** (`python scripts/metric.py --selftest`) and diagnostics were
@@ -102,8 +119,10 @@ If the campaign is stuck or plateaued, **diagnose the failure type before jumpin
 implementation-capped / fixed-choice-fought / near-miss) and take the smallest justified jump on the
 refine↔pivot spectrum — escalate to an *orthogonal* lever only once the current family is exhausted, but
 do escalate decisively when it is (`docs/reference/pivoting.md`). A rising-complexity plateau argues for a
-pivot, not more special-casing; a near-miss argues for gathering more evidence, not abandoning. Write the
-few most promising directions as the JOURNAL **NEXT** pointer. If plateaued and literature search is
+pivot, not more special-casing; a near-miss argues for gathering more evidence, not abandoning. **Prioritize
+deliberately** — rank the candidate directions by *importance × tractability × cost* and commit the top few,
+rather than defaulting to the next lever in line (Wieman decision 14). Write the few most promising directions
+as the JOURNAL **NEXT** pointer. If plateaued and literature search is
 enabled, trigger a search (per `docs/program.md`) and fold its top priorities in.
 
 ### 5. Report

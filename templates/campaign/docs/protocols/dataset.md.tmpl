@@ -7,6 +7,13 @@ READ-ONLY, never modify or regenerate. Verify the files exist before experiment 
 Fires on a fresh tree or when inputs change. Defines how the campaign's inputs are obtained/generated
 and split, so the data is reproducible and the splits stay fixed.
 
+> **Never regenerate or overwrite inputs on an unconfirmed diagnosis.** Inputs are load-bearing and
+> overwriting them is usually irreversible. Before acting on the theory that the data is wrong, the diagnosis
+> must reach **CONFIRMED via the highest-authority artifact** — read the actual data-prep / pipeline source,
+> don't act on a derived statistic or a plausible correlation. (A real session nearly overwrote a *correct*
+> dataset on an INFERRED diagnosis; reading the normalization source reversed it.) Gating a destructive
+> action to the user on a below-CONFIRMED diagnosis makes the human your only backstop — confirm first.
+
 ## Source
 {{DATA_SOURCE}}
 <!-- Where the data comes from: a measurement, a simulator, or a generator script. Absolute paths. -->

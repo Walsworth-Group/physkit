@@ -36,6 +36,18 @@ quality — so track and economize it deliberately. Draws on `docs/SIMULATION_VA
 - **For hardware / irreversible evaluations:** confirm before any destructive action; interleave/randomize
   A/B comparisons against drift; pre-screen with a forward model. (See `program.md` hardware section.)
 
+## Monitor a long run — don't wait to be asked
+For any run expected to exceed ~30–60 min (a long sim, a big training job, a detached/background process):
+- **Arm a liveness self-check** on a cadence proportional to the expected duration rather than relying on the
+  user to ask "is it done?" — verify the process is still alive AND its **log is advancing** (new lines / a
+  moving step counter), not merely that a PID exists.
+- **A stalled log is a dead run.** Silent deaths are common — OOM, a GPU/driver hang, a killed job. Treat a
+  log that stopped advancing as a failure to investigate, not "still going."
+- **Report status proactively** at each check (started / progressing / stalled / done). Tee stdout to a file
+  so liveness is inspectable: `... > results/diagnostics/<stem>_<UTCstamp>.log 2>&1`.
+- (A real campaign's multi-hour fit died ~20 min in and sat dead until the user asked twice — the loop
+  should catch that itself.)
+
 ## Record
 Log the running evaluation count + budget and the sample-efficiency comparison in the JOURNAL / scoreboard;
 note the stopping decision and its trigger when you stop a direction.

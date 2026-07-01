@@ -237,9 +237,12 @@ reproducible report effectively is):
    narration of what each lever bought.
 8. **Promising alternatives** — the contenders, brief.
 9. **Reproducibility** — exact configs, commands, data provenance, environment, file pointers.
-10. **Limitations & open questions** — honest accounting of what's unresolved and the ceiling,
+10. **Broader implications & significance** — over what range the solution applies; what it *newly enables or
+    predicts*; which open problems in the field it might bear on; why it's interesting beyond this campaign —
+    the honest version, no overclaiming *(Wieman decision 27)*.
+11. **Limitations & open questions** — honest accounting of what's unresolved and the ceiling,
     including any unresolved disputes from the JOURNAL record.
-11. **References** — verified, clickable.
+12. **References** — verified, clickable.
 
 ## Before you call it done — checklist
 
@@ -250,6 +253,7 @@ reproducible report effectively is):
 - [ ] Every citation was fetched and confirmed to be a real paper matching its use.
 - [ ] A figure shows the evidence/ablation; a figure shows the headline result; figures have takeaway captions.
 - [ ] The reproducibility section gives exact commands + configs a stranger could run.
+- [ ] Broader implications stated honestly — applicability range, what it newly enables/predicts, open problems it bears on — with no overclaiming.
 - [ ] A claim→evidence manifest maps every headline claim to its backing artifact (experiment id / `result_<NN>.json` / figure), with planned-vs-executed deltas noted.
 - [ ] No placeholder text, no "TODO", no invented numbers.
 

@@ -29,6 +29,10 @@ from it: a FROZEN metric, an experiment loop, levers, guardrails, logging, verif
 Do NOT use this to run an already-scaffolded loop, to verify a finding (`verify`), or to write
 the final report (`final-report`).
 
+- **If the idea itself is unvetted**, offer to run **`assess-idea`** first (advisory — feasibility/worth).
+  It never blocks scaffolding, but a quick GO / DE-RISK-FIRST / NO-GO can save a campaign built on a
+  low-ceiling problem. Off by default; propose it when the user hasn't already pressure-tested the direction.
+
 ## Inputs
 - The **target directory** where the campaign should be created (ask if not given; default: the current
   working directory). Never overwrite existing files without explicit confirmation.
@@ -138,9 +142,10 @@ control, or training/fitting purely on real experimental data). If there is one,
    discipline). Then the baseline (exp 000) value/method, any theoretical ceilings, the guardrail
    (necessary-but-not-sufficient), and diagnostics. Pin down what FEEDS the metric vs what is FROZEN.
    These — primary, guardrail, diagnostics — plus the experiment-type **run numerics** (e.g. epochs +
-   best epoch for ML; iterations / wall-clock / n_free_params for fits), plus the always-present
-   **`metric_version` / `data_version`** comparability tags, become the columns of
-   `results/scoreboard.tsv`, the campaign's quantitative ledger (separate from the narrative journal).
+   best epoch for ML; iterations / wall-clock / n_free_params for fits), plus a **`tier`** column
+   (Scout/Confirmation/Extended) and the always-present **`metric_version` / `data_version`** comparability
+   tags, become the columns of `results/scoreboard.tsv`, the campaign's quantitative ledger (separate from
+   the narrative journal).
 4. **Physics / system knowledge.** Capture (from sources wherever possible) everything needed to model
    the system:
    - **Physical objects & geometry** — dimensions, arrangement/layout, material(s), and quantities.
@@ -161,7 +166,8 @@ control, or training/fitting purely on real experimental data). If there is one,
    with the problem; equations in math blocks with precise, defined notation; a *living doc* updated when
    discoveries change the physics; **includes the physics inventory** — every relevant effect tagged
    accounted-for / negligible-by-scale / out-of-scope / deferred / unknown, *with a reason*, from the
-   `frame-problem` artifact) and, when the system has significant physical objects/geometry,
+   `frame-problem` artifact — **and the predictive framework**: the mechanism/model the loop predicts with,
+   at a complexity matched to the problem, plus the discriminating thought-experiments it licenses) and, when the system has significant physical objects/geometry,
    **`docs/SYSTEM.md`** (apparatus/sample parameters, with sources). Link both from the README. Record
    anything you had to ask — the next agent shouldn't have to. *(If a `frame-problem` artifact exists,
    confirm its inventory rather than rebuilding it.)*

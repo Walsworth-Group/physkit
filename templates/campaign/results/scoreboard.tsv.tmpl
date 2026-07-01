@@ -16,4 +16,7 @@
 #   versions. When the metric or data changes, bump the tag and RE-SCORE saved contenders under the new
 #   version before comparing; a programmatic check should refuse a cross-version current-best (campaign-status
 #   flags it). Every row MUST carry both tags — a blank tag makes the row uncomparable and is a hygiene fail.
-exp_id	timestamp	metric_version	data_version	description	{{LEVER_COLUMNS}}	{{PRIMARY_METRIC_COL}}	{{PRIMARY_SPREAD_COL}}	{{GUARDRAIL_COL}}	{{DIAGNOSTIC_COLUMNS}}	{{RUN_COLUMNS}}	verified	notes
+# `tier` = the run-length tier from program.md caps (Scout / Confirmation / Extended; `Baseline` for exp 000).
+#   Keep it on EVERY row so scout/confirmation cap-compliance stays machine-auditable — a real campaign lost
+#   its tier tag partway through and cap-compliance became unverifiable.
+exp_id	timestamp	metric_version	data_version	tier	description	{{LEVER_COLUMNS}}	{{PRIMARY_METRIC_COL}}	{{PRIMARY_SPREAD_COL}}	{{GUARDRAIL_COL}}	{{DIAGNOSTIC_COLUMNS}}	{{RUN_COLUMNS}}	verified	notes

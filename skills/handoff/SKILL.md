@@ -23,6 +23,12 @@ The test it must pass: **could a fresh agent, with no memory of this session, re
 and (a) know what we're trying to do, (b) trust where things stand, and (c) take the next step — without
 asking you?** If not, it's incomplete.
 
+**Flush converged decisions to disk as they lock — don't wait for the handoff.** A design or plan that
+exists only in the conversation is one interrupted session away from gone. When a decision or plan
+converges (e.g. locked via an AskUserQuestion, or a design you've settled), write it to a real file *then*;
+the handoff *distills* durable artifacts, it is not the only place they should first appear. (A real
+~80-turn design session ended with zero files written and had to be reconstructed from the raw transcript.)
+
 ## The four parts
 
 1. **Vision & goal — where this is headed and why.** The end goal and the decision it drives (pull from

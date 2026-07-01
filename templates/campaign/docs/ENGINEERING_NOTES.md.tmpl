@@ -21,6 +21,21 @@ check). Skip the obvious.
 
 ---
 
+## Known landmines / Do-not-repeat
+A short, scannable list of hard-won "never do this again" hazards — the things that broke the machine,
+corrupted a run, or cost hours. Distinct from the ED rationale below: this is the fast **pre-flight
+checklist**. **Re-check it before any action matching a listed trigger** (GPU use, launching a
+detached/long process, overwriting inputs, …), and **proactively surface the relevant landmine to the user
+before complying** with a request that would hit one — don't silently walk into it. A landmine that lives
+only in a chat message or a memory file will not be re-checked (a real campaign re-triggered a
+machine-freezing GPU path twice because the warning wasn't captured here).
+
+| trigger (when about to…) | landmine (what went wrong) | do instead |
+|---|---|---|
+| <e.g. use the GPU for the dictionary build> | <froze the whole machine twice; hard reboot> | <use the CPU-parallel path; do NOT re-enable the GPU build> |
+
+---
+
 ## ED-001 — <one-line title>
 **Date:** {{DATE}} · **Status:** active · **Area:** <method / model / convention / tooling / approximation>
 
