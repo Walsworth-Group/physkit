@@ -6,7 +6,11 @@ All notable changes to the kit are recorded here. Format follows
 Dates are UTC. Each entry cites the run/finding that motivated it (the kit's own
 `campaign-review → improve-kit` loop) so a future reviewer can trace the "why".
 
-## [Unreleased] — towards 0.5.0
+## [Unreleased]
+
+_Nothing yet._
+
+## [0.5.0] — 2026-06-30
 
 ### Added
 - **`CHANGELOG.md`** (this file) — a running, human-readable kit change log.
