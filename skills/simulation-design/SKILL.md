@@ -60,6 +60,11 @@ Decide every check *now*, as a concrete plan `correctness-suite` will later exec
   *theoretical* rate (not just "gets smaller"). A wrong observed order is a discretization bug.
 - **Conservation / symmetry invariants** that must hold exactly or to round-off (energy, mass, charge; the
   symmetries of the setup); a frozen **self-test** asserting a known input→output.
+- **Sign / convention round-trip** — for a forward model or data generator, a check that a known simple input
+  (uniformly-poled dipole, manufactured source) produces output whose **sign, units, and ordering** match a
+  trusted analytic reference. Plan this as a **gate that must pass before the model is FROZEN** as a campaign
+  input — *frozen ≠ validated*; a sign/convention bug locked into a frozen generator poisons every downstream
+  experiment and is among the most expensive failures to catch late.
 - **Convergence study** — refine until the answer stops moving, and **separate numerical error from model
   error** so a data gap isn't blamed on the wrong one.
 

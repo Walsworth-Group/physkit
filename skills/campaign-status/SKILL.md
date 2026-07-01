@@ -10,8 +10,9 @@ a lever gets over-mined while an orthogonal one sits untried, progress plateaus 
 it. This skill is the periodic step back — it reports where the campaign stands, fixes hygiene, trims
 the journal, and re-points the loop at the most promising orthogonal directions.
 
-**Read-mostly.** Its only writes are: consolidating the JOURNAL, updating the **NEXT** pointer, and
-appending a dated checkpoint note. It never edits the scoreboard, results, configs, or anything FROZEN.
+**Read-mostly.** Its only writes are: consolidating the JOURNAL, updating the **NEXT** pointer, appending
+a dated checkpoint note, and snapshotting the session transcript to `transcripts/` (provenance). It never
+edits the scoreboard, results, configs, or anything FROZEN.
 
 ## When to invoke
 - Every **N experiments** (the checkpoint cadence named in `docs/program.md`).
@@ -55,8 +56,21 @@ From `results/scoreboard.tsv`, `results/JOURNAL.md`, and `results/DISCOVERIES.md
 Flag (don't silently fix) anything wrong:
 - Every scoreboard row has a matching `results/result_<NN>.json` and its config in `configs/`; a result
   that exists only in the console is not saved.
+- **No orphaned result — every row has a written narrative AND a graded verdict.** A `result_<NN>.json`
+  (or scoreboard row) with no completed `logbook.md`/`JOURNAL.md` entry and no graded outcome is an
+  **orphan**: results sitting on disk while their analysis/verdict was deferred and lost at a session
+  boundary is the single most common ledger leak. Flag every orphan to be completed now.
+- **The verification gate is actually wired** — `.claude/settings.json` exists and registers the
+  `guard_discoveries` PreToolUse hook. An imported / hand-built / relocated tree frequently *loses* it,
+  leaving the gate decorative (a real campaign once ran with no `.claude/` at all). If missing, flag loudly
+  and re-run the `new-campaign` `.claude` wiring step.
 - The **current-best is independently verified** — if a config is acting as current-best or a DISCOVERY
-  without a CONFIRMED `verify` verdict, recommend running `verify` on it now.
+  without a CONFIRMED `verify` verdict, recommend running `verify` on it now. The hook guards *DISCOVERIES
+  writes* only — it does **not** see scoreboard edits, so a current-best can be promoted unverified; a
+  current-best / DISCOVERY-backed row whose **`verified` column is blank** is a hygiene failure to surface.
+- **Comparability tags present** — every scoreboard row carries `metric_version` + `data_version`, and no
+  "current best" ranks rows scored under *different* versions; a cross-version comparison is a silent error
+  (re-score contenders under the current version first).
 - **Dispute records are intact** (the JOURNAL's append-only verifier/user challenges) — never trimmed.
 - PROVISIONAL findings are tracked and not silently treated as settled.
 - The metric **self-test still passes** (`python scripts/metric.py --selftest`) and diagnostics were
@@ -65,6 +79,17 @@ Flag (don't silently fix) anything wrong:
   re-run after the latest core change and passes; a result standing on a red suite is not trustworthy.
 - **Every experiment has its reproducibility snapshot** (`results/snapshots/<label>/` — config + code +
   manifest); a result without one is not "saved".
+
+### 2.5 Snapshot the session transcript (provenance)
+Preserve this session's Claude Code transcript with the campaign before retention pruning removes it — the
+provenance record, and primary data for any write-up. From the campaign dir, run:
+```
+python "${CLAUDE_PLUGIN_ROOT}/skills/campaign-status/scripts/archive_transcript.py"
+```
+(use the campaign's python — e.g. `py -3` on Windows). It copies this session's `.jsonl` into
+`./transcripts/` with a MANIFEST — idempotent (re-run each checkpoint to refresh as the session grows),
+and it never blocks the checkpoint if it errors. The transcript holds the full conversation + tool I/O, so
+treat `transcripts/` as sensitive.
 
 ### 3. Consolidate the journal (if long)
 If the JOURNAL exceeds ~150 lines (or the protocol's trigger), apply `journal_consolidation.md`:

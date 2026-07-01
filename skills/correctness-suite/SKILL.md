@@ -45,6 +45,12 @@ Implement the ones that apply:
   separated from model error).
 - **Frozen self-test** — a fast `--selftest` asserting a known input→output for the metric/scorer and core
   physics, so a sign/convention slip (the most common silent bug) trips immediately.
+- **Sign / convention round-trip** — for a **forward model or data generator**, feed a known simple input (a
+  uniformly-poled dipole, a manufactured source) through the pipeline and assert the **sign, units, and
+  ordering conventions** of the output match a trusted analytic reference (and, where invertible, that
+  forward∘inverse returns the input). This is the cheapest guard against the convention/sign bug that
+  silently mirrors or negates everything downstream — the kind that has sat in a *frozen* generator for tens
+  of experiments before a human caught it.
 - **Application-specific checks** — the field-standard comparisons and known-artifact guards captured in the
   plan. Encode the checkable ones here.
 
@@ -86,6 +92,11 @@ run the splitting / correction control before believing it.
   doesn't delete a guard they don't understand.
 
 ## 3 · Keep it green (the gate)
+- **Validate BEFORE you freeze (frozen ≠ validated).** Run the suite — especially the sign/convention
+  round-trip and the symmetry self-tests — on a forward model / data generator / scorer *before* it is
+  declared FROZEN and a campaign builds on it. "Frozen" means *locked*, not *correct*: a frozen-but-unvalidated
+  model bakes its bug into every downstream experiment, and "match the published number" can quietly drive you
+  to reproduce the original's bug. Validate first, then freeze.
 - **Re-run the suite after any change to core/FROZEN code** — the scoring math, the physics/geometry, the
   forward model. Do **not** edit FROZEN code without re-running and (in a campaign) user sign-off.
 - A **red suite blocks trust**: don't promote a result, write a DISCOVERY, or report a number while a
@@ -113,6 +124,7 @@ can never silently return. New checks are appended as the work uncovers them.
 - [ ] Every applicable plan check is encoded as an asserting, deterministic, loud-failing test.
 - [ ] MMS and an order-of-accuracy test exist for any discretized solver (not just "error is small").
 - [ ] Conservation/symmetry invariants and a fast frozen self-test are in the cheap tier.
+- [ ] A sign/convention round-trip + symmetry self-tests ran and passed **before** any forward model / data generator was frozen (frozen ≠ validated).
 - [ ] Application-specific checks from the plan are included.
 - [ ] The orthogonal sanity panel (no-skill floor, train↔eval tracking, leakage, stderr scan, shape/param drift) passes for any load-bearing number.
 - [ ] The suite runs from one entry point, tiered by cost, and tees a pass/fail log.

@@ -56,7 +56,9 @@ double-interview.
 
 ## Step 0 — read the kit before interviewing
 Read these so your questions and fills are grounded (paths are under the plugin root):
-- `${CLAUDE_PLUGIN_ROOT}/docs/PRINCIPLES.md` — the doctrine every campaign inherits.
+- `${CLAUDE_PLUGIN_ROOT}/docs/PRINCIPLES.md` — the doctrine every campaign inherits; it's sectioned by 8
+  contexts. Skim it now; once the archetype(s) are chosen (Step 1), read **in depth only the contexts they
+  lean on** (the cheatsheet maps each archetype to its disciplines) rather than all eight.
 - `${CLAUDE_PLUGIN_ROOT}/docs/CORE.md` — the always-on spine + the general skills it routes to
   (`frame-problem`, `verify`, `simulation-design`, `correctness-suite`, `report`, …) that this campaign composes.
 - `${CLAUDE_PLUGIN_ROOT}/templates/ARCHETYPE_CHEATSHEET.md` — the campaign archetypes (A–I) and their patterns.
@@ -76,6 +78,32 @@ Collect what already answers the interview, so you only ask about real gaps:
 - **Detect, don't ask, what you can check:** the compute (CPU cores, RAM, and GPU — e.g. run
   `nvidia-smi`), the available Python/toolchain, and the data files present and their shapes.
 Carry these harvested facts into the interview.
+
+## Step 0.6 — establish the source-authority ledger (when more than one source describes the system)
+Replication and model-improvement campaigns routinely ship **several descriptions of the same system that
+disagree** — the paper text, a figure, leftover or post-publication code, a released trained-model or data
+artifact, and the user's recollection. Building the baseline on the wrong one is the most expensive setup
+mistake there is: a *faithful reproduction of the wrong spec* looks correct and only unravels hours into the
+loop (and a "match the published number" gate can then drive the agent to reverse-engineer the original's
+bug). Before scaffolding, build a short ledger:
+- **Enumerate every source** that describes a load-bearing fact — the architecture/method, the
+  training/processing recipe, normalization & units, hyperparameters, the data convention.
+- **Rank them by authority.** A *shipped artifact you can parse or run* (trained weights / saved model /
+  released data) outranks the *paper text/figure*, which outranks *modified or leftover code*, which
+  outranks *human recollection*. The artifact is ground truth; everything else is a *description* of it.
+- **Resolve each load-bearing fact to the highest-authority source available by reading the artifact** —
+  parse the saved model's topology, probe the data's actual statistics, run the released weights on your
+  eval set — rather than inferring it from a lower-authority proxy. The campaign already pins *data*
+  conventions empirically (Step 1, topic 5); pin the *method/recipe* with the same rigor — do not defer it
+  to "exp 000's job" when an artifact on disk settles it in seconds.
+- **Tag each fact's provenance:** *PINNED* (from an authoritative artifact / empirical probe) · *REPORTED*
+  (in text) · *INFERRED* (from an untrusted proxy) · *RECALLED* (from memory). Carry the tags into the spec.
+- **Quarantine, don't absorb, untrusted or contradictory sources.** State explicitly that the
+  leftover/modified code is NOT the spec (and why) so the loop agent doesn't re-anchor on it.
+- A load-bearing fact you can only mark INFERRED/RECALLED is a **genuine gap** — ask the user in Step 1,
+  naming the source and the conflict (e.g. *"the figure shows no dropout but the leftover code has it — the
+  saved model would settle it; do you have the trained weights?"*), rather than silently baking it in.
+Seed the resolved ledger into `docs/ENGINEERING_NOTES.md` (Step 3) so the provenance survives into the loop.
 
 ## Step 1 — the interview (topic by topic)
 Go one topic at a time; confirm understanding before moving on. For each topic, **fill what the sources
@@ -110,7 +138,8 @@ control, or training/fitting purely on real experimental data). If there is one,
    discipline). Then the baseline (exp 000) value/method, any theoretical ceilings, the guardrail
    (necessary-but-not-sufficient), and diagnostics. Pin down what FEEDS the metric vs what is FROZEN.
    These — primary, guardrail, diagnostics — plus the experiment-type **run numerics** (e.g. epochs +
-   best epoch for ML; iterations / wall-clock / n_free_params for fits) become the columns of
+   best epoch for ML; iterations / wall-clock / n_free_params for fits), plus the always-present
+   **`metric_version` / `data_version`** comparability tags, become the columns of
    `results/scoreboard.tsv`, the campaign's quantitative ledger (separate from the narrative journal).
 4. **Physics / system knowledge.** Capture (from sources wherever possible) everything needed to model
    the system:
@@ -202,8 +231,11 @@ Before generating anything, write a concise **campaign spec**: the archetype(s) 
 metric (with bounds + a-priori range), baseline, guardrail/diagnostics, levers, FROZEN/READ-ONLY/MUTABLE,
 constraints, caps (and whether tiering applies), the data plan, the detected compute + chosen
 environment, the multi-stage plan (if any), and the values you'll use for the key placeholders. Cite
-the source for any value pulled from a document/paper/data. Show it to the user and get explicit
-sign-off (or corrections). This is the checkpoint that keeps the build aligned with the original intent.
+the source for any value pulled from a document/paper/data, **with its provenance tag (PINNED / REPORTED /
+INFERRED / RECALLED) from the Step 0.6 ledger** — and call out every load-bearing fact still at
+INFERRED/RECALLED as an open question for the user to resolve before the baseline run. Show it to the user
+and get explicit sign-off (or corrections). This is the checkpoint that keeps the build aligned with the
+original intent.
 
 ## Step 3 — generate the campaign tree
 Copy `${CLAUDE_PLUGIN_ROOT}/templates/campaign/` into the target directory and fill it from the spec,
@@ -227,7 +259,11 @@ obeying `PLACEHOLDERS.md`:
   **`.claude/settings.json`** (from its `.tmpl`) and **`scripts/guard_discoveries.py`** — the PreToolUse
   hook that blocks a `DISCOVERIES.md` write when no independent verification ran recently. Fill
   **`{{PYTHON_CMD}}`** with the python invocation detected in Step 0.5 (`py -3` on Windows, `python3` on
-  macOS/Linux) so the hook command runs on this machine.
+  macOS/Linux) so the hook command runs on this machine. **Verify the hook is actually wired** before
+  handoff — `.claude/settings.json` present and registering `guard_discoveries`; a tree without it runs with
+  **no verify gate at all** (this has happened on a real campaign whose tree was assembled by hand). The hook
+  guards only DISCOVERIES writes — current-best promotion is enforced by `program.md`'s promotion rule + the
+  `campaign-status` check (it does not see scoreboard edits).
 - **Code stubs:** fill `scripts/metric.py` (the FROZEN scorer + `--selftest`) and
   `scripts/run_campaign.py` (the runner). These are intentionally light — leave the TODO hooks for the
   agent to implement the physics in-loop, but wire the names/metric so `--selftest` is the gate for
@@ -236,7 +272,9 @@ obeying `PLACEHOLDERS.md`:
   goal, the decision it drives, the loosely-held expectations, and the numbered goal-linked task hierarchy —
   graduating the `frame-problem` decomposition); **`docs/VERIFICATION_PLAN.md`** (the application-specific
   checks from topic 4b — the gate `verify`/`correctness-suite` consume); and seed **`docs/ENGINEERING_NOTES.md`**
-  (empty but for its header — the append-only "why" record where `record-decision` entries land). Put the
+  with the **Step 0.6 source-authority ledger** (one ED per load-bearing fact resolved from a source — its
+  value, the authoritative artifact it's PINNED to, the provenance tag, and the lower-authority sources
+  quarantined and why; an empty header only if there was a single source). Put the
   user's *ideas to try* as the opening `PROJECT_ORIENTATION` tasks + JOURNAL NEXT items.
 - **Author the campaign-specific reference docs the interview surfaced:** fill `docs/CONVENTIONS.md` and
   `docs/PHYSICS.md` (the governing physics — equations in math blocks, precise notation; **include the
@@ -304,5 +342,10 @@ that `CLAUDE.md` is loaded before the loop starts. The campaign is then ready to
   `docs/program.md`.
 - Never overwrite existing files without confirmation; if the target dir already has a campaign, treat
   it as a multi-campaign add (suffix) or stop and ask.
+- **Imported / relocated / hand-built trees silently lose the verify gate.** A tree not generated by this
+  skill (copied in, assembled from frozen inputs, or moved) usually lacks `.claude/settings.json` +
+  `scripts/guard_discoveries.py`, so the DISCOVERIES verify gate is absent and the doctrine prose in
+  `CLAUDE.md` is decorative. Re-run the Step 3 `.claude` wiring step for any such tree; `campaign-status`
+  also flags a missing hook.
 - The metric and core physics you scaffold are FROZEN by construction — say so to the user, and make
   the `--selftest` real before exp 000 so a convention/sign slip can't corrupt the whole campaign.

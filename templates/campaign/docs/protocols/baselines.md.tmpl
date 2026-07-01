@@ -18,6 +18,16 @@ result can be checked against them. Two rules follow from these:
   it as a **flag that the metric/units may be incongruent** (scrutinize scaling / normalization / ranges
   / the metric definition) — not as a target to beat.
 
+## Before you run — pin the spec to ground truth (settle the cheap questions first)
+The baseline run is usually the most expensive single step (often multi-hour); the facts that define it are
+usually settleable in seconds. **Before spending it, resolve every statically-answerable spec fact** — the
+architecture/method, the recipe, normalization, units — **against the most authoritative source available**
+(the source-authority ledger in `docs/ENGINEERING_NOTES.md`): parse a shipped trained model's topology,
+probe the data's real statistics, read the released config. Do **not** carry a load-bearing fact into the
+run still tagged INFERRED/RECALLED (from leftover/modified code or memory) when an artifact on disk would
+PIN it. If a released trained model exists, prefer validating the repro against **its actual outputs on your
+eval set** over the paper's *printed* numbers — printed tables can omit details or reflect a different run.
+
 ## Run it
 ```
 {{BASELINE_COMMAND}}
@@ -27,8 +37,21 @@ result can be checked against them. Two rules follow from these:
 {{GATE_CRITERIA}}
 <!-- The expected baseline value/range and the sanity checks that prove the chain is sound (e.g. a
      known input maps to a known output; the metric collapses on a null input; units come out right).
-     If the baseline is wildly off the expected range, the pipeline is wrong — fix it before
-     experiment 0. A floor you can't trust makes every later delta meaningless. -->
+     A floor you can't trust makes every later delta meaningless. -->
+
+**A baseline that misses the expected range is a three-way fork, not proof your code is wrong.** Diagnose
+*which* before "fixing" — and never tune the repro toward the target number blindly:
+1. **Your reproduction is wrong** — a real bug in the port/pipeline (units, channel order, a mis-wired
+   layer). Debug it (`debug`, `correctness-suite`) and re-run.
+2. **The target result has a quirk or bug your *faithful* repro correctly does NOT inherit** — the
+   published number came from a different (sometimes buggy) recipe. Here the discrepancy is a *finding*:
+   investigate the mechanism (compare against the authoritative artifact — e.g. run the released weights),
+   record it, and decide deliberately whether to match the original's behavior or keep the corrected one —
+   do **not** reverse-engineer the bug just to hit the printed number (that is goalpost-matching, not repro).
+3. **The spec you were handed is wrong** — a load-bearing fact came from a low-authority source
+   (leftover code, recollection) that the authoritative artifact contradicts. Re-pin it against the artifact
+   (update the source-authority ledger) and re-run.
+The honest move when a faithful repro disagrees with the paper is to *find out why*, not to force a match.
 
 ## Record
 {{FLOOR_RECORD_RULE}}

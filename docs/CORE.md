@@ -97,7 +97,7 @@ such. Skill: `report` (campaigns: `final-report`).
 | writing any report or document | `report` skill (+ `cite-check`) |
 | standing up an autoresearch campaign | `new-campaign` skill (campaign layer) |
 | resuming / checking a campaign | `handoff`, `campaign-status` (campaign layer) |
-| needing the full doctrine | `docs/PRINCIPLES.md` |
+| needing a principle's full statement / rationale | `docs/PRINCIPLES.md` — read the relevant §context, not the whole file |
 | needing the map of all files | `docs/DOCTRINE_INDEX.md` |
 
 The eight principle contexts, in one line each — full text in `PRINCIPLES.md`:

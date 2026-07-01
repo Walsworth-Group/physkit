@@ -38,13 +38,22 @@ reverse-engineer it:
 Don't record the obvious or the trivial — that's noise. The test is: *would someone reasonably wonder "why
 was this done this way?" and be unable to answer it from the code?*
 
-## The fields (decision / alternatives / why / conditions / revisit-if)
+## The fields (decision / alternatives / why / [provenance] / conditions / revisit-if)
 Capture, briefly:
 - **Decision** — what was chosen, concretely.
 - **Alternatives considered** — the real options on the table (including "do nothing"), one line each. A
   decision with no alternatives recorded reads as the only option, which is rarely true.
 - **Why this one** — the reasoning and the trade-off, tied to the actual constraints (compute, accuracy,
   fabrication, time, interpretability). Name the evidence if there is some.
+- **Provenance** *(mandatory — every record states it)* — the **authoritative source the decision is
+  pinned to** and its confidence: *PINNED* (read from a shipped artifact / saved model / released data /
+  empirical probe) · *REPORTED* (stated in a paper/doc) · *INFERRED* (from an untrusted proxy, e.g.
+  leftover/modified code) · *RECALLED* (from memory) · *REASONED* (your own engineering/design judgment,
+  resting on no external claim about the system — use this for a pure trade-off choice). When the decision
+  rests on a fact from a source, rank sources by authority — an artifact you can parse or run outranks text,
+  which outranks modified code, which outranks recollection — resolve the fact to the highest available, and
+  note any lower-authority sources that disagree and were quarantined. A load-bearing fact you can only mark
+  INFERRED/RECALLED is **not yet settled** — flag it, don't quietly build on it.
 - **Conditions it depends on** — the assumptions/regime that make this the right call (a parameter range,
   a data property, a compute budget, a deadline). These are what change underneath a decision.
 - **Revisit-if** — the concrete trigger that should reopen it ("if we move beyond the dilute regime", "if
@@ -71,12 +80,15 @@ Keep notation and links consistent with the rest of the work; reference related 
 - **`report`** — decision records feed the methods/limitations sections (why each choice, what it rests on).
 
 ## Bundled asset
-- `assets/decision_template.md` — the five-field record (decision · alternatives · why · conditions ·
+- `assets/decision_template.md` — the record (decision · alternatives · why · [provenance] · conditions ·
   revisit-if), with status and date.
 
 ## Checklist
 - [ ] The decision is stated concretely, with the real alternatives (incl. "do nothing").
 - [ ] The reasoning ties to actual constraints/evidence, not just preference.
+- [ ] **Provenance** is recorded (mandatory) — the source the decision is pinned to + confidence
+      (PINNED/REPORTED/INFERRED/RECALLED, or REASONED for a pure-judgment call); an INFERRED/RECALLED
+      load-bearing fact is flagged unsettled.
 - [ ] The **conditions it depends on** are written down.
 - [ ] A concrete **revisit-if** trigger is set.
 - [ ] It's in the right place (engineering record), not mixed into conventions or the journal.

@@ -35,6 +35,14 @@ asking you?** If not, it's incomplete.
    it, what you expected, and what you'd just learned. This is the part that evaporates and is the hardest
    to reconstruct from artifacts. Note any landmine (a known-broken thing, a dead end already ruled out,
    a flaky step).
+   - **Leave no orphan.** Every scoreboard row / `result_*.json` must have its narrative completed and a
+     **graded verdict** before you hand off — a result whose analysis was deferred at the session boundary
+     is the single most common thing lost (it survives on disk while its meaning evaporates).
+   - **Before claiming a requested deliverable "wasn't done," look outside the campaign tree.** A prior
+     session may have written it to a sibling directory or an absolute path. **Grep the recent session
+     transcript(s) for `Write`/`Bash` targets**, don't just `ls` the campaign root — a real handoff once
+     declared a finished, smoke-tested deliverable "never created" because it read only the tree. State a
+     deliverable missing only after that search comes up empty.
 
 3. **"Run this to confirm state" — a concrete check.** A command (or short sequence) the resumer runs
    *first* to verify the environment works and the stated state is real: e.g. activate the env, run the
@@ -75,6 +83,8 @@ prevents re-litigating settled decisions. The newest handoff is the live one; th
 - [ ] Vision & goal stated — a resumer understands the point, not just the next task.
 - [ ] Current state captures the **in-flight reasoning** (hypothesis, why, expectation, last learning), not just artifacts.
 - [ ] Current-best result + its verification status recorded; landmines/dead-ends noted.
+- [ ] **No orphaned result** handed off — every scoreboard row / `result_*.json` has a completed narrative and a graded verdict.
+- [ ] Before asserting a deliverable "wasn't done," the recent transcript(s) were searched for artifacts written **outside** the campaign root.
 - [ ] A "run this to confirm state" command with its **expected output** is given.
 - [ ] A prioritized, goal-linked NEXT roadmap is present and synced with the JOURNAL NEXT.
 - [ ] The prior handoff was archived, not overwritten.

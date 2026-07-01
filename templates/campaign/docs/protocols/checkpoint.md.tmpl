@@ -15,7 +15,15 @@ are exhausted? Is the current-best genuinely ahead of the floor by more than the
 {{HYGIENE_CHECKS}}
 <!-- e.g. every row has a result_<NN>.json; the current-best config is reproducible; no orphaned
      PROVISIONAL findings; the guardrail still behaves on known-good/known-bad inputs; diagnostics
-     logs are persisted, not console-only. -->
+     logs are persisted, not console-only.
+     ALSO (always check these — they were added after real campaigns leaked on them):
+     - NO ORPHANED RESULT: every scoreboard row / result_<NN>.json has a completed logbook/JOURNAL
+       narrative AND a graded verdict (a result whose analysis was deferred is the commonest leak).
+     - VERIFY GATE WIRED: .claude/settings.json registers the guard_discoveries hook (imported/relocated
+       trees lose it); the current-best row's `verified` column is not blank.
+     - COMPARABILITY: every row carries metric_version + data_version; no current-best compares across
+       versions (re-score under the current version first). -->
+For the full hygiene list, run `campaign-status` (it encodes these checks).
 
 ## 4. Re-plan
 Pick the {{REPLAN_HORIZON}} most promising orthogonal directions for the next block of experiments and

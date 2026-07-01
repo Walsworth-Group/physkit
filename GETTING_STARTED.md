@@ -45,6 +45,11 @@ folder directly:
 Because the install is cached, after editing the kit run `/plugin marketplace update physkit` to
 pull the changes (Option A avoids this — it always reads live).
 
+> **Run B/C as separate commands.** The `marketplace add` / `install` / `reload-plugins` lines are three
+> distinct steps — run them one at a time, not pasted together. If `/plugin marketplace add` opens an
+> **"Enter marketplace source:"** box, type **only the path — no quotes, nothing after it** — then Enter
+> (the quoted form only works when you type the whole `/plugin marketplace add "…"` line at once).
+
 Confirm any install with `/plugin list`, then `/reload-plugins` to activate immediately. After that,
 `/physkit:new-campaign` and the other skills are available in all projects, namespaced
 `/physkit:<skill>`.

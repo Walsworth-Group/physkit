@@ -3,7 +3,7 @@ id: principles
 kind: reference-doc
 layer: shared
 load: on-demand
-load_trigger: Read once at setup; reload when a result looks surprising, a decision needs grounding, or a principle's full statement is needed.
+load_trigger: Consult the relevant §context on demand (a principle's full statement/rationale, a decision needing grounding, a surprising result) — NOT a cover-to-cover preload; CORE/CLAUDE.md carry the always-on essence and the skills carry per-context depth.
 frozen: true
 addresses: [1, 2, 3, 4, 5, 6, 7, 8]
 status: new
@@ -83,6 +83,7 @@ a protocol).
 ### 4 · Experimental design & rigor
 - **Change one lever per experiment** so the effect is attributable — *default, not a hard rule*: deliberately test an interdependent **co-varying pair** when parameters depend on each other, and say so.
 - **Bound expectations a priori** — compute the ceiling, floor, and order of magnitude before running; a result outside the envelope is a bug or a discovery, decided before celebrating.
+- **Anchor every load-bearing fact to the most authoritative source, and settle statically-answerable questions before spending an expensive run.** When several sources describe the same system — paper text/figure, leftover or post-publication code, a *shipped artifact* (trained weights, released data), human recollection — rank them by authority and resolve each load-bearing fact (the architecture/method, the recipe, normalization, units, conventions) to the **highest-authority artifact available** by *reading the artifact* (parse the saved model, probe the data's real statistics, run the released weights), not inferring it from a lower-authority proxy. **Tag each fact's provenance:** *PINNED* (from an authoritative artifact or empirical probe) · *REPORTED* (stated in text) · *INFERRED* (from an untrusted proxy, e.g. modified code) · *RECALLED* (from memory) · *REASONED* (your own engineering/design judgment, resting on no external claim about the system). A load-bearing fact still at INFERRED/RECALLED is a **blocker to resolve — ask, don't default**; and a question a cheap static check (an artifact parse, a data probe) can answer is answered *before* a multi-hour run is spent assuming it. This is the cheapest way to avoid a faithful reproduction of the *wrong* spec — and the trap where "match the published number" quietly drives you to reproduce the original's bug.
 - **Evaluate in tiers when compute warrants** — cheap checks first; never conclude from toy-scale runs. (Not mandatory for cheap problems.)
 - **Replicate** across seeds/perturbations; report spread and effect size; test **robustness across models and runs**.
 

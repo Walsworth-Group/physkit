@@ -10,4 +10,10 @@
 #   experiment-type RUN numerics (e.g. epochs trained + best epoch for ML; iterations / wall-clock /
 #   n_free_params for fits; seed / n_reps). If a *_COLUMNS group is empty for this campaign, remove it
 #   AND its adjacent tab so the header has no blank column.
-exp_id	timestamp	description	{{LEVER_COLUMNS}}	{{PRIMARY_METRIC_COL}}	{{PRIMARY_SPREAD_COL}}	{{GUARDRAIL_COL}}	{{DIAGNOSTIC_COLUMNS}}	{{RUN_COLUMNS}}	verified	notes
+# COMPARABILITY (the most common silent landmine): `metric_version` / `data_version` tag the FROZEN metric
+#   and the dataset/version this row was scored under (e.g. `v1`, `v2_corrected`). A "current best" / ranking
+#   claim is valid ONLY WITHIN one (metric_version, data_version) pair — NEVER compare a number across
+#   versions. When the metric or data changes, bump the tag and RE-SCORE saved contenders under the new
+#   version before comparing; a programmatic check should refuse a cross-version current-best (campaign-status
+#   flags it). Every row MUST carry both tags — a blank tag makes the row uncomparable and is a hygiene fail.
+exp_id	timestamp	metric_version	data_version	description	{{LEVER_COLUMNS}}	{{PRIMARY_METRIC_COL}}	{{PRIMARY_SPREAD_COL}}	{{GUARDRAIL_COL}}	{{DIAGNOSTIC_COLUMNS}}	{{RUN_COLUMNS}}	verified	notes

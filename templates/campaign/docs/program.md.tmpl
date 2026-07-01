@@ -15,6 +15,13 @@ stopped.**
   State why before you commit.
 - **Assume you are wrong until independently proven right.** A number that converged, looks clean, or
   matches your hope is *suspect*, not *confirmed*. The burden of proof is on the positive result.
+- **Anchor facts to the authoritative source; tag their provenance.** A spec value from a paper, leftover
+  code, or memory is a *description* of the system, not the system. Pin every load-bearing fact
+  (architecture, recipe, units, conventions) to the highest-authority artifact you can parse or run — the
+  source-authority ledger in `docs/ENGINEERING_NOTES.md` — and treat a fact you can only mark
+  INFERRED/RECALLED as a gap to resolve **before** building an expensive run on it. When a faithful repro
+  disagrees with a published number, find out *why* (your bug / the target's quirk / a wrong spec); never
+  reverse-engineer the original's bug just to match its table (protocols/baselines.md).
 - **Prefer the minimally sufficient model/design.** Reach for the simplest {{MODEL_NOUNS}} that
   explains the data; add a parameter/term only when it earns its keep against the {{SPREAD_NOUN}}
   spread, is physically/theoretically motivated, AND generalizes. (Near-universal — apply by default.)
@@ -162,6 +169,13 @@ specific source (a paper, a doc, the user), **cite that source** on the JOURNAL 
 ## FROZEN / out of scope (NEVER change; NEVER ask for)
 - **FROZEN** (no edit without re-validation + user sign-off): the scoring math `{{FROZEN_SCORER_PATH}}`;
   {{FROZEN_LIST}}; the experimental data (read-only).
+  - **Frozen ≠ validated.** A forward model / data generator / scorer must PASS its correctness gate — a
+    **sign/convention round-trip against a trusted analytic reference** plus **known-symmetry self-tests**
+    (build and run it with `correctness-suite`) — **before** it is frozen and exp 000 runs. Freezing an unvalidated model bakes its bugs into *every* downstream experiment. And treat any
+    later **"unphysical" symptom** (a sign flip, a reversed/mirrored artifact, a structured residual that
+    won't go away) as a trigger to **re-verify the FROZEN model FIRST** — before building corrective physics
+    (tilt terms, detrending, extra capacity) on top of it. A persistent model–data gap can be a *bug in the
+    frozen reference code*, not only model-form error.
 - **READ-ONLY** (use, don't edit): {{READONLY_LIST}}.
 - **MUTABLE**: {{MUTABLE_LIST}} (+ `configs/` — a new file per experiment).
 
@@ -200,6 +214,14 @@ from **gap-to-ceiling moves** (a freer decoder closed the gap — check the guar
 On promotion to current-best, update `configs/RECOMMENDED.json` to point at the promoted config and save
 the full artifact set (protocols/artifacts.md). Keep the artifacts for each successive best so the
 progression is inspectable.
+
+**Promotion is enforced, not just described.** Record the verify verdict in the scoreboard `verified`
+column the **same turn** you promote — a row acting as current-best (or backing a DISCOVERY) with a blank
+`verified` is a hygiene failure that `campaign-status` flags. The PreToolUse hook enforces verification for
+*DISCOVERIES writes*; it does **not** see scoreboard edits, so **current-best promotion is enforced by this
+rule + the `campaign-status` check** — don't let a number become "best" on the scoreboard without the
+verdict beside it. Promotion compares only **within one `(metric_version, data_version)`** — never rank a
+row against one scored under a different metric or dataset version (re-score first; see Logging Protocol).
 
 ## Independent verification — assume the result is WRONG and try to REFUTE it
 Convergence is not correctness. Before any finding is graduated to DISCOVERIES.md or accepted as
@@ -324,6 +346,10 @@ metric/sanity score, and the experiment-type **run numerics** (e.g. epochs train
 iterations, wall-clock). Append-only; never delete or rename a column mid-campaign (it breaks
 comparability), and keep the PRIMARY column position stable. A new column requires the run-writer to
 emit it first. The `verified` column carries the independent-verification verdict (blank until run).
+The **`metric_version` and `data_version`** columns tag the FROZEN metric and dataset this row was scored
+under: **a "current best"/ranking is only valid within one `(metric_version, data_version)` pair** — never
+compare across versions (the single most common silent landmine). When either changes, bump the tag and
+**re-score saved contenders** under the new version before comparing; every row must carry both tags.
 (The full per-experiment breakdown is also saved to `results/result_<NN>.json`.)
 
 ### `results/JOURNAL.md` (steering view)

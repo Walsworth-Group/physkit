@@ -8,6 +8,14 @@ Write/Edit to a DISCOVERIES file with no recent verify event in the session tran
 
 FAIL-OPEN by design: any parsing/IO error -> allow (a hook bug must never brick a campaign). Flip
 FAIL_OPEN to False for strict mode. Window is configurable via AUTORESEARCH_VERIFY_WINDOW_MIN (default 60).
+
+SCOPE (know the gaps this hook does NOT close — campaign-status covers them):
+  * It guards ONLY DISCOVERIES writes. It does NOT see scoreboard edits, so a "current best" can still be
+    promoted unverified — that is enforced by program.md's promotion rule + the campaign-status hygiene check.
+  * It only fires if THIS tree wired it (.claude/settings.json registers it). An imported / hand-built /
+    relocated tree often has no .claude/ and runs with NO gate — campaign-status asserts the hook is wired.
+  * FAIL_OPEN means a parse/IO error silently allows the write; the campaign-status verified-column check is
+    the backstop that catches anything the hook let through.
 """
 from __future__ import annotations
 import json, os, re, sys, glob
