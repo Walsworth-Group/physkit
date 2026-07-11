@@ -16,14 +16,14 @@ experiment for full reproducibility.
 
 ## How this campaign runs
 
-This is an autonomous research loop. The agent re-reads [`docs/program.md`](docs/program.md) every
+This is an autonomous research loop. The agent re-reads [`docs/charter.md`](docs/charter.md) every
 iteration and: hypothesizes a change to one lever, predicts the metric, runs it, evaluates the frozen
 metric + guardrail, logs a scoreboard row, and graduates confirmed findings to `DISCOVERIES.md` only
 after independent verification. Experiments are numbered `exp000` (the baseline gate), `exp001` (first
 method), then `exp002`, `exp003`, … — zero-padded to three digits so they sort correctly.
 
-- **The loop / charter:** [`docs/program.md`](docs/program.md)
-- **Conventions & units (bug-prevention reference):** [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md)
+- **The loop / charter:** [`docs/charter.md`](docs/charter.md)
+- **Conventions & units (bug-prevention reference):** [`{{CONVENTIONS_DOC}}`]({{CONVENTIONS_DOC}})
 - **Scoreboard (ledger):** [`results/scoreboard.tsv`](results/scoreboard.tsv)
 - **Working memory / settled findings:** [`results/JOURNAL.md`](results/JOURNAL.md) · [`results/DISCOVERIES.md`](results/DISCOVERIES.md)
 
@@ -41,7 +41,7 @@ method), then `exp002`, `exp003`, … — zero-padded to three digits so they so
 
 ## Background docs
 
-- Campaign loop: [`docs/program.md`](docs/program.md)
-- Conventions/units: [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md)
-- Governing physics: [`docs/PHYSICS.md`](docs/PHYSICS.md)
+- Campaign loop: [`docs/charter.md`](docs/charter.md)
+- Conventions/units: [`{{CONVENTIONS_DOC}}`]({{CONVENTIONS_DOC}})
+- Governing physics: [`{{PHYSICS_DOC}}`]({{PHYSICS_DOC}})
 {{EXTRA_BACKGROUND_DOC_LINKS}}

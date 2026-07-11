@@ -24,6 +24,12 @@ is not proof of a finding, but **no finding built on a red suite is trustworthy.
 Bring software-testing discipline (a layered suite, cheap checks first, regression on every fixed bug),
 specialized to physical-simulation correctness.
 
+**Where it lives (campaign).** The scaffold ships at `tests/correctness_checks.py` (+ `tests/README.md`) —
+five skip-stubs (analytic-limit · invariants · parity · convergence · regression) you fill from
+`docs/VERIFICATION_PLAN.md`. `run_campaign.py` warns if it's absent and (under `--selftest`) runs it and
+warns on red; `verify` treats a red suite as a promotion blocker; re-run it after any core/FROZEN change
+(`docs/protocols/checkpoint.md`). Run: `python tests/correctness_checks.py` (exit 0 = green).
+
 ---
 
 ## 1 · Build the checks (encode the V&V plan)
@@ -74,6 +80,11 @@ number that fails one is suspect no matter how good it looks:
   convergence warnings; a buried warning often *is* the result.
 - **Shape / parameter drift** — array shapes, units, and free-parameter count are what you intended (a silent
   broadcast or one extra fitted parameter explains many "improvements").
+- **Guardrail scope** — a closure/sanity guardrail must actually exercise the lever/code path it's meant to
+  guard: perturb the lever deliberately (including to a known-bad value) and confirm the guardrail's output
+  *changes*. A guardrail that reads identically regardless of the lever gives false confidence — worse than
+  no guardrail, since it looks like coverage. Flag any guardrail that can't be shown to fail as untested, not
+  passing (`verify` §4 item 6 runs this same check per-claim; encode it once here as a standing test).
 
 And a short watchlist of **statistical fallacies** that manufacture fake wins: *Simpson's paradox* (an
 aggregate trend that reverses by subgroup), *survivorship / selection* (concluding from only the runs that
@@ -115,7 +126,7 @@ can never silently return. New checks are appended as the work uncovers them.
 - **Upstream:** `simulation-design` / `frame-problem` hand over the V&V plan and the application-specific
   checks this skill encodes; `dimensional-analysis` supplies cheap invariants (units, scaling).
 - **Downstream / alongside:** `verify` uses a green suite as evidence when adjudicating a claim (evidence,
-  not proof); a campaign's `program.md` independent-verification gate and `campaign-status` check
+  not proof); a campaign's `charter.md` independent-verification gate and `campaign-status` check
   suite-green; `report` cites the executed checks in its verification section.
 - **Doctrine:** `docs/SIMULATION_VALIDATION.md` (MMS, order-of-accuracy, validation hierarchy, compensating
   errors, domain of applicability).

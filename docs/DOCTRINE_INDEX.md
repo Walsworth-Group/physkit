@@ -24,7 +24,8 @@ maintainer) can find the right file without loading everything — the substrate
 
 > **Single sources of truth.** Principles live in [`PRINCIPLES.md`](PRINCIPLES.md) (canonical taxonomy).
 > The always-loaded spine is [`CORE.md`](CORE.md). This index never restates principle content — it only
-> points. Context numbers below (`addresses:`) refer to the eight contexts in `PRINCIPLES.md`.
+> points. Context numbers below (`addresses:`) refer to the **nine legacy contexts** in `PRINCIPLES.md`
+> (not the nine *pillars* of the v2 taxonomy — the numbering differs; the X1 migration will reconcile).
 
 ---
 
@@ -108,6 +109,14 @@ Items not yet built are listed so the index is a complete map of the intended ki
 | version-control | `docs/reference/version-control.md` | reference-doc | 7 | new |
 | context-economy | `docs/reference/context-economy.md` | reference-doc | 7 | new |
 | coordinate-frames | `docs/reference/coordinate-frames.md` | reference-doc | 5 | new |
+| hardware-in-the-loop | `docs/reference/hardware-in-the-loop.md` | reference-doc | 4,8,9 | new |
+| signal-extraction-pitfalls | `docs/reference/signal-extraction-pitfalls.md` | reference-doc | 2,4,5 | new |
+| uncertainty-and-error-budgets | `docs/reference/uncertainty-and-error-budgets.md` | reference-doc | 2,5,1 | new |
+| systematic-errors | `docs/reference/systematic-errors.md` | reference-doc | 2,4,1 | new |
+| noise-and-sensitivity | `docs/reference/noise-and-sensitivity.md` | reference-doc | 5,4,2 | new |
+| calibration-and-drift | `docs/reference/calibration-and-drift.md` | reference-doc | 4,5,7 | new |
+| ip-and-attribution | `docs/reference/ip-and-attribution.md` | reference-doc | 1,7 | new |
+| prompt-surface-audit | `docs/reference/prompt-surface-audit.md` | reference-doc | 9,1 | new |
 | reporting-standards | — | reference-doc | 1 | absorbed into `report` skill (§standards) |
 | latex-toolchain | — | reference-doc | 1 | absorbed into `report` assets README |
 
@@ -127,24 +136,49 @@ Items not yet built are listed so the index is a complete map of the intended ki
 | derive | `skills/derive/SKILL.md` | 2,5 | new (analytical/symbolic theory) |
 | assess-idea | `skills/assess-idea/SKILL.md` | 8,4,9 | new (feasibility/worth triage — Wieman decision 9; front-end cluster) |
 | literature-review | `skills/literature-review/SKILL.md` | 1,8 | new (understand the field, cited — Wieman decisions 1,7; front-end cluster) |
+| attribute-mechanism | `skills/attribute-mechanism/SKILL.md` | 2,5,3 | new (mechanism attribution — "simulate before you attribute"; composes frame-problem/dimensional-analysis/signal-extraction-pitfalls/debug/verify) |
+| assumption-audit | `skills/assumption-audit/SKILL.md` | 3,4 | new (plateau → diagnosis mode-change; solve-don't-confirm + operating-point validity; lab-loop keeper) |
+
+### Project skills (on-demand; `layer: campaign`)
+
+| id | path | addresses | status |
+|---|---|---|---|
+| new-project | `skills/new-project/SKILL.md` | 7,8 | new (scaffolds the Project home above campaigns; composes new-campaign) |
+| fork-campaign | `skills/fork-campaign/SKILL.md` | 2,1 | new (invalidation clean break §4.4b; composes new-campaign + verify) |
 
 ### Campaign skills (on-demand; `layer: campaign`)
 
 | id | path | addresses | status |
 |---|---|---|---|
-| new-campaign | `skills/new-campaign/SKILL.md` | 4,8 | ported+extended |
-| campaign-status | `skills/campaign-status/SKILL.md` | 3,4 | ported+extended |
+| new-campaign | `skills/new-campaign/SKILL.md` | 4,8 | ported+extended (project-aware: reference shared, LINEAGE row, §5 relationship) |
+| campaign-status | `skills/campaign-status/SKILL.md` | 3,4 | ported+extended (+ project mode: cross-campaign, FROZEN/MUTABLE) |
 | final-report | `skills/final-report/SKILL.md` | 1 | ported+extended (composes `report`) |
-| handoff | `skills/handoff/SKILL.md` | 7 | new |
+| handoff | `skills/handoff/SKILL.md` | 7 | new (project-aware: resume from LINEAGE, whole-tree portability) |
 | discovery-loop | `skills/discovery-loop/SKILL.md` | 6 | new (archetype G) |
 | experiment-design | `skills/experiment-design/SKILL.md` | 4 | new (archetype H) |
 | model-selection | `skills/model-selection/SKILL.md` | 2,4 | new (archetype I) |
+
+### Project scaffold (`layer: campaign`; materialized per project by `new-project`)
+
+| id | path | kind | addresses | status |
+|---|---|---|---|---|
+| project-charter | `templates/project/PROJECT.md.tmpl` | scaffold-template | 7 | new (system · goal · data/shared pointers) |
+| lineage | `templates/project/LINEAGE.md.tmpl` | scaffold-template | 7 | new (the campaign + session index) |
+| project-claude | `templates/project/CLAUDE.md.tmpl` | scaffold-template | 1,7 | new (project always-on rules) |
+| project-discoveries | `templates/project/DISCOVERIES.md.tmpl` | scaffold-template | 2,7 | new (promoted verified findings; survive fork-and-archive) |
+| project-engineering-notes | `templates/project/ENGINEERING_NOTES.md.tmpl` | scaffold-template | 7 | new (durable project-wide decisions) |
+| shared-physics | `templates/project/shared/PHYSICS.md.tmpl` | scaffold-template | 5 | new (governing physics + target-of-study §; shared) |
+| shared-conventions | `templates/project/shared/CONVENTIONS.md.tmpl` | scaffold-template | 5 | new (units/signs/frames; shared) |
+| shared-instrument | `templates/project/shared/INSTRUMENT.md.tmpl` | scaffold-template | 5 | new (measurement rig; retires SYSTEM.md) |
+| data-readme | `templates/project/data/README.md.tmpl` | scaffold-template | 7 | new (read-only + DATA_PATH pointer convention) |
+| reports-readme | `templates/project/reports/README.md.tmpl` | scaffold-template | 1 | new (single project outputs location) |
+| session-notes | `templates/project/sessions/NOTES.md.tmpl` | scaffold-template | 7,8 | new (ad-hoc session record at true tier) |
 
 ### Campaign scaffold (`layer: campaign`; materialized per campaign)
 
 | id | path | kind | addresses | status |
 |---|---|---|---|---|
-| program | `templates/campaign/docs/program.md.tmpl` | scaffold-template | 3,4 | ported+refined |
+| program | `templates/campaign/docs/charter.md.tmpl` | scaffold-template | 3,4 | ported+refined |
 | physics | `templates/campaign/docs/PHYSICS.md.tmpl` | scaffold-template | 5 | ported+refined (inventory) |
 | intake | `templates/campaign/INTAKE.md.tmpl` | scaffold-template | 8 | new |
 | project-orientation | `templates/campaign/docs/PROJECT_ORIENTATION.md.tmpl` | scaffold-template | 7,8 | new |
@@ -155,7 +189,7 @@ Items not yet built are listed so the index is a complete map of the intended ki
 | campaign-claude | `templates/campaign/CLAUDE.md.tmpl` | scaffold-template | 1,2,7 | new (always-on per-campaign doctrine + hard gates) |
 | discoveries-guard | `templates/campaign/scripts/guard_discoveries.py.tmpl` | scaffold-template | 2 | new (PreToolUse hook: blocks unverified DISCOVERIES write) |
 | hook-settings | `templates/campaign/.claude/settings.json.tmpl` | scaffold-template | 2 | new (wires the guard hook; uses `{{PYTHON_CMD}}`) |
-| claude-general | `templates/CLAUDE.general.md` | scaffold-template | 1,2,7 | new (copy to a project `CLAUDE.md` for everyday always-on doctrine) |
+| claude-general | ~~`templates/CLAUDE.general.md`~~ | scaffold-template | 1,2,7 | **retired 2026-07-03** — was a duplicate of the spine and drifted; `docs/CORE.md` is the single source. Users import it from their project `CLAUDE.md` (`@<kit>/docs/CORE.md`) or copy its body (see `GETTING_STARTED.md` §1) |
 
 ### Report assets
 
@@ -183,23 +217,41 @@ Every principle context should have at least one `frozen` or always-loaded home 
 
 | Ctx | Home(s) |
 |---|---|
-| 1 Integrity | CORE + PRINCIPLES (frozen); `report`, `cite-check`, reporting-standards |
-| 2 Verification | CORE + PRINCIPLES (frozen); `verify`, `correctness-suite`, SIMULATION_VALIDATION |
-| 3 Problem-solving | PRINCIPLES; `debug`, `pivoting`, program.md, campaign-status |
-| 4 Experimental design | PRINCIPLES; program.md, `new-campaign`, archetypes |
-| 5 Physics & simulation | PRINCIPLES; `frame-problem`, `simulation-design`, SIMULATION_VALIDATION, PHYSICS |
+| 1 Integrity | CORE + PRINCIPLES (frozen); `report`, `cite-check`, reporting-standards, `ip-and-attribution`, `prompt-surface-audit` |
+| 2 Verification | CORE + PRINCIPLES (frozen); `verify`, `correctness-suite`, SIMULATION_VALIDATION, `signal-extraction-pitfalls`, `attribute-mechanism`, `uncertainty-and-error-budgets`, `systematic-errors`, `noise-and-sensitivity` |
+| 3 Problem-solving | PRINCIPLES; `debug`, `pivoting`, `assumption-audit`, charter.md, campaign-status |
+| 4 Experimental design | PRINCIPLES; charter.md, `new-campaign`, archetypes, `hardware-in-the-loop`, `systematic-errors`, `noise-and-sensitivity`, `calibration-and-drift`, `assumption-audit` |
+| 5 Physics & simulation | PRINCIPLES; `frame-problem`, `simulation-design`, SIMULATION_VALIDATION, PHYSICS, `attribute-mechanism`, `uncertainty-and-error-budgets`, `noise-and-sensitivity`, `calibration-and-drift` |
 | 6 Discovery-loop | PRINCIPLES; `discovery-loop`, archetype G (cheatsheet), expensive-evaluation |
-| 7 Records & reproducibility | CORE (frozen: context economy); this index, `handoff`, `record-decision`, scaffold |
+| 7 Records & reproducibility | CORE (context economy — doctrine, unfrozen per dec #10 2026-07-03); this index, `handoff`, `record-decision`, scaffold |
 | 8 Autonomy & collaboration | CORE (frozen-adjacent: clarify-the-goal); `new-campaign`, frame-problem |
-| 9 Operating unattended | CORE (Running unattended) + PRINCIPLES §9; `program.md` (Getting Unstuck + promotion), `campaign-status`, `expensive-evaluation`, ENGINEERING_NOTES (landmines), the CLAUDE.md gates + DISCOVERIES hook |
+| 9 Operating unattended | CORE (Running unattended) + PRINCIPLES §9; `charter.md` (Getting Unstuck + promotion), `campaign-status`, `expensive-evaluation`, `hardware-in-the-loop` (archetype E), ENGINEERING_NOTES (landmines), the CLAUDE.md gates + DISCOVERIES hook, `prompt-surface-audit` |
 
 **Open gaps:** none of the backlog tiers remain — Tiers 0–5 and the deferred discovery-loop/archetype G are
 all built. Remaining work is testing/iteration, not net-new artifacts. *(Context 9 overlaps 7–8 by design;
 its organization vs those contexts is flagged for revisit.)*
 
 ## Changelog
+- **v0.6** — added the 2026-07 lab-loop keepers: `assumption-audit` (skills-table row + Ctx 3/4 coverage —
+  the plateau → diagnosis mode-change; solve-don't-confirm + operating-point validity) and
+  `prompt-surface-audit` (reference-doc row + Ctx 9/1 coverage — rendered-context auditing for multi-agent
+  loops; PRINCIPLES Ctx 9 gained the twin bullet, v1.9; CORE's plateau line gained the second species).
+  Sign-off route: PR review, 2026-07-07.
+- **v0.5** — added `ip-and-attribution` (the cite-and-adapt-never-reproduce guardrail for capability work,
+  meeting item X3/LHF-2): reference-doc row + Ctx 1 coverage. Constraint doc for the C1–C4 capability
+  library; posture pending formal confirmation by open decision #8. Sign-off approved 2026-07-04.
+- **v0.4** — indexed the experimental **measurement-science reference cluster**
+  (`uncertainty-and-error-budgets`, `systematic-errors`, `noise-and-sensitivity`, `calibration-and-drift`):
+  added their rows + Ctx 2/4/5 coverage. Meeting-2026-07-02 items **B2** (uncertainty) and **B4**
+  (systematics) plus two net-new (noise, calibration). *(Context-numbered `addresses` remap with the X1
+  9-pillar migration.)*
+- **v0.3** — indexed the mechanism-attribution + hardware-loop additions (PRs #6/#7, merged 2026-07-03):
+  added the `attribute-mechanism` skills-table row (its SKILL.md shipped but was left unindexed), and wired
+  `attribute-mechanism` / `signal-extraction-pitfalls` / `hardware-in-the-loop` into the §3 coverage audit
+  (Ctx 2/4/5/9). The two reference docs were already row-indexed in-PR; no principle content changed —
+  provenance in `synthesis/PR6_PR7_INTEGRATION_REVIEW.md`.
 - **v0.2** — added **Context 9 · Operating unattended** to the coverage audit (home: CORE "Running
-  unattended" + PRINCIPLES §9; enforced via `program.md` / `campaign-status` / `expensive-evaluation` /
+  unattended" + PRINCIPLES §9; enforced via `charter.md` / `campaign-status` / `expensive-evaluation` /
   ENGINEERING_NOTES landmines / the CLAUDE.md gates). Bumped CORE `addresses` to `1,2,7,8,9` and PRINCIPLES
   to `1–9`. From the 2026-06-30 review.
 - **v0.1** — initial index + metadata schema. Enumerates the full intended kit (built + planned) from

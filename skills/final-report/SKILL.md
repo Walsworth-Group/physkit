@@ -57,7 +57,8 @@ below are `report`'s five, expanded with where the campaign supplies each:
 - **Verified.** Run `report`'s report-time check: recompute the headline result and key deltas from the
   **frozen record** (scoreboard/logbook) — require the current-best's `verify` status is **CONFIRMED**,
   not just high — confirm internal consistency (abstract ↔ body, totals, units), `cite-check` every
-  reference, and flag anything PROVISIONAL or resting on a QUESTIONABLE ASSUMPTION.
+  reference (claim-support from full text, not the abstract; abstract-only support is PROVISIONAL), and flag
+  anything PROVISIONAL or resting on a QUESTIONABLE ASSUMPTION.
 - **Reproducible.** A stranger with the repo should be able to rerun the headline result: exact configs,
   commands, data provenance, environment, and the file pointers to find everything (the per-experiment
   snapshot). If they can't, the report has failed its primary job.
@@ -69,15 +70,17 @@ below are `report`'s five, expanded with where the campaign supplies each:
 
 Campaigns differ in how they store things, so **start by reading the campaign's own structure** rather
 than assuming filenames. You are looking for a handful of *roles*; find whatever file plays each role.
-(Campaigns scaffolded by this kit use standard homes — `docs/program.md`, `results/scoreboard.tsv`,
-`results/JOURNAL.md`, `results/DISCOVERIES.md`, `docs/PHYSICS.md`, `docs/CONVENTIONS.md`,
-`docs/SYSTEM.md`, optional `LITERATURE.md`, `configs/`, `results/images/` — confirm they exist, and fall
+(Campaigns scaffolded by this kit use standard homes — `docs/charter.md`, `results/scoreboard.tsv`,
+`results/JOURNAL.md`, `results/DISCOVERIES.md`, the governing physics/conventions/instrument docs
+(`docs/PHYSICS.md` · `docs/CONVENTIONS.md` · `docs/INSTRUMENT.md` for a standalone campaign, or the project's
+`../../shared/PHYSICS.md` · `../../shared/CONVENTIONS.md` · `../../shared/INSTRUMENT.md` when the campaign lives
+in a project), optional `LITERATURE.md`, `configs/`, `results/images/` — confirm they exist, and fall
 back to discovery for non-kit campaigns.)
 
 - **The charter / program doc** — defines the goal, the **primary metric**, what is **FROZEN** (physics,
   geometry, data, the metric itself), and which **levers** were explored. This is your north star: the
   report's thesis is "given the frozen setup and the goal, here is the best lever combination and the
-  evidence for it." (Often a `program*.md` / `README` / a docs folder.)
+  evidence for it." (Often a `charter*.md` / `README` / a docs folder.)
 - **The experiment ledger** — the per-experiment record of what was tried and what it scored: the primary
   metric plus sub-metrics, ceilings, sanity/overfit flags, and notes. This is the spine of your evidence
   section — each row is an ablation. (Often a `scoreboard.tsv/csv`, a results table, or a set of
@@ -93,8 +96,9 @@ back to discovery for non-kit campaigns.)
   levers. This is your bibliography seed and your anti-hallucination anchor. (Often a `LITERATURE.md`.)
 - **The figures** — outputs from the runs, especially the most refined ones. (Often a `results*/images/`
   or per-experiment output dirs.)
-- **Reference docs** — the governing physics (`docs/PHYSICS.md` — equations, methods, system behavior),
-  conventions (`docs/CONVENTIONS.md`), and apparatus/sample parameters (`docs/SYSTEM.md`). Pull
+- **Reference docs** — the governing physics (`PHYSICS.md` — equations, methods, system behavior),
+  conventions (`CONVENTIONS.md`), and the measurement rig / apparatus + sample parameters (`INSTRUMENT.md`).
+  In a **project** these are shared at `../../shared/`; in a standalone campaign they're in `docs/`. Pull
   definitions and derivations from these rather than reconstructing them.
 
 If a role has no obvious home, search for it (grep for the metric name, for "best", for citation URLs)

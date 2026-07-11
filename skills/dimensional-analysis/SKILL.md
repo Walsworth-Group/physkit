@@ -76,6 +76,7 @@ falsified," not "correct."
 - **`frame-problem`** uses jobs 2–3 to bound the answer and to decide what's negligible-by-scale.
 - **`verify`** runs job 1 as the first check on any new/derived equation, before recomputing.
 - **`debug`** uses job 1 to localize a units/sign bug.
+- **`attribute-mechanism`** uses job 2 to bound each candidate mechanism's plausible strength before the sweep is coded.
 - For deeper theory (the π-theorem proof, scaling laws, asymptotics, similarity solutions) see
   `docs/reference/dimensional-analysis.md`.
 

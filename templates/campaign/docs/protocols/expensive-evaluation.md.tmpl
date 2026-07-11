@@ -17,6 +17,12 @@ quality — so track and economize it deliberately. Draws on `docs/SIMULATION_VA
 - **Tier by fidelity (scout → confirm → extended).** Screen candidates with the cheapest evaluation that
   discriminates; spend full-fidelity evaluations only on survivors. Never conclude from toy-scale alone —
   but never burn a full run where a cheap one would have filtered the candidate.
+  **Levers can have different re-check costs — don't force them into one blended scout tier.** A lever that's
+  cheap to re-screen (e.g. a per-item/per-frame reprocessing pass) and one that isn't (e.g. a global refit
+  across the whole dataset) don't belong in the same "scout" bucket if the cheap one can be screened far more
+  often for the same budget. When a campaign has both kinds, split or tag the scout tier by which cost axis
+  each lever touches, so the budget plan reflects the real cost structure instead of assuming uniform scout
+  cost.
 - **Pre-screen with a cheaper proxy** where one exists — a surrogate, a reduced-order model, a coarser grid,
   a digital twin — then confirm winners at full fidelity. (Validate the proxy against the true evaluator;
   surrogate errors mislead the search — `SIMULATION_VALIDATION.md` §6.)
@@ -34,7 +40,8 @@ quality — so track and economize it deliberately. Draws on `docs/SIMULATION_VA
 - **Save the expensive output** (`protocols/artifacts.md` quicker-check artifacts) so a result can be
   re-checked without re-running, and the verifier can work from saved artifacts on a long run.
 - **For hardware / irreversible evaluations:** confirm before any destructive action; interleave/randomize
-  A/B comparisons against drift; pre-screen with a forward model. (See `program.md` hardware section.)
+  A/B comparisons against drift; pre-screen with a forward model. (See `charter.md` hardware section and
+  `docs/reference/hardware-in-the-loop.md` for the full operational doctrine.)
 
 ## Monitor a long run — don't wait to be asked
 For any run expected to exceed ~30–60 min (a long sim, a big training job, a detached/background process):

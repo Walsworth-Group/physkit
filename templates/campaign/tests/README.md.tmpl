@@ -1,0 +1,19 @@
+# tests/ — the campaign's correctness suite
+
+The simulator's standing checks (built and maintained with the `correctness-suite` skill from
+`docs/VERIFICATION_PLAN.md`). `verify` asks "is this *result* right?"; this suite asks "is the *machinery*
+still right?" — and makes the answer a button you can press.
+
+**Run:** `python tests/correctness_checks.py` — exit `0` = green · `1` = a check FAILED.
+
+**Starter check kinds** (in `correctness_checks.py`, shipped as skip-stubs — implement the ones that apply):
+analytic-limit · conservation/symmetry invariants · independent-method parity · convergence ·
+known-physics replication + regression gates.
+
+**Green-gate policy (LIGHT):**
+- `scripts/run_campaign.py` warns if the suite is **absent**, and under `--selftest` runs it and warns on
+  **RED** — a warning, never a hard stop.
+- `verify` treats a **red suite as a blocker** for promoting a finding.
+- **Re-run after ANY change to core/FROZEN code** (`docs/protocols/checkpoint.md`).
+- Per `debug`, **every fixed bug earns a new regression check here** — "a check that encodes a lesson you
+  already paid for once."

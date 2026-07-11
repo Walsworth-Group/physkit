@@ -65,6 +65,12 @@ The silent bugs that produce a plausible-but-wrong number (worse than a crash, b
   output; find the *first* one.
 - **Seed / nondeterminism** — unset RNG state making results irreproducible across runs/machines.
 - **Double-counting / missing factor** — a term added twice, or a Jacobian/volume element dropped.
+- **Self-referential nuisance-parameter anchoring** — a calibration/registration/background parameter meant to
+  track independent ground truth instead gets re-solved against *its own previous estimate* (e.g. a per-step
+  registration fit initialized from, and implicitly pulled toward, the prior step's answer rather than the raw
+  data). The fit converges and looks stable — but it's stable around its own accumulated drift, not the truth,
+  and walks slowly with no error signal to catch it. Check: does resetting the parameter's prior value between
+  steps change the answer? If yes, it was anchoring to itself, not the data (`simulation-design` §assumptions).
 - **Frozen-infrastructure bug (upstream)** — a persistent *unphysical* symptom (a reversed sign, a
   mirrored/flipped artifact, a structured residual that won't go away) can be a bug in the FROZEN forward
   model / data generator *upstream*, not in the model you're tuning. Re-verify the frozen reference code (a
@@ -73,11 +79,27 @@ The silent bugs that produce a plausible-but-wrong number (worse than a crash, b
   buries the real bug. (A real campaign chased a training-data sign error as a physical "tilt" for ~50
   experiments.)
 
+- **Latent geometry assumption armed by a calibration change** — a shared buffer/window/grid sized to
+  ONE consumer silently truncates or clips another the day a calibration changes the first (e.g. a shared
+  pulse window sized to pulse A clips the longer pulse B after A is shortened — while metadata keeps
+  recording B's intended length). Size shared structures to the max of their consumers, and regression-test
+  *extents* (what actually got written/played), not just parameters.
+- **Success inferred from ambient state** — judging a step's success by state it *should* have changed
+  (a cache is fresh, a file exists, a flag is set) instead of by the step's own explicit output/exit
+  signal. A previous success, or an unrelated writer, leaves the ambient check green while the step fails
+  every time — and disables the retry/latch logic built on it.
+- **Path-dependent state reset** — a counter/breaker/flag reset on the common code path but not on the
+  alternate path that reaches the same outcome (manual stop vs normal completion; error path vs success
+  path). Bites exactly during operator interventions. Reset state where the *condition* becomes true, not
+  where control usually flows.
+
 ## Fail loudly so the next bug is cheap
 After the fix, leave the code safer than you found it: assert physical invariants and array shapes/units at
 boundaries; guard against NaN/inf; check matrix conditioning before solving; confirm optimizers actually
-converged (report iterations / final residual). And **promote the bug to a regression check** — add the
-minimal failing case to `correctness-suite` so this exact bug can never silently return.
+converged (report iterations / final residual). And **promote the bug two ways** so it can't cost twice: add
+the minimal failing case to `correctness-suite` as a regression check (so it can never silently return), and
+append a one-line **`symptom → check`** entry to `CONVENTIONS.md` → *Known gotchas* (so the next person
+*recognizes* it at a glance instead of re-debugging it).
 
 **Tooling you install must be non-intrusive.** A monitor / watcher / auto-start process you add while
 debugging must run windowless/headless with no per-iteration side effects (no console pop-ups, no resource
@@ -98,6 +120,9 @@ Don't abandon an idea on the strength of a crash.
   bisects *for* you by telling you which invariant broke.
 - **`verify`** — once fixed, re-verify the result; a crash never counts as a refutation of the idea.
 - **`pivoting`** — only after the ladder proves it's a capped idea, not a bug.
+- **`attribute-mechanism`** — once the ladder clears the code and a *real* signature persists (rung 7 /
+  "When it isn't a bug"), the question shifts from "is the code right" to "what physical cause produces
+  this" — hand off to `attribute-mechanism`.
 
 ## Debug report (when worth recording)
 For a non-trivial bug, capture it briefly: **expected vs actual**, the **root cause** (the mechanism, not

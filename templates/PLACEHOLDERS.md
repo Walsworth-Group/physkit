@@ -14,7 +14,7 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 - **`[PROPOSED]`** — an inline tag on a speculative/optional discipline. The setup skill presents these
   to the user to **keep or cut**; surviving ones lose the tag, cut ones are deleted.
 - **`.tmpl` suffix** — marks a file that contains placeholders. Stripped on generation
-  (`program.md.tmpl` → `docs/program.md`).
+  (`charter.md.tmpl` → `docs/charter.md`).
 - **`<NN>`, `<slug>`, `<label>`, `<G>`** in **prose/example** text are literal illustrative
   placeholders (how filenames look at runtime), NOT substitutions — leave them as-is. Only `{{...}}` is
   substituted. (`{{NN}}` and `{{SLUG}}` *are* substitutions — they appear in the config templates'
@@ -38,8 +38,8 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 - Fill from the **interview** (goal, metric, physics, data, constraints, compute, time). Where the user
   defers (e.g. a parameter they'll fit later), write the placeholder's content as an explicit TODO with
   the deferral noted, not a silent guess.
-- Keep filled prose at the same altitude as the surrounding boilerplate — a filled `program.md` should
-  read as naturally as a hand-written charter (see `examples/program-files/`).
+- Keep filled prose at the same altitude as the surrounding boilerplate — a filled `charter.md` should
+  read as naturally as a hand-written charter (see `examples/charter-files/`).
 
 ---
 
@@ -153,7 +153,7 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 ### Logging & scoreboard
 | Placeholder | Meaning |
 |---|---|
-| `{{SCOREBOARD_COLUMN_LIST}}` | The full scoreboard schema string (in program.md). |
+| `{{SCOREBOARD_COLUMN_LIST}}` | The full scoreboard schema string (in charter.md). |
 | `{{PRIMARY_METRIC_COL}}` | The scoreboard column holding the primary metric. |
 | `{{PRIMARY_SPREAD_COL}}` | The column holding the replicate spread. |
 | `{{GUARDRAIL_COL}}` | The column holding the guardrail value. |
@@ -210,10 +210,23 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 | `{{TOPIC}}` | A literature topic heading. |
 | `{{NEXT_SEQUENCE}}` | The recommended next-experiment sequence. |
 
+### Project & shared-doc references (in-project vs standalone campaign)
+Filled per **campaign mode** (detected by `new-campaign` Step 0.1). **In-project** campaigns reference the
+project's shared docs — **no local copy** (design §4.1); **standalone** campaigns keep their own `docs/`. Each
+value is a **relative path from the file that contains it**, so the depth differs by file — fill each
+occurrence with the path that actually resolves (the validator checks intra-tree doc links resolve).
+
+| Placeholder | Meaning | In-project value (by file location) | Standalone value (by file location) |
+|---|---|---|---|
+| `{{PHYSICS_DOC}}` | Path to the governing-physics doc. | campaign-root (charter/README/INTAKE): `../../shared/PHYSICS.md` · `results/` (INDEX/DISCOVERIES): `../../../shared/PHYSICS.md` | campaign-root: `docs/PHYSICS.md` · `results/`: `../docs/PHYSICS.md` |
+| `{{CONVENTIONS_DOC}}` | Path to the conventions doc. | campaign-root: `../../shared/CONVENTIONS.md` · `results/`: `../../../shared/CONVENTIONS.md` | campaign-root: `docs/CONVENTIONS.md` · `results/`: `../docs/CONVENTIONS.md` |
+| `{{SIBLING_FROZEN_MUTABLE}}` | (coupled sibling campaigns only — else DELETE the block) What this campaign FREEZES that a sibling treats as MUTABLE, and vice versa. | — | — |
+| `{{CONSUMED_ARTIFACTS}}` | (coupled sibling campaigns only) The promoted `../../shared/<artifact>_<ver>/` artifacts this campaign READS (never a sibling's working folder). | — | — |
+
 ### Framing & planning docs (INTAKE · PROJECT_ORIENTATION · PHYSICS · VERIFICATION_PLAN · protocols/expensive-evaluation)
 These fill the setup/planning docs authored before the loop runs. The `*_PROPOSED` tokens hold the
 user's **pre-sign-off** proposals captured in `INTAKE.md`; once the campaign spec is signed off they are
-restated (frozen) in `program.md` / `metric.py` under their final names — see the alias note below.
+restated (frozen) in `charter.md` / `metric.py` under their final names — see the alias note below.
 
 | Placeholder | Meaning |
 |---|---|
@@ -263,7 +276,7 @@ restated (frozen) in `program.md` / `metric.py` under their final names — see 
 > **Alias note (proposed → final, and near-synonyms).** Several tokens name the **same quantity at
 > different stages or in different docs**; fill them consistently. The a-priori bound/range appears as
 > `{{APRIORI_BOUND}}` (INTAKE/PHYSICS), `{{APRIORI_RANGE}}` (VERIFICATION_PLAN), `{{APRIORI_BOUND_NOTES}}`
-> (program.md), and `{{METRIC_PLAUSIBLE_RANGE}}` (program/metric); the metric's hard bounds as
+> (charter.md), and `{{METRIC_PLAUSIBLE_RANGE}}` (program/metric); the metric's hard bounds as
 > `{{HARD_BOUNDS}}` (VERIFICATION_PLAN) and `{{METRIC_HARD_BOUNDS}}` (program/metric); the domain gotchas
 > as `{{KNOWN_ARTIFACTS}}` (VERIFICATION_PLAN) and `{{KNOWN_GOTCHAS}}` (CONVENTIONS/INTAKE). The split is
 > intentional — the planning docs are drafted before the charter freezes the final wording — but the

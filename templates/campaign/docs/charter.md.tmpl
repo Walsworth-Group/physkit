@@ -31,7 +31,7 @@ stopped.**
   spread, is physically/theoretically motivated, AND generalizes. (Near-universal — apply by default.)
 - **Use precise notation and units everywhere.** Name the quantity, its units, and its scale.
   {{UNITS_EXAMPLE_LINE}}. Ambiguous notation is how sign/convention bugs survive (see
-  `docs/CONVENTIONS.md`).
+  `{{CONVENTIONS_DOC}}`).
 - **Track uncertainty as a first-class output.** No bare point estimates — every metric you act on
   carries a spread (see Rigor). A result without an error bar is not yet a result.
 - **Honesty is non-negotiable.** Report only numbers you actually computed from a real run — never
@@ -112,7 +112,7 @@ WHILE not interrupted:
   9. UPDATE       — the runner already appended this experiment's FACTS to results/logbook.md; COMPLETE
                     that entry's narrative (Analysis / Verification / NEXT) + add its results/INDEX.md row
                     + a one-line note in the results/JOURNAL.md steering view; graduate settled findings
-                    to DISCOVERIES.md only after independent verification; update docs/PHYSICS.md if a
+                    to DISCOVERIES.md only after independent verification; update {{PHYSICS_DOC}} if a
                     finding changes the physics.
  10. CONSOLIDATE  — if JOURNAL > ~150 lines, trim to recent + open threads (protocols/journal_consolidation.md).
  11. CHECKPOINT   — if exp_id % {{CHECKPOINT_EVERY}} == 0, run protocols/checkpoint.md.
@@ -194,6 +194,21 @@ comes from a *related solved problem*, note the analogy and what *transfers*** �
 Do NOT pause to request more data, a different metric, or a radically different objective. Work
 strictly within the levers above.
 
+[[OPTIONAL — this campaign is COUPLED to sibling campaigns in the same project (e.g. a forward-model campaign whose output a decoder campaign consumes):
+## Relationship to sibling campaigns
+This campaign shares a project with siblings attacking the same system. Coupling is kept **explicit here** so
+no campaign silently changes a lever a sibling depends on (the failure mode: a forward-model bug scored a
+decoder on wrong test data — see the project `CLAUDE.md` fork-and-archive rule).
+- **What this campaign FREEZES that a sibling treats as MUTABLE (and vice versa):** {{SIBLING_FROZEN_MUTABLE}}
+  <!-- e.g. "We FREEZE the forward model F and promote it to ../../shared/forward_<ver>/; the decoder campaign
+       treats F as fixed. The decoder MUTATES the decoder architecture, which we treat as out-of-scope here." -->
+- **Consumed artifacts come from `../../shared/`, never a sibling's working folder:** {{CONSUMED_ARTIFACTS}}
+  <!-- the promoted, versioned artifacts this campaign READS (a frozen forward model, a generated training set),
+       each at ../../shared/<artifact>_<ver>/ — a sibling's results/ is off-limits (mechanism §4.2). -->
+- **Changing a lever a sibling froze is a cross-campaign change** — coordinate it, re-promote the artifact
+  under a NEW version tag, and record it in `../../LINEAGE.md`. Do not silently repurpose a frozen input.
+]]
+
 [[OPTIONAL — hardware-in-the-loop campaign (the loop drives real instruments):
 ## Hardware safety & irreversibility
 - **Respect hardware limits as HARD constraints.** {{HARDWARE_LIMITS}}. A setpoint outside the safe
@@ -208,6 +223,9 @@ strictly within the levers above.
   first. The primary metric carries statistical AND systematic error; never act on a single read.
 - **Log the full instrument + environment state every run** (settings, calibration, firmware,
   conditions — the "thermostat in the box").
+- **Set each threshold from the operational doctrine, not from scratch:** `docs/reference/hardware-in-the-loop.md`
+  (readiness gate; agent–instrument file protocol; drift/starvation guard; progress-not-liveness
+  monitoring; ingest quarantine; deterministic abort).
 ]]
 
 ## Decision / promotion
@@ -342,15 +360,25 @@ the biggest unexploited structural lever ({{STRUCTURAL_LEVERS}}).
   on new data" is a **load-bearing claim, not a stopping cue** — treat it like a positive result and try to
   *refute* it: attempt to beat the supposed limit with an orthogonal lever or a freer model, and give the
   reasoned argument for why any gain that appears is non-physical, *before* stopping. The loop runs until a
-  direction is genuinely exhausted or you are told to stop; a plateau is a pivot signal (escalate the lever),
-  not a finish line. "I've stopped finding gains" is not the same as "no gains exist." If you truly believe
+  direction is genuinely exhausted or you are told to stop; a plateau is a pivot signal (escalate the lever — or, if it
+  *resists* escalation, an audit signal: see "At a hard plateau, audit the inheritance" below), not a
+  finish line. "I've stopped finding gains" is not the same as "no gains exist." If you truly believe
   you're at a limit, state it as a claim *with the falsification you attempted* — and keep exploring
   orthogonal directions rather than idling.
 - **Diagnose before you pivot.** Name the failure type (idea-wrong / implementation-capped /
-  fixed-choice-fought / near-miss) and take the **smallest jump** the diagnosis justifies along the
+  fixed-choice-fought / near-miss — or the non-pivot **inherited-value-wrong**, handled in the next
+  bullet) and take the **smallest jump** the diagnosis justifies along the
   refine↔pivot spectrum — escalate to an orthogonal lever only once the current family is exhausted, but
   do escalate decisively when it is. A crash is a bug (`debug`), not a verdict; a near-miss is a
   gather-more signal, not a dead end. Full diagnosis: `docs/reference/pivoting.md`.
+- **At a hard plateau, audit the inheritance.** If one-lever experiments across two or more lever
+  families pin at the same floor — or the current best sits far from its own a-priori expectation and no
+  lever moves the gap — the stall may live *upstream* of every lever: a wrong inherited value (a
+  calibration, a derived quantity, a classification) that every experiment silently carries. Lever
+  escalation cannot escape that; run the assumption audit (`assumption-audit`): enumerate what the
+  current best inherits with provenance, rank by would-being-wrong-produce-this-stall, and spend ONE
+  discriminating experiment that **solves for the top suspect's value from scratch** (never one that
+  merely "confirms" the incumbent) before committing more optimization runs.
 
 [[OPTIONAL — literature search enabled (the user opted in to literature search):
 ### Literature search rule
@@ -402,7 +430,7 @@ Write only after multiple consistent experiments confirm a finding on `{{PRIMARY
 noted) AND an independent verification returns CONFIRMED. **A PreToolUse hook blocks this write unless an
 independent verify ran recently** — run `{{VERIFY_SKILL}}` (it spawns a refuter sub-agent), get CONFIRMED,
 and quote the verdict; this is hard gate #1 in `CLAUDE.md`. Don't fight the hook — satisfy it. When a discovery changes the physical
-understanding, also update `docs/PHYSICS.md` (equations, the effect, references consulted).
+understanding, also update `{{PHYSICS_DOC}}` (equations, the effect, references consulted).
 
 ### `results/INDEX.md`
 The navigable map of the campaign — one row per experiment linking it to its config, snapshot, result,

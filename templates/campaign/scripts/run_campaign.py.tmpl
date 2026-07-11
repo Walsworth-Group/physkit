@@ -1,6 +1,6 @@
-"""run_campaign.py — the experiment runner for {{CAMPAIGN_TITLE}}.
+"""run_campaign.py - the experiment runner for {{CAMPAIGN_TITLE}}.
 
-Runs ONE experiment from a config and writes the full reproducible record. This file is MUTABLE — add
+Runs ONE experiment from a config and writes the full reproducible record. This file is MUTABLE - add
 forwards / decoders / preprocessors / search strategies here; it is the plumbing, not the FROZEN
 scoring math (that lives in scripts/metric.py).
 
@@ -13,7 +13,7 @@ Every run MUST leave behind, for reproducibility:
     ·  at least one figure in results/images/  ·  a tee'd log in results/diagnostics/
     ·  a reproducibility snapshot in results/snapshots/exp<NN>_<slug>/ (the config + a copy of scripts/)
     ·  an entry appended to results/logbook.md (this script appends the FACTS automatically; the agent
-       completes the narrative slots — Analysis / Verification / NEXT — afterward)
+       completes the narrative slots - Analysis / Verification / NEXT - afterward)
 A result is not "saved" until it has a scoreboard row, a result_<NN>.json, its figure, AND its snapshot.
 """
 from __future__ import annotations
@@ -22,6 +22,7 @@ import argparse
 import datetime as _dt
 import json
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -90,13 +91,29 @@ def snapshot_experiment(cfg: dict, config_path: Path | None = None) -> Path:
     return dst
 
 
+def validate_method(cfg: dict) -> None:
+    """HARD-FAIL if a lever named in `cfg` isn't actually wired to any effect in run_experiment().
+
+    TODO(campaign): maintain a set/dict of the method names each lever field actually dispatches on
+    (e.g. {"registration": {"none", "rigid", "affine"}, "decoder": {"linear", "mlp"}}) and assert every
+    lever value in `cfg` is a recognized member before running. A lever whose value doesn't match any
+    dispatch branch silently falls through to a default/no-op - the experiment runs, writes a
+    scoreboard row, and looks like a real test of that lever when it changed nothing. This has actually
+    happened (an unwired lever burned a full evaluation before being caught by a manual review, not by
+    the runner) - fail loudly here instead of relying on someone noticing.
+    """
+    raise NotImplementedError("Implement validate_method() - hard-fail on any cfg lever value the "
+                              "dispatch in run_experiment() doesn't actually recognize.")
+
+
 def run_experiment(cfg: dict) -> dict:
     """Execute the method described by `cfg` and return its prediction + any intermediates.
 
-    TODO(campaign): this is where the LEVERS live — registration / forward / preprocessing / decoder /
-    design / training, dispatched on fields in `cfg`. Keep side effects isolated; return arrays.
+    TODO(campaign): this is where the LEVERS live - registration / forward / preprocessing / decoder /
+    design / training, dispatched on fields in `cfg`. Keep side effects isolated; return arrays. Call
+    `validate_method(cfg)` first so an unrecognized lever value fails loudly instead of silently no-op'ing.
     """
-    raise NotImplementedError("Implement run_experiment() — dispatch the method from the config.")
+    raise NotImplementedError("Implement run_experiment() - dispatch the method from the config.")
 
 
 def load_target(cfg: dict):
@@ -104,7 +121,7 @@ def load_target(cfg: dict):
 
     TODO(campaign): for a fixed-data campaign, read the experimental data here (READ-ONLY).
     """
-    raise NotImplementedError("Implement load_target() — load the data the metric scores against.")
+    raise NotImplementedError("Implement load_target() - load the data the metric scores against.")
 
 
 def guardrail(prediction, cfg: dict) -> dict:
@@ -161,7 +178,9 @@ def append_logbook(cfg: dict, exp_id: str, label: str, score: float, diags: dict
         f"- **Change**: {cfg.get('_comment', '')}\n"
         f"- **Result**: {{PRIMARY_METRIC}} = {score:.4f}; {{GUARDRAIL_METRIC}} = {diags}\n"
         f"- **Analysis**: \n"
+        f"- **Expected vs found**: \n"
         f"- **Verification**: \n"
+        f"- **Excluded data**: none\n"
         f"- **Disputes & responses**: \n"
         f"- **Status**: open\n"
         f"- **Artifacts**: results/result_{exp_id}.json . results/images/{label}_* . results/snapshots/{label}/\n"
@@ -174,7 +193,7 @@ def append_logbook(cfg: dict, exp_id: str, label: str, score: float, diags: dict
 def evaluate_and_record(cfg: dict, prediction, target) -> dict:
     """Score with the FROZEN metric, run the guardrail, and write result_<NN>.json (+ figure)."""
     score = metric.compute_metric(prediction, target)
-    assert np.isfinite(score), "primary metric is non-finite — refuse to record a noise result"
+    assert np.isfinite(score), "primary metric is non-finite - refuse to record a noise result"
     diags = guardrail(prediction, cfg)
 
     label = cfg["exp_name"]
@@ -208,20 +227,48 @@ def evaluate_and_record(cfg: dict, prediction, target) -> dict:
     return result
 
 
+def check_correctness_suite(run: bool) -> None:
+    """LIGHT correctness gate (doctrine: no finding built on a red suite is trustworthy).
+
+    Always warns if the standing suite is absent; when ``run`` is True (under ``--selftest``) it executes the
+    suite and warns on RED. Never blocks - ``verify`` treats a red suite as a promotion blocker, and it must
+    be re-run after any change to core/FROZEN code (docs/protocols/checkpoint.md).
+    """
+    suite = ROOT / "tests" / "correctness_checks.py"
+    if not suite.is_file():
+        print("WARNING: no correctness suite at tests/correctness_checks.py - the simulator is unguarded; "
+              "build one with the correctness-suite skill.")
+        return
+    if not run:
+        return
+    try:
+        proc = subprocess.run([sys.executable, str(suite)], capture_output=True, text=True, timeout=600)
+    except Exception as exc:  # a broken/slow suite must warn, never block the run
+        print(f"WARNING: could not run the correctness suite ({exc}); continuing.")
+        return
+    if proc.stdout:
+        print(proc.stdout.rstrip())
+    if proc.returncode != 0:
+        print("WARNING: correctness suite is RED - a check FAILED. Results built on this code are not "
+              "trustworthy until it is green (this is a warning, not a hard stop).")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Experiment runner for {{CAMPAIGN_TITLE}}")
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--config", type=Path, help="run one experiment from this config")
     g.add_argument("--baseline", action="store_true", help="run experiment 000 (the floor gate)")
-    ap.add_argument("--selftest", action="store_true", help="run the metric selftest first")
+    ap.add_argument("--selftest", action="store_true", help="run the metric selftest + correctness suite first")
     args = ap.parse_args()
 
+    check_correctness_suite(run=False)   # always: warn if the standing suite is absent
     if args.selftest:
         metric.selftest()
+        check_correctness_suite(run=True)   # LIGHT gate: run the suite, warn (never block) on red
 
     if args.baseline:
         # TODO(campaign): the simplest defensible baseline (see docs/protocols/baselines.md). It also
-        # validates the data/scoring chain end-to-end. Expected floor is in docs/program.md.
+        # validates the data/scoring chain end-to-end. Expected floor is in docs/charter.md.
         cfg = {"exp_name": "exp000_baseline", "_comment": "baseline gate"}
     else:
         cfg = load_config(args.config)
@@ -233,6 +280,7 @@ def main():
     snapshot_experiment(cfg, args.config if not args.baseline else None)
     print(f"snapshot -> results/snapshots/{stem}/")
 
+    validate_method(cfg)   # hard-fail before spending an evaluation on an unwired/unrecognized lever
     target = load_target(cfg)
     prediction = run_experiment(cfg)
     evaluate_and_record(cfg, prediction, target)

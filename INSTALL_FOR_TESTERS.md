@@ -1,74 +1,67 @@
-# Testing PhysKit (Claude Code plugin)
+# Testing PhysKit
 
-*A copy-paste install guide to share with colleagues testing the kit.*
+PhysKit adds physics-research skills (`/physkit:verify`, `/physkit:frame-problem`, `/physkit:report`, …)
+plus a rigor/honesty doctrine that stays loaded in every prompt. This is a one-time install — after Step 1
+it works in the terminal **and** the Claude desktop app, in any project, from then on.
 
-PhysKit adds physics-research skills — framing, verification, simulation V&V, debugging, honest reporting —
-as `/physkit:<name>` commands, plus a `CLAUDE.md` you drop into a project to keep the rigor/honesty doctrine
-always in context.
-
-**Before you start:** make sure `claude` runs in your terminal and the PHYS shared drive is mounted. The kit
-lives at:
-
-`G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\physkit-dev\physkit-internal\kit`
-
-*(If your shared drive isn't `G:`, change the drive letter.)*
+**Before you start:** your G: drive (Google Drive) is mounted, and `claude` runs in a terminal.
 
 ---
 
-## Step 1 — Put the doctrine in your project
-1. Pick the project folder you'll work in.
-2. Copy this file from the kit:
-   `…\physkit-internal\kit\templates\CLAUDE.general.md`
-3. Paste it into your project folder and **rename the copy to `CLAUDE.md`**.
+## Step 1 — Install the plugin (one time, ~1 minute)
 
-## Step 2 — Start Claude with the plugin (easiest — do this one)
-1. Open a terminal and `cd` into your project folder.
-2. Launch Claude with the kit attached — copy this **whole line, quotes included**:
-   ```
-   claude --plugin-dir "G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\physkit-dev\physkit-internal\kit"
-   ```
-   That loads the skills for the session **and** auto-loads your project `CLAUDE.md`. Skip to Step 4.
+Open a terminal (any folder is fine) and run these **three commands, one at a time** — press Enter after
+each and wait for it to finish before typing the next:
 
-*(This avoids the install dialog. Only do Step 3 if you'd rather install it permanently so you don't pass
-`--plugin-dir` each time.)*
+```
+/plugin marketplace add "G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\physkit-dev\physkit-internal\kit"
+```
+> If a box titled **"Enter marketplace source"** pops up instead, that means the quotes didn't paste through.
+> Type just the path with no quotes, then Enter:
+> `G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\physkit-dev\physkit-internal\kit`
 
-## Step 3 — (optional) Install permanently
-Run these as **three separate commands, one at a time**, at the normal chat prompt — do **not** paste them
-together:
+```
+/plugin install physkit@physkit
+```
+```
+/reload-plugins
+```
 
-1. Add the marketplace (type the whole line, including quotes):
-   ```
-   /plugin marketplace add "G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\physkit-dev\physkit-internal\kit"
-   ```
-   ⚠️ If a box pops up titled **"Enter marketplace source:"**, type **only the path — no quotes, nothing
-   after it** — then Enter:
-   `G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\physkit-dev\physkit-internal\kit`
-2. Install the plugin:
-   ```
-   /plugin install physkit@physkit
-   ```
-3. Activate it:
-   ```
-   /reload-plugins
-   ```
-*(If you tested the earlier version named `autoresearch`, remove it first: `/plugin marketplace remove autoresearch`.)*
+Done — physkit is now installed for you everywhere, including the desktop app. (Testing an older
+`autoresearch`-named version? Remove it first: `/plugin marketplace remove autoresearch`.)
 
-## Step 4 — Check it worked
-- `/plugin list` shows **physkit**.
-- Typing `/physkit:` lists the skills (verify, frame-problem, report, …).
-- `/context` shows `CLAUDE.md` loaded (the always-on doctrine).
-- Sanity check: ask *"what's your frozen core?"* — it should recite it.
+## Step 2 — Turn on the doctrine in your project
 
-## Step 5 — Use it
-Work normally — skills trigger on their own, or call them explicitly: `/physkit:verify`,
-`/physkit:frame-problem`, `/physkit:report`. To stand up an autonomous research campaign, run
+The plugin gives you the *skills*. To also keep the rigor/honesty doctrine in context on every turn (it
+works like an always-on system prompt), each project you test in needs one file.
+
+In your project folder, create a file named `CLAUDE.md` containing this one line:
+```
+@G:\Shared drives\PHYS - Walsworth Group\Experiment folders\Machine Learning\physkit-dev\physkit-internal\kit\docs\CORE.md
+```
+Claude Code re-reads `CLAUDE.md` every turn, so the doctrine never falls out of context. (If that `@import`
+line doesn't seem to take — check with `/context` — paste the contents of `CORE.md` directly into your
+`CLAUDE.md` instead.)
+
+## Step 3 — Check it worked
+
+- `/plugin list` → shows **physkit**
+- Type `/physkit:` → lists the skills
+- `/context` → shows your `CLAUDE.md` is loaded
+- Ask *"what's your frozen core?"* → it should recite the doctrine
+
+## Step 4 — Use it (CLI or desktop app)
+
+Just work normally — skills trigger on their own, or call them directly: `/physkit:verify`,
+`/physkit:frame-problem`, `/physkit:report`. To start a full autonomous research campaign, run
 `/physkit:new-campaign` (see `GETTING_STARTED.md`).
 
-## Windows gotchas (save yourself some time)
-- **Long paths:** the shared-drive path is long, so pip installs of big wheels (TensorFlow/PyTorch) and some
-  git operations can fail with "Filename too long". Fixes: `git config --global core.longpaths true`, and
-  install heavyweight packages into a venv at a SHORT path (e.g. `C:\venvs\physkit`).
-- **Use `py -3.x`**, not `python3` (which is often a non-functional Windows Store stub).
-- **Symlinks:** Google Drive File Stream doesn't support them — copy files instead of linking.
+---
+
+## Windows gotchas
+- **"Filename too long"**: run `git config --global core.longpaths true`, and install big packages
+  (TensorFlow/PyTorch) into a venv at a short path like `C:\venvs\physkit`, not the shared drive.
+- **Python**: use `py -3.x`, not `python3` (often a broken Windows Store stub).
+- **No symlinks on Google Drive**: copy files instead of linking them.
 
 Please flag anything confusing or broken — thanks for testing!

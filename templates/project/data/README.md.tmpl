@@ -1,0 +1,26 @@
+# data/ — the ONE canonical copy (read-only)
+
+This is the project's **single source of experimental / reference data**, shared by every campaign and session
+by **relative path** (`../../data`). This directory exists so the data is stored **once** — the duplication that
+bloated prior investigations to hundreds of GB and broke a path on every move starts the moment a second copy is
+made. Do not make one.
+
+## Rules (non-negotiable)
+1. **Read-only.** The loop **never writes into `data/`.** Derived/cached/generated data goes in the campaign's
+   own `results/` or a campaign `cache/`, never here.
+2. **Referenced, never copied.** Campaigns and sessions point at `../../data/<file>`. **Never copy the data into
+   a campaign folder.** A copied dataset is what breaks paths on the next rename/move.
+3. **Provenance recorded.** Each dataset's origin (instrument/run/date, or the external source) is documented —
+   here or in `../shared/INSTRUMENT.md`.
+
+## On-tree vs a `data_path` pointer
+- **On-tree (default):** the read-only data files live right here in `data/`.
+- **Off-tree pointer:** when the canonical data is large or already lives elsewhere (a lab store, a multi-hundred-GB
+  pile), DON'T copy it in. Instead this directory holds a single pointer file **`DATA_PATH.txt`** whose one line
+  is the **absolute path** to the real data root, and `PROJECT.md` records the same `data_path`. Code resolves
+  `../../data` → that path once. **This is the only absolute path in the whole project tree** — everything else is
+  relative, so the tree still relocates as one unit (only `DATA_PATH.txt` is re-pointed after a move of the data).
+
+<!-- Off-tree example — the single line inside data/DATA_PATH.txt:
+E:\canonical-store\asi-nv\D_experimental
+-->

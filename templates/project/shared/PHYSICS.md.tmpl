@@ -1,0 +1,80 @@
+# Physics — {{PROJECT_TITLE}}
+
+The governing physics for this project (shared by all its campaigns): the foundational reference the loop-running agent consults to
+reason about the metric, the levers, and what results are physically possible. Built from user-provided
+information, user-provided literature, and (if enabled) a targeted literature search. **Length varies
+dramatically** with the problem and how much the user supplies — a paragraph or many pages.
+
+**Living document.** Update it whenever a campaign discovery changes the physical understanding (add the
+new effect, its equations, and the literature consulted — see the loop's UPDATE step in `charter.md`).
+
+> Notation: write all equations in math blocks (`$$ … $$` for display, `$…$` inline) with **precise,
+> well-defined symbols and units**. Define every symbol the first time it appears.
+
+## Target of study
+{{TARGET_OF_STUDY}}   <!-- what is under investigation: the sample / material / plasma / star / molecule /
+device — its identity, structure, and the physical quantities the project aims to determine or optimize. Spans
+subfields (an astronomer's target is not a "sample"). The measurement rig that probes it is in INSTRUMENT.md. -->
+
+## Physics inventory — what's modeled, what's not, and why
+The effects that could matter to this project, each tagged — so every omission is **deliberate and
+auditable**, and a persistent model–data gap points straight at a parked effect (model-form error). This
+graduates from the `frame-problem` framing artifact / `INTAKE.md`. **Re-check it whenever a discovery
+changes the physics** (the loop UPDATE step).
+
+| Effect | Tag | Why (number where "negligible") |
+|---|---|---|
+| {{EFFECT_1}} | accounted-for | <how it's modeled> |
+| {{EFFECT_2}} | negligible-by-scale | <the estimate/ratio showing it's small here> |
+| {{EFFECT_3}} | out-of-scope | <why outside this campaign> |
+| {{EFFECT_4}} | deferred | <added when…> |
+| {{EFFECT_5}} | unknown | <flagged risk — how we'll find out> |
+
+- **A-priori bound on the key result (ceiling / floor / order):** {{APRIORI_BOUND}}
+- **Domain of validity / key assumptions:** {{DOMAIN_ASSUMPTIONS}}
+
+## Predictive framework — the model we predict *with* (and revise)
+<!-- The mental model the loop reasons FROM: the mechanism + the key variables and their relationships, at a
+     complexity CHOSEN to match this problem (say WHY this level, not more). The inventory above lists the
+     effects; this ties them into PREDICTIONS. This is Wieman's *predictive framework* (decisions 5, 8, 19,
+     20, 23) — the connective tissue of expert problem-solving. Fill:
+     - Mechanism / model: the underlying mechanism + the variables & relationships it predicts with.
+     - Thought-experiments it licenses ("if I change X, the framework predicts Y") — run these before a run
+       to get a-priori predictions (decision 19) and candidate levers (decision 8). Prefer predictions that
+       DISCRIMINATE between hypotheses, e.g. "raise the bias field → a reversed-My artifact GROWS with the
+       field if it's a coil gradient, but stays FIXED if it's a geometric tilt."
+     REVISION LOG = the "Updates from discoveries" section below. When data contradicts a framework prediction
+     (decision 20), decide whether the anomaly fits the framework's stated domain or the FRAMEWORK ITSELF must
+     change (decision 23), and log the change there with its reason (e.g. laser cooling → add the AC Stark
+     shift and its spatial variation across the beam).
+     PLACEMENT NOTE (provisional): the revision log lives here in PHYSICS.md for now; reassess after a couple
+     of campaigns whether it belongs here or in the append-only ENGINEERING_NOTES.md. -->
+
+## Foundational equations
+<!-- The governing equations of the system, in math blocks. Define each symbol + its units.
+     e.g. for an ASI / NV problem: the field produced by a magnetization distribution,
+       $$ \mathbf{B}(\mathbf{r}) = \frac{\mu_0}{4\pi}\,\nabla\!\times\!\int \frac{\mathbf{M}(\mathbf{r}')\times(\mathbf{r}-\mathbf{r}')}{|\mathbf{r}-\mathbf{r}'|^{3}}\,d^3r' $$
+     and the projection onto the measured NV axis. -->
+
+## Simulation methods & approximations
+<!-- How the physics is computed/simulated for this project (shared by all its campaigns), the key approximations, and their domain
+     of validity (point-dipole vs finite-thickness, linearization, discretization, etc.). -->
+
+## Common techniques for this problem
+<!-- The standard approaches the field uses to attack this problem, with their trade-offs — so the
+     agent isn't reinventing or missing a known method. -->
+
+## System behavior (through the lens of this problem)
+<!-- Properties and typical behavior most relevant to the metric/levers: degeneracies, symmetries,
+     conserved quantities, regimes, ill-posedness.
+     e.g. ASI: magnetization reconstruction from field alone is non-unique (a null space / infinitely
+     many M give the same B); a hysteresis sweep flips each island once, via nucleated domain growth. -->
+
+## Updates from discoveries
+<!-- Append here when a confirmed discovery changes the physics. Date each entry; give the effect, its
+     equations, and references.
+     e.g. "2026-…: out-of-plane canting / Stoner–Wohlfarth response found to bias the fit — added the
+     S–W energy and the canting correction below; see [refs]." -->
+
+## References
+<!-- Literature consulted (prefer arXiv versions). Keep in sync with LITERATURE.md if it exists. -->

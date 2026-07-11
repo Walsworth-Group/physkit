@@ -2,7 +2,7 @@
 
 The **slim core** of the campaign protocol — what the agent needs every iteration.
 Rarely-fired procedures live in `docs/protocols/`. Modeled on the v4
-image-reconstruction campaign (`E:\Magnetic inverse loop - v4\docs\program.md`).
+image-reconstruction campaign (`E:\Magnetic inverse loop - v4\docs\charter.md`).
 
 ## Mission
 
@@ -31,7 +31,7 @@ standoff ~72% of island DOF are above noise; edges are resolvable, interior
 
 ## Startup Checklist
 
-1. Read this file (`docs/program.md`).
+1. Read this file (`docs/charter.md`).
 2. Read `docs/DESIGN_island_classifier.md` (the why) + `docs/CONVENTIONS.md`
    (sign/ordering — the bug-prevention reference).
 3. Read `results/DISCOVERIES.md` (settled), `results/JOURNAL.md` (NEXT: pointer).

@@ -1,12 +1,12 @@
 # Campaign Archetype Cheat-Sheet
 
 A reference for the `new-campaign` setup skill (and the researcher) when filling
-`campaign/docs/program.md.tmpl`. Most physical-science autoresearch campaigns fall into a small set of
+`campaign/docs/charter.md.tmpl`. Most physical-science autoresearch campaigns fall into a small set of
 recurring archetypes (catalogued below as A–I). A campaign may match **none, one, or several** — determine which **apply**, and **inherit and merge** the
 metric/lever/FROZEN/failure-mode guidance from each relevant one (don't force a single best fit). If
 several apply *in sequence* rather than at once, that's a multi-stage campaign (see the note at the
 end). Then specialize the placeholders. Four of the archetypes are exemplified by real campaigns in
-`examples/program-files/`; the generic `program.md` template is the union of their rigor disciplines. The
+`examples/charter-files/`; the generic `charter.md` template is the union of their rigor disciplines. The
 hardware-in-the-loop archetype (**E**) is fundamentally different from the compute-only ones and needs
 special treatment — see its section.
 
@@ -20,7 +20,7 @@ archetypes and patterns appear.
 ---
 
 ## A. Iterative fit / decoder optimization
-*Real example: `examples/program-files/program_residual.md` (NV residual minimization).*
+*Real example: `examples/charter-files/charter_residual.md` (NV residual minimization).*
 
 - **PRIMARY metric:** a scale-invariant goodness-of-fit on REAL data (R² / residual / log-likelihood /
   χ²), FROZEN. The model may relax to a continuous form, but the score evaluates the final
@@ -37,7 +37,7 @@ archetypes and patterns appear.
   re-fit — test the pair).
 
 ## B. Forward-model / simulation improvement
-*Real example: `examples/program-files/program_forward.md` (NV forward model).*
+*Real example: `examples/charter-files/charter_forward.md` (NV forward model).*
 
 - **PRIMARY metric:** residual between the forward-projected prediction of a KNOWN configuration and
   measured anchors, FROZEN scorer. Here the **forward CODE is the mutable target** — this inverts what
@@ -88,7 +88,7 @@ photonic structures.*
   slow and a fresh source of bugs. Record what you chose and why. (Full checklist: `docs/PRINCIPLES.md` §5.)
 
 ## D. ML-model training / classifier
-*Real example: `examples/program-files/program.md` (per-island ASI classifier).*
+*Real example: `examples/charter-files/charter.md` (per-island ASI classifier).*
 
 - **PRIMARY metric:** a held-out test metric with EXACT labels (balanced accuracy / F1 / MSE), FROZEN.
   Report the **hard-subgroup split** — a mean propped up by an easy subgroup is not a win.
@@ -106,7 +106,9 @@ photonic structures.*
   points (cf. archetype C reward-hacking).
 
 ## E. Hardware-in-the-loop / experimental control
-*No real example in the kit yet — e.g. closed-loop tuning of an instrument: pulse calibration, field or
+*Illustrative example: `examples/charter-files/charter_hardware_loop.md` (a filled archetype-E charter
+distilled from a real qualified loop); full operational patterns in `docs/reference/hardware-in-the-loop.md`.
+E.g. closed-loop tuning of an instrument: pulse calibration, field or
 voltage setpoints, sample conditions, alignment, readout optimization. **This archetype needs special
 treatment** — the "experiment" is a real measurement on real hardware, not a compute job.*
 
@@ -133,11 +135,12 @@ treatment** — the "experiment" is a real measurement on real hardware, not a c
 - **Failure modes / guardrails:** artifacts masquerading as signal → null/control measurements + repeats;
   drift between comparisons → interleaving + re-measuring the reference; overfitting to one session's
   conditions → confirm across sessions; unsafe excursions → a hard safety gate + human confirmation.
-  (The generic `program.md` carries an optional "Hardware safety & irreversibility" block for this
-  archetype; full doctrine in `docs/PRINCIPLES.md` §6.)
+  (The generic `charter.md` carries an optional "Hardware safety & irreversibility" block for this
+  archetype; full operational doctrine in `docs/reference/hardware-in-the-loop.md`, principle-level in
+  `docs/PRINCIPLES.md` §9.)
 
 ## F. Inverse problem / parameter estimation (with uncertainty)
-*Real example: `examples/program-files/program_ASI_CNN.md` (reconstruct the magnetization M from a single
+*Real example: `examples/charter-files/charter_ASI_CNN.md` (reconstruct the magnetization M from a single
 NV field projection).*
 
 - **PRIMARY metric:** fidelity of the **recovered quantity** (a parameter, field, or distribution) to
@@ -241,7 +244,7 @@ Operational doctrine: the **`model-selection`** skill.*
 ---
 
 ## Cross-archetype constants (fill these the same way for ANY archetype)
-These are settled doctrine in the generic `program.md` and apply regardless of archetype:
+These are settled doctrine in the generic `charter.md` and apply regardless of archetype:
 - ONE **frozen metric**; scoring math never changes mid-campaign.
 - **Exp 000 baseline gate** = the floor + an end-to-end pipeline/convention validation.
 - The **FROZEN / READ-ONLY / Mutable** code tripartition.
@@ -255,7 +258,8 @@ These are settled doctrine in the generic `program.md` and apply regardless of a
   stdout; never lose a number).
 - **Simulation Verification & Validation** — most archetypes have a simulation component (forward models,
   synthetic data, evaluators, surrogates), so apply the V&V&UQ doctrine in `docs/SIMULATION_VALIDATION.md`;
-  and **hardware safety / irreversibility** for hardware-in-the-loop campaigns (`docs/PRINCIPLES.md` §6).
+  and **hardware safety / irreversibility** for hardware-in-the-loop campaigns
+  (`docs/reference/hardware-in-the-loop.md`; principle-level in `docs/PRINCIPLES.md` §9).
 
 ## Multi-objective / multi-stage campaigns
 Many complex goals are best done as **several sequential loops**, not one tangled campaign — optimizing
@@ -274,5 +278,5 @@ arrangement with *idealized* magnets — a baseline for (3) plus a solid optimiz
 simple; (2) design a protocol the user runs to measure their real magnets' imperfections; (3) optimize
 the arrangement of the *imperfect* magnets, building on (1) and the data from (2).
 
-The setup skill plans and proposes the staging, and gives each loop its own `program_<NAME>.md`,
+The setup skill plans and proposes the staging, and gives each loop its own `charter_<NAME>.md`,
 `configs_<NAME>/`, `results_<NAME>/`.

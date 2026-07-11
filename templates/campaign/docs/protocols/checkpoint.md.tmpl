@@ -27,7 +27,10 @@ are exhausted? Is the current-best genuinely ahead of the floor by more than the
        (registration / pose / normalization) is non-degenerate on the data it is applied to. A degenerate
        upstream step can pass the metric+guardrail while silently corrupting specific inputs (a real campaign
        promoted a best whose registration was mis-aligning some frames). Validate the transform, not just the
-       score. -->
+       score.
+     - CORRECTNESS SUITE GREEN: if core/FROZEN code changed since the last checkpoint, re-run
+       `tests/correctness_checks.py`; a red (or never-run) suite means results built since the change are
+       suspect until it is green. -->
 For the full hygiene list, run `campaign-status` (it encodes these checks).
 
 ## 4. Re-plan

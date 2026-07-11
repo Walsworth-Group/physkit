@@ -6,7 +6,7 @@ information, user-provided literature, and (if enabled) a targeted literature se
 dramatically** with the problem and how much the user supplies — a paragraph or many pages.
 
 **Living document.** Update it whenever a campaign discovery changes the physical understanding (add the
-new effect, its equations, and the literature consulted — see the loop's UPDATE step in `program.md`).
+new effect, its equations, and the literature consulted — see the loop's UPDATE step in `charter.md`).
 
 > Notation: write all equations in math blocks (`$$ … $$` for display, `$…$` inline) with **precise,
 > well-defined symbols and units**. Define every symbol the first time it appears.
@@ -27,6 +27,11 @@ changes the physics** (the loop UPDATE step).
 
 - **A-priori bound on the key result (ceiling / floor / order):** {{APRIORI_BOUND}}
 - **Domain of validity / key assumptions:** {{DOMAIN_ASSUMPTIONS}}
+- **Dimensionless groups (the problem's *real* parameters)** *(optional — fill if the problem has meaningful
+  ones; delete this line if not)*: the Buckingham-π groups that govern the behavior and the regime each sits
+  in (≫1 / ≪1 / O(1)), so you know which terms dominate or drop. The `dimensional-analysis` skill derives
+  them; recording them here names the *actual* knobs (e.g. a drive-to-coupling ratio Ω/A that collapses a
+  two-parameter picture onto one axis). Skip for problems with no informative groups.
 
 ## Predictive framework — the model we predict *with* (and revise)
 <!-- The mental model the loop reasons FROM: the mechanism + the key variables and their relationships, at a

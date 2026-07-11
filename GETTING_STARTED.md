@@ -12,6 +12,11 @@ campaign or not, and triggers on everyday science requests. A **campaign layer**
 autonomous-research loops. This guide walks the campaign path; the general skills need no setup beyond
 installing the plugin (full list at the bottom).
 
+> **Five skills to know by name** — the rest the agent reaches on its own and suggests when relevant:
+> `frame-problem` (start any physics problem here) · `verify` (check before you rely) · `report` (write
+> it up, provenance-labeled) · `new-campaign` (stand up a loop) · `campaign-status` (the running loop's
+> heartbeat).
+
 ---
 
 ## 1. Install the kit
@@ -55,18 +60,40 @@ Confirm any install with `/plugin list`, then `/reload-plugins` to activate imme
 `/physkit:<skill>`.
 
 **Make the doctrine always-on (recommended for everyday use).** Installing the plugin makes the *skills*
-available, but Claude Code does **not** auto-load the kit's doctrine docs — so the frozen core isn't in
-context unless something pulls it in. For a general (non-campaign) project, copy
-`templates/CLAUDE.general.md` from the kit to a `CLAUDE.md` in your project folder; Claude Code auto-loads
-it every session, keeping the honesty/verification core in context. (For campaigns, `new-campaign`
-generates a campaign-specific `CLAUDE.md` for you — see §4.)
+available, but Claude Code does **not** auto-load the kit's doctrine docs — and a doc read once falls out
+of context over a long session. The fix: put the spine in your project's `CLAUDE.md`, which Claude Code
+re-injects every turn. Either add one import line pointing at the kit —
+`@<path-to-kit>/docs/CORE.md` — or copy the body of `docs/CORE.md` into a `CLAUDE.md` in your project
+folder. The import keeps you current automatically; the copy is the fallback if imports don't resolve on
+your setup. *(`CORE.md` is the single source — the former `templates/CLAUDE.general.md` duplicate was
+retired 2026-07-03.)* (For campaigns, `new-campaign` generates a campaign-specific `CLAUDE.md` for you —
+see §4.)
 
 ## 2. Start a campaign — the interview
 
-In that session, run:
+### First: a Project? (use one when the work will iterate)
+Most real investigations run **many attempts over time** on one physical system. PhysKit's home for that is a
+**Project** — one folder that holds the shared **data** and **physics/conventions/instrument** docs *once*
+(referenced by every campaign, never copied), a single **`LINEAGE.md`** index of what each attempt changed and
+found, and the campaigns + ad-hoc sessions themselves. It's what stops a months-long, many-version effort from
+duplicating gigabytes and breaking paths on every rename.
+
+- **Starting a fresh line of research?** Run **`/physkit:new-project`** first — it scaffolds the Project home
+  (`PROJECT.md` · `LINEAGE.md` · shared `data/` + `shared/` · `campaigns/` · `sessions/` · `reports/`) and then
+  runs the campaign interview below for your first campaign.
+- **Adding another attempt to an existing Project?** Run **`/physkit:new-campaign`** inside it — it wires the new
+  campaign to the shared `../../data` + `../../shared/` and appends a `LINEAGE.md` row.
+- **A quick one-off** (no frozen metric, no successors)? A bare campaign is fine — but a Project costs nothing
+  extra and means zero reorganization when it grows.
+- **A change invalidated a campaign's findings** (a forward-model bug, a corrected metric)? Use
+  **`/physkit:fork-campaign`** — it archives the old campaign and starts a clean-ledger sibling, carrying forward
+  only findings that survive re-verification.
+
+The interview below is the same whether the campaign is inside a Project or standalone. In your session, run:
 
 ```
-/physkit:new-campaign
+/physkit:new-project      # a fresh line of research (scaffolds the Project, then the first campaign)
+/physkit:new-campaign     # a campaign inside an existing Project, or a standalone one-off
 ```
 
 **What to expect.** The skill first harvests everything it can from what's already available — your
@@ -97,13 +124,13 @@ Then it generates a complete campaign folder and validates that nothing is left 
 ```
 your-campaign/
   docs/
-    program.md            the loop charter the agent re-reads every iteration
+    charter.md            the loop charter the agent re-reads every iteration
     PHYSICS.md            governing equations, methods, the effect inventory (a living doc)
     CONVENTIONS.md        units, signs, ordering — the bug-prevention reference
     VERIFICATION_PLAN.md  how you'll know the answer is right — drafted before the work
     PROJECT_ORIENTATION.md  the goal, done-criteria, and the goal-linked task list
     ENGINEERING_NOTES.md  the decision / "why" record (conditions + revisit-if triggers)
-    SYSTEM.md             apparatus / sample parameters (when relevant)
+    INSTRUMENT.md         the measurement rig / apparatus + sample parameters (when relevant)
     protocols/            metric · baselines · checkpoint · journal_consolidation · artifacts · dataset · expensive-evaluation
   configs/
     _template.json      copy this per experiment
@@ -149,7 +176,7 @@ it has neither. Confirm with `/context` that `CLAUDE.md` is loaded before you st
 
 Then kick it off with a prompt like:
 
-> Read `docs/program.md` and the `results/` ledger, then run the autonomous research loop continuously
+> Read `docs/charter.md` and the `results/` ledger, then run the autonomous research loop continuously
 > until I stop you.
 
 **Why `--dangerously-skip-permissions`:** the loop runs unattended and makes many edits, runs, and
@@ -180,6 +207,6 @@ graduate to `results/DISCOVERIES.md`. Check in whenever you like — the ledger 
 
 *The kit ships two layers of skills, all namespaced `/physkit:<name>`. **General science toolkit**
 (usable in any session): `assess-idea`, `literature-review`, `frame-problem`, `verify`, `simulation-design`,
-`correctness-suite`, `debug`, `dimensional-analysis`, `derive`, `record-decision`, `cite-check`, `report`. **Campaign layer**:
+`correctness-suite`, `debug`, `dimensional-analysis`, `derive`, `attribute-mechanism`, `record-decision`, `cite-check`, `report`. **Campaign layer**:
 `new-campaign` (scaffold + interview), `campaign-status` (periodic checkpoint), `handoff` (cold-resume),
 `discovery-loop`, `experiment-design`, `model-selection`, and `final-report` (end-of-campaign report).*

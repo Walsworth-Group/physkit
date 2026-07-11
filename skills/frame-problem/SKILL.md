@@ -56,6 +56,12 @@ Rules that make the inventory honest:
   leftover code, or memory is a *description* of the system, not the system — pin each to the
   highest-authority artifact you can parse/run and tag its provenance (`docs/PRINCIPLES.md` Ctx 4). An
   unpinned load-bearing fact is a risk, like an unjustified "negligible."
+- **Derive implied counts from a named structure, don't just take the given number.** When the problem
+  references a named structure class (a lattice, a symmetry group, a periodic or composite geometry), that
+  name carries an implicit multiplicity or count — derive it explicitly from the structure's definition and
+  cross-check it against any count given in the framing. A mismatch here is load-bearing: an implicit-count
+  error silently changes handedness, degeneracy, or scale in everything downstream, and is easy to miss
+  because it never throws an error, only a plausible-looking wrong answer.
 - **Keep it living.** A persistent gap between model and data, after the work checks out, points straight
   at a **parked or missing effect** here (model-form error) — the inventory is where you look — **or at a bug
   in the FROZEN reference code / forward model itself** (a sign/convention error upstream masquerades as
@@ -107,6 +113,11 @@ Draw from (pick what fits — not all apply):
   "everyone in this subfield checks X" practices for *this* problem. Capture these now; they're easy to
   forget and expensive to miss. (In a campaign these land in the verification plan / `VERIFICATION_PLAN.md`
   and feed `correctness-suite`, which promotes each hard-won check to a standing regression gate.)
+
+For each check, **name the arbiter — a coded gate or the model's judgment.** Prefer a coded gate that emits
+the verdict (the model explains and acts on it, but doesn't decide); reserve model judgment for what
+genuinely can't be coded (e.g. a physical-plausibility call) and say why. *(D-2: enforce, don't exhort —
+wire checks as gates, not reminders.)*
 
 The plan is the input to the rest of the pipeline: `correctness-suite` *executes* the checkable ones,
 `verify` adversarially checks the resulting claims, and `simulation-design` turns this into a sim's full
@@ -164,6 +175,8 @@ the **inventory → `PHYSICS.md`**, the **goal + steps → `PROJECT_ORIENTATION.
   (name, origin, axes, handedness) in the inventory and pin how every transpose/handedness/sign ambiguity is
   broken from an **independent** reference; `verify` runs the frame-consistency checklist downstream.
 - **`verify` / `correctness-suite`** consume the verification plan downstream.
+- **`attribute-mechanism`** consumes this skill's effect inventory as its candidate-mechanism list when a
+  real signature later needs its physical cause pinned down.
 
 ## Worked mini-example (estimate, then frame)
 

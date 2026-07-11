@@ -2,7 +2,7 @@
 
 The slim core of a **targeted, continuously-running** campaign whose **sole goal is to drive the
 experimental forward-vs-data residual as low as possible**, honestly. Read this every iteration.
-Mirrors the V1 loop (`docs/program.md`) but with a different objective and a hard persistence rule.
+Mirrors the V1 loop (`docs/charter.md`) but with a different objective and a hard persistence rule.
 
 ## Mission
 Maximize the single FROZEN metric **`EXP_RESIDUAL_R2`** (= 1 − mean experimental field residual;

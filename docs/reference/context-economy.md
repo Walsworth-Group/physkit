@@ -4,7 +4,7 @@ kind: reference-doc
 layer: shared
 load: on-demand
 load_trigger: When deciding what to keep loaded vs stream on demand, how to tier docs (CORE vs REFERENCE), or how to keep a long-running agent's working context lean.
-frozen: true
+frozen: false  # unfrozen per decision #10 (2026-07-03) — stays doctrine, but how much context helps tracks model capability
 addresses: [7]
 status: new
 review: living
@@ -66,6 +66,11 @@ main thread never pays for the intermediate reasoning. Use them as both a speed 
   `verify` and `cite-check` skills already spawn refuters/checkers this way.
 - **Scope tight, return small.** Give each sub-agent a precise task and ask for a compact, structured
   result; a sub-agent that hands back its whole transcript defeats the purpose.
+- **Pass the why, not just the instruction.** Every delegation prompt carries the goal, the context, and
+  what the result is *for* (what it gates, who reads it, the stakes) — motivation shifts behavior more
+  reliably than bare commands (pillar 8). One deliberate exception: an independent *verifier* gets the
+  stakes but **never the generating reasoning or the expected answer** — the why of the check, not the how
+  of the result (see `verify` §4).
 - **Check independence before you fan out.** Parallelize only what is *provably* independent: before
   dispatching, analyze the **data, file-write, and shared-state dependencies** — two sub-agents must not
   write the same file, mutate shared state, or consume each other's output concurrently. If step B needs

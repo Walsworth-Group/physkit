@@ -1,0 +1,86 @@
+"""Correctness suite - the simulator's standing checks.
+
+Run:  python tests/correctness_checks.py       (exit 0 = green | 1 = a check FAILED)
+
+`verify` asks "is this *result* right?"; this suite asks "is the *machinery* still right?". Build it with
+the `correctness-suite` skill from docs/VERIFICATION_PLAN.md. A FRESH scaffold is all-skip (green, with a
+reminder to add checks). No finding built on a RED suite is trustworthy.
+
+Each check is a zero-arg function returning one of:
+    "pass"                  the check held
+    "skip: <why-not-yet>"   not implemented yet  (does NOT fail the suite)
+    "fail: <what broke>"    the check FAILED     (raising is also treated as a failure)
+
+Rules of thumb (see the correctness-suite skill for depth):
+  * cheap/fast checks first; seed every RNG and log the seed (deterministic)
+  * fail loudly with the numbers (expected / actual / tolerance)
+  * re-run after ANY change to core/FROZEN code (docs/protocols/checkpoint.md)
+  * every bug you fix earns a new regression check here - a lesson you only pay for once
+"""
+from __future__ import annotations
+
+
+# --- the checks (replace each `skip` stub with a real assertion) ---------------------------------
+
+def analytic_limit():
+    """Drive the model to a closed-form / asymptotic regime and confirm it reproduces it to tolerance."""
+    return "skip: not implemented - assert a known analytic limit"
+
+
+def conservation_invariants():
+    """Norm/energy/probability conserved; quantities stay in physical range; no NaN/inf; shapes+units OK."""
+    return "skip: not implemented - assert the setup's invariants"
+
+
+def independent_parity():
+    """A second, mechanism-diverse computation agrees on a case both can do, to a stated tolerance."""
+    return "skip: not implemented - compare two independent methods"
+
+
+def convergence():
+    """The answer is stable under further refinement (dt / grid / tol); report the refinement used."""
+    return "skip: not implemented - refine until the answer stops moving"
+
+
+def regression_gates():
+    """Reproduce known/published behavior; add one check per fixed bug (sign/convention round-trip, ...)."""
+    return "skip: not implemented - pin known-physics + each past bug"
+
+
+CHECKS = [analytic_limit, conservation_invariants, independent_parity, convergence, regression_gates]
+
+
+# --- runner (you shouldn't need to edit below) ---------------------------------------------------
+
+def run_all():
+    """Run every check; return a list of (name, status). A raising check becomes a failure, never a pass."""
+    results = []
+    for check in CHECKS:
+        try:
+            status = check() or "pass"
+        except Exception as exc:  # a raising check is a FAILURE, never a silent pass
+            status = f"fail: {type(exc).__name__}: {exc}"
+        results.append((check.__name__, status))
+    return results
+
+
+def main() -> int:
+    results = run_all()
+    n_fail = sum(1 for _, s in results if s.startswith("fail"))
+    n_skip = sum(1 for _, s in results if s.startswith("skip"))
+    n_pass = len(results) - n_fail - n_skip
+    for name, status in results:
+        mark = "PASS" if status == "pass" else ("FAIL" if status.startswith("fail") else "skip")
+        print(f"  [{mark}] {name}: {status}")
+    print(f"correctness suite: {n_pass} pass | {n_fail} fail | {n_skip} skip")
+    if n_fail:
+        print("RED - a correctness check FAILED. Do not trust results built on this code until it is green.")
+        return 1
+    if n_pass == 0:
+        print("WARNING - 0 active checks. The simulator is unguarded; add checks (correctness-suite skill).")
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+    raise SystemExit(main())

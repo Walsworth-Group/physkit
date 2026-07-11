@@ -11,7 +11,7 @@ FAIL_OPEN to False for strict mode. Window is configurable via AUTORESEARCH_VERI
 
 SCOPE (know the gaps this hook does NOT close — campaign-status covers them):
   * It guards ONLY DISCOVERIES writes. It does NOT see scoreboard edits, so a "current best" can still be
-    promoted unverified — that is enforced by program.md's promotion rule + the campaign-status hygiene check.
+    promoted unverified — that is enforced by charter.md's promotion rule + the campaign-status hygiene check.
   * It only fires if THIS tree wired it (.claude/settings.json registers it). An imported / hand-built /
     relocated tree often has no .claude/ and runs with NO gate — campaign-status asserts the hook is wired.
   * FAIL_OPEN means a parse/IO error silently allows the write; the campaign-status verified-column check is

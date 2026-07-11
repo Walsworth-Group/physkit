@@ -7,7 +7,8 @@ description: >-
   It captures four things: the vision and goal, the current state including the in-flight reasoning (what
   you were doing and why), a concrete "run this to confirm state" command that verifies the environment and
   reproduces where things stand, and a prioritized roadmap of next steps. Prior handoffs are archived, never
-  overwritten, so the trail of reasoning is preserved. Pairs with campaign-status (health) and the
+  overwritten, so the trail of reasoning is preserved. In a project it resumes from LINEAGE.md (the
+  cross-campaign index) and checks whole-tree portability. Pairs with campaign-status (health) and the
   PROJECT_ORIENTATION.md doc (goal/tasks).
 ---
 
@@ -62,6 +63,23 @@ the handoff *distills* durable artifacts, it is not the only place they should f
    on the coercive-band subset — exp queue in JOURNAL NEXT"). Keep it in sync with the `PROJECT_ORIENTATION`
    tasks and the JOURNAL NEXT pointer.
 
+## In a project — resume from `LINEAGE.md`, check whole-tree portability
+When the work lives in a **project** (`PROJECT.md` + `LINEAGE.md` above the campaign), the handoff is
+project-aware:
+- **Vision/goal** also come from `PROJECT.md` (the investigation-wide goal), and the project-wide state is
+  **`LINEAGE.md`** — the index of every campaign + session, what each changed and found. A resumer reads
+  `LINEAGE.md` **first** to see where the whole investigation stands (which campaign is active, what's
+  archived/forked, what's verified), then descends into the active campaign's own docs. Name `LINEAGE.md` as the
+  first resume anchor.
+- **Current state** notes which campaign is active (its `LINEAGE.md` row), any sibling coupling in play (a frozen
+  artifact consumed from `../../shared/`), and whether a recent change is a **`fork-campaign`** trigger
+  (invalidated a sibling's findings) rather than a local matter.
+- **Portability check over the project tree.** The tree must relocate as one unit — every reference relative, the
+  only absolute path the resolved `data_path`. Add the project validator to "run this to confirm state":
+  `python "${CLAUDE_PLUGIN_ROOT}/skills/new-campaign/scripts/validate_campaign.py" <project_root>` (structure +
+  every campaign indexed in `LINEAGE.md` + no absolute paths in configs). A broken path or an un-indexed
+  campaign is a resume landmine.
+
 ## Archive, don't overwrite
 A handoff is part of the record. **Never overwrite the previous one** — write a new dated file
 (`handoff_<UTC-date>.md`) and move the prior into an `archive/` (or keep an append-only sequence). The
@@ -72,6 +90,8 @@ prevents re-litigating settled decisions. The newest handoff is the live one; th
 ## Composition
 - **`PROJECT_ORIENTATION.md`** — source of the vision/goal and the task roadmap (the handoff *references* it,
   doesn't duplicate the full hierarchy).
+- **`LINEAGE.md` + `PROJECT.md`** (in a project) — the cross-campaign index a resumer reads first and the
+  investigation-wide goal; the handoff points at the active campaign's row rather than duplicating the index.
 - **`campaign-status`** — its latest checkpoint feeds "current state"; run it before a handoff if stale.
 - **`correctness-suite` / `verify` / the metric self-test** — the "run this to confirm state" commands.
 - **the logbook / JOURNAL** — the narrative the handoff distills; the handoff points into them rather than
@@ -94,4 +114,6 @@ prevents re-litigating settled decisions. The newest handoff is the live one; th
 - [ ] A "run this to confirm state" command with its **expected output** is given.
 - [ ] A prioritized, goal-linked NEXT roadmap is present and synced with the JOURNAL NEXT.
 - [ ] The prior handoff was archived, not overwritten.
+- [ ] Resume anchors are current: the newest handoff/JOURNAL covers the **latest** session; any external digest (e.g. a user's `_claude-archive/INDEX.md`) is treated as advisory and flagged if its date lags the newest work.
+- [ ] In a project: `LINEAGE.md` is named as the first resume anchor, and the tree passes the portability/structure validator (no absolute paths; every campaign indexed).
 - [ ] Cold-resume test passes: a fresh agent could act from this file + the repo alone.

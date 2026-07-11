@@ -1,6 +1,6 @@
 ---
 name: new-campaign
-description: Interview a researcher and scaffold a new autonomous-research ("autoresearch") campaign in the physical sciences. Use when the user wants to START or SET UP a new campaign, optimization loop, fitting/decoder campaign, forward-model-improvement campaign, generative-design search, ML-training campaign, or hardware-in-the-loop tuning loop — phrasings like "start a new campaign", "set up an autoresearch loop", "scaffold a campaign to optimize X", "I want to build a loop that improves Y", or "create the program.md / metric / scoreboard for a new project". Conducts a structured interview (goal, metric, physics, data, levers, constraints, compute, time), co-designs the FROZEN metric, determines which archetype(s) apply, then generates a complete ready-to-run campaign tree (program.md charter, protocols, configs, results ledger, and light code stubs) from the kit templates and validates that nothing is left unfilled. NOT for running an existing loop, verifying a result (verify), or writing the end-of-campaign report (final-report).
+description: Interview a researcher and scaffold a new autonomous-research ("autoresearch") campaign in the physical sciences. Use when the user wants to START or SET UP a new campaign, optimization loop, fitting/decoder campaign, forward-model-improvement campaign, generative-design search, ML-training campaign, or hardware-in-the-loop tuning loop — phrasings like "start a new campaign", "set up an autoresearch loop", "scaffold a campaign to optimize X", "I want to build a loop that improves Y", or "create the charter.md / metric / scoreboard for a new project". Conducts a structured interview (goal, metric, physics, data, levers, constraints, compute, time), co-designs the FROZEN metric, determines which archetype(s) apply, then generates a complete ready-to-run campaign tree (charter.md, protocols, configs, results ledger, and light code stubs) from the kit templates and validates that nothing is left unfilled. NOT for running an existing loop, verifying a result (verify), or writing the end-of-campaign report (final-report).
 ---
 
 # new-campaign — interview, then scaffold a campaign
@@ -24,10 +24,11 @@ from it: a FROZEN metric, an experiment loop, levers, guardrails, logging, verif
 
 ## When to invoke
 - The user wants to start / set up / scaffold a new campaign or optimization loop.
-- An existing project needs the autoresearch structure (program.md + metric + scoreboard) added.
+- An existing project needs the autoresearch structure (charter.md + metric + scoreboard) added.
 
 Do NOT use this to run an already-scaffolded loop, to verify a finding (`verify`), or to write
-the final report (`final-report`).
+the final report (`final-report`). To **fork a campaign whose findings a bug/correction invalidated** (a
+clean break with an archived source + re-verified carry-forward), use **`fork-campaign`**, not this skill.
 
 - **If the idea itself is unvetted**, offer to run **`assess-idea`** first (advisory — feasibility/worth).
   It never blocks scaffolding, but a quick GO / DE-RISK-FIRST / NO-GO can save a campaign built on a
@@ -69,8 +70,27 @@ Read these so your questions and fills are grounded (paths are under the plugin 
 - `${CLAUDE_PLUGIN_ROOT}/templates/PLACEHOLDERS.md` — the fill convention + canonical placeholder list.
 - Skim `${CLAUDE_PLUGIN_ROOT}/templates/campaign/` — what you will fill (now including `INTAKE.md`,
   `docs/PROJECT_ORIENTATION.md`, `docs/ENGINEERING_NOTES.md`, `docs/VERIFICATION_PLAN.md`,
-  `docs/protocols/expensive-evaluation.md`), and `${CLAUDE_PLUGIN_ROOT}/examples/program-files/` — real
+  `docs/protocols/expensive-evaluation.md`), and `${CLAUDE_PLUGIN_ROOT}/examples/charter-files/` — real
   filled charters for altitude/voice.
+
+## Step 0.1 — detect the project context (in-project vs standalone)
+Before anything else, determine whether this campaign is being created **inside a project** (a `new-project`
+home) or **standalone**. This one bit changes where the shared physics/data live and whether a `LINEAGE.md`
+row is appended.
+- **In-project** if an ancestor directory holds a `PROJECT.md` + `LINEAGE.md` (or `new-project` invoked you
+  with a project root, or the user says so). The campaign then lives at `<project>/campaigns/<NN>_<slug>/` —
+  pick `<NN>` as the next zero-padded index after the last `campaigns/` entry (= the last `LINEAGE.md` row).
+- **Standalone** otherwise. **Recommend `new-project`** when the work will iterate over multiple attempts
+  (almost every real investigation does — a project makes shared data/docs referenced-not-copied and needs
+  zero reorganization later), but **do not force it**; a genuine one-off is fine as a bare campaign.
+
+Carry the mode through Step 3 — it changes four things:
+1. **Physics/conventions/instrument** are **referenced from `../../shared/`, never copied** (in-project) vs
+   authored in the campaign's own `docs/` (standalone). *(No campaign-local copies in-project — design §4.1.)*
+2. **Data** is `../../data` (in-project) vs the campaign's own data note (standalone).
+3. An in-project campaign **appends a `LINEAGE.md` row** and resolves the charter's *Relationship to sibling
+   campaigns* block; a standalone campaign deletes that block.
+4. The campaign `CLAUDE.md` **project-context** block is kept (in-project) or deleted (standalone).
 
 ## Step 0.5 — harvest sources and detect the environment (before asking anything)
 Collect what already answers the interview, so you only ask about real gaps:
@@ -141,6 +161,10 @@ control, or training/fitting purely on real experimental data). If there is one,
    in, hard bounds, and the **a-priori plausible range** (predict before running — encode the bounding
    discipline). Then the baseline (exp 000) value/method, any theoretical ceilings, the guardrail
    (necessary-but-not-sufficient), and diagnostics. Pin down what FEEDS the metric vs what is FROZEN.
+   **Ask explicitly whether the baseline (the prior work's delivered pipeline/number this campaign will
+   freeze and build on) has already been through `verify`.** If not, say so plainly in the campaign spec
+   as an open risk rather than silently trusting it — a campaign optimizes *against* its baseline, so an
+   unverified baseline is a load-bearing unknown the whole campaign inherits, not a detail.
    These — primary, guardrail, diagnostics — plus the experiment-type **run numerics** (e.g. epochs +
    best epoch for ML; iterations / wall-clock / n_free_params for fits), plus a **`tier`** column
    (Scout/Confirmation/Extended) and the always-present **`metric_version` / `data_version`** comparability
@@ -162,15 +186,27 @@ control, or training/fitting purely on real experimental data). If there is one,
    - **Conventions** — units/sign/ordering (→ `docs/CONVENTIONS.md`) and known artifacts / recurring
      bugs to guard against. (Capture the **simulation methods/approximations** here too — the
      always-determine simulation check above decides whether the V&V plan in Step 3 applies.)
-   Author two reference docs from this: **`docs/PHYSICS.md`** (the governing physics — its length varies
-   with the problem; equations in math blocks with precise, defined notation; a *living doc* updated when
-   discoveries change the physics; **includes the physics inventory** — every relevant effect tagged
-   accounted-for / negligible-by-scale / out-of-scope / deferred / unknown, *with a reason*, from the
-   `frame-problem` artifact — **and the predictive framework**: the mechanism/model the loop predicts with,
-   at a complexity matched to the problem, plus the discriminating thought-experiments it licenses) and, when the system has significant physical objects/geometry,
-   **`docs/SYSTEM.md`** (apparatus/sample parameters, with sources). Link both from the README. Record
-   anything you had to ask — the next agent shouldn't have to. *(If a `frame-problem` artifact exists,
-   confirm its inventory rather than rebuilding it.)*
+   Author the governing physics + conventions + instrument docs — **but WHERE they live depends on the mode
+   (Step 0.1):**
+   - **In-project:** these are the project's **shared** docs (`../../shared/PHYSICS.md`,
+     `../../shared/CONVENTIONS.md`, `../../shared/INSTRUMENT.md`) — **reference them, don't copy.** `new-project`
+     seeded them; fill any thin slot here, and if this campaign surfaced new physics/conventions, UPDATE the
+     shared docs (they're living docs shared by every campaign). Do **not** create campaign-local `docs/PHYSICS.md`
+     / `docs/CONVENTIONS.md`.
+   - **Standalone:** author them in the campaign's own `docs/`: **`docs/PHYSICS.md`** (governing physics **+ a
+     *target-of-study* section** describing the object under study), **`docs/CONVENTIONS.md`** (units/signs/
+     frames), and — when the system has significant physical objects/geometry — **`docs/INSTRUMENT.md`** (the
+     measurement rig / apparatus + sample parameters, with sources). *(There is no `SYSTEM.md`: it was retired
+     and split into the PHYSICS target-of-study section + `INSTRUMENT.md`, so each name is unambiguous across
+     subfields.)*
+   Either way **`PHYSICS.md`** is the governing physics (length varies with the problem; equations in math
+   blocks with precise, defined notation; a *living doc*; **includes the physics inventory** — every relevant
+   effect tagged accounted-for / negligible-by-scale / out-of-scope / deferred / unknown, *with a reason*, from
+   the `frame-problem` artifact — **and the predictive framework**: the mechanism/model the loop predicts with,
+   at a complexity matched to the problem, plus the discriminating thought-experiments it licenses). Link the
+   docs from the README via `{{PHYSICS_DOC}}` / `{{CONVENTIONS_DOC}}` (filled per Step 0.1 mode). Record anything
+   you had to ask — the next agent shouldn't have to. *(If a `frame-problem` artifact exists, confirm its
+   inventory rather than rebuilding it.)*
 4b. **Verification — capture the application-specific checks (now).** Decide *how a result will be known to
    be right* before the loop runs: the analytic limits, invariants, convergence, independent-method parity,
    and especially the **field-standard checks, known artifacts, and gotchas for THIS problem** — the part
@@ -187,7 +223,7 @@ control, or training/fitting purely on real experimental data). If there is one,
    **hardware safety limits** (hard constraints), irreversibility, and what actions need confirmation.
 8. **Compute resources & time budget.** **Detect** the available hardware rather than asking (CPU
    cores, RAM, GPU via `nvidia-smi`). If it is relevant to the problem (e.g. a GPU for ML), **record it
-   explicitly in the scaffolding** (the README Environment section and a note in `program.md`) so future
+   explicitly in the scaffolding** (the README Environment section and a note in `charter.md`) so future
    agents don't overlook available resources. Ask the user only for what you can't measure — chiefly the
    **time budget** (per-run and overall-loop). Use this to fill the run caps **archetype-specifically**
    (epochs for ML; replication depth for a cheap closed-form fit; expensive/irreversible runs for
@@ -215,7 +251,7 @@ control, or training/fitting purely on real experimental data). If there is one,
 12. **User's own ideas (ALWAYS ASK).** Ask the user (a) any ideas/directions they would like you to
     **try**, and (b) anything that should **NOT** be tried (out of scope, known dead ends, forbidden
     approaches). Record the *to-try* ideas as the opening JOURNAL **NEXT** items (attributed to the
-    user), and fold the *do-not-try* items into the `program.md` FROZEN / out-of-scope section. User
+    user), and fold the *do-not-try* items into the `charter.md` FROZEN / out-of-scope section. User
     ideas are inputs, not a ceiling — you remain encouraged to propose well-founded novel ideas of your
     own (`docs/PRINCIPLES.md` §2).
 13. **Multi-stage plan — propose it proactively.** Many complex tasks are best done as **several
@@ -229,7 +265,7 @@ control, or training/fitting purely on real experimental data). If there is one,
     *idealized* magnets — establishes a baseline and a solid optimizer while the physics is simple;
     (2) design a measurement protocol the user runs to characterize their real magnets' imperfections;
     (3) optimize the arrangement of the *imperfect* magnets, building on (1) and the data from (2).
-    Give each stage its own `program_<NAME>.md` / `configs_<NAME>/` / `results_<NAME>/`, and confirm the
+    Give each stage its own `charter_<NAME>.md` / `configs_<NAME>/` / `results_<NAME>/`, and confirm the
     staging with the user.
 
 ## Step 2 — write the campaign spec and get sign-off (anti-drift checkpoint)
@@ -247,17 +283,17 @@ original intent.
 Copy `${CLAUDE_PLUGIN_ROOT}/templates/campaign/` into the target directory and fill it from the spec,
 obeying `PLACEHOLDERS.md`:
 - **Resolve every `{{PLACEHOLDER}}`** with prose at the same altitude as the surrounding boilerplate
-  (read the `examples/program-files/` charters for voice). Where the user deferred a value, write an
+  (read the `examples/charter-files/` charters for voice). Where the user deferred a value, write an
   explicit TODO noting the deferral — never a silent guess.
 - **Resolve every `[[OPTIONAL — … ]]` block:** DELETE it if it doesn't apply (keeps the slim core
   slim); KEEP-WITH-A-NOTE a universal section that's merely not-yet-wired (mark it `(DEFERRED)`).
   Include the hardware-safety block only for archetype E. **The ceiling blocks are a SET** — ceilings
   appear in the Metric, Decision/promotion, and Before-accepting sections (and `metric.md`); keep or
   delete them all together. For a fixed-data campaign, delete `protocols/dataset.md` (leave the READ-ONLY
-  note) AND drop its row from the `program.md` Protocol Index.
+  note) AND drop its row from the `charter.md` Protocol Index.
 - **Resolve every `[PROPOSED]` tag:** present each speculative discipline to the user to keep or cut;
   drop the tag on kept ones, delete cut ones.
-- **Strip the `.tmpl` suffix** on write (`program.md.tmpl` → `docs/program.md`, etc.).
+- **Strip the `.tmpl` suffix** on write (`charter.md.tmpl` → `docs/charter.md`, etc.).
 - **Always-on context + the enforcement hook (critical — this is what keeps the doctrine in context and
   the verify gate un-skippable):** generate **`CLAUDE.md`** (from `CLAUDE.md.tmpl`) in the campaign root —
   Claude Code auto-loads it every session, and it is the ONLY reliable always-on context (a plugin's
@@ -268,30 +304,50 @@ obeying `PLACEHOLDERS.md`:
   macOS/Linux) so the hook command runs on this machine. **Verify the hook is actually wired** before
   handoff — `.claude/settings.json` present and registering `guard_discoveries`; a tree without it runs with
   **no verify gate at all** (this has happened on a real campaign whose tree was assembled by hand). The hook
-  guards only DISCOVERIES writes — current-best promotion is enforced by `program.md`'s promotion rule + the
+  guards only DISCOVERIES writes — current-best promotion is enforced by `charter.md`'s promotion rule + the
   `campaign-status` check (it does not see scoreboard edits).
 - **Code stubs:** fill `scripts/metric.py` (the FROZEN scorer + `--selftest`) and
   `scripts/run_campaign.py` (the runner). These are intentionally light — leave the TODO hooks for the
   agent to implement the physics in-loop, but wire the names/metric so `--selftest` is the gate for
-  exp 000.
+  exp 000. The `tests/` **correctness suite** ships as skip-stubs — from `docs/VERIFICATION_PLAN.md`, seed at
+  least the analytic-limit + invariant checks for the frozen forward model (see the `correctness-suite`
+  skill); it is green-gated (`run_campaign` warns on red under `--selftest`; `verify` blocks promotion on it).
 - **Author the new orientation/verification/engineering docs:** fill **`docs/PROJECT_ORIENTATION.md`** (the
   goal, the decision it drives, the loosely-held expectations, and the numbered goal-linked task hierarchy —
-  graduating the `frame-problem` decomposition); **`docs/VERIFICATION_PLAN.md`** (the application-specific
+  graduating the `frame-problem` decomposition); **when the field has them, also fill the optional "Where this
+  sits in the field" block** — the gap/novelty, adjacent work, the **threshold ladder + named precedents** for
+  the key quantity, and what not to claim (ask the user or draw on the topic-4 literature; skip the block if
+  the quantity has no canonical thresholds — never invent them); **`docs/VERIFICATION_PLAN.md`** (the application-specific
   checks from topic 4b — the gate `verify`/`correctness-suite` consume); and seed **`docs/ENGINEERING_NOTES.md`**
   with the **Step 0.6 source-authority ledger** (one ED per load-bearing fact resolved from a source — its
   value, the authoritative artifact it's PINNED to, the provenance tag, and the lower-authority sources
   quarantined and why; an empty header only if there was a single source). Put the
   user's *ideas to try* as the opening `PROJECT_ORIENTATION` tasks + JOURNAL NEXT items.
-- **Author the campaign-specific reference docs the interview surfaced:** fill `docs/CONVENTIONS.md` and
-  `docs/PHYSICS.md` (the governing physics — equations in math blocks, precise notation; **include the
-  physics inventory** — effects accounted-for/not + why); add a
-  `docs/SYSTEM.md` when there are significant physical objects/geometry (dimensions, layout, material,
-  sample/measurement-axis/bias-field orientations, pixel size/FoV — each with its source). Record the
-  **detected compute** and the **chosen environment + setup commands** in the README (Environment /
-  Quick-start) and note the available compute in `program.md`. Register any new docs in the README.
+- **Reference docs — author or reference per Step 0.1 mode (see topic 4):** *In-project* — physics, conventions,
+  and instrument are the project's **shared** docs: **delete the copied `docs/PHYSICS.md.tmpl` and
+  `docs/CONVENTIONS.md.tmpl`** from the campaign tree (no local copies — design §4.1) and fill
+  `{{PHYSICS_DOC}}` / `{{CONVENTIONS_DOC}}` with the `../../shared/…` path at the correct relative depth per file
+  (see PLACEHOLDERS.md); update the shared docs in place if this campaign added physics/conventions. *Standalone* —
+  keep and fill `docs/PHYSICS.md` (+ a target-of-study section), `docs/CONVENTIONS.md`, and `docs/INSTRUMENT.md`
+  (apparatus/sample params; there is **no** `SYSTEM.md`), and fill the placeholders with `docs/…`. Either way,
+  record the **detected compute** + the **chosen environment/setup commands** in the README (Environment /
+  Quick-start), note available compute in `charter.md`, and register any new docs in the README.
+- **Project wiring (in-project only — from Step 0.1):**
+  1. Reference the canonical data as **`../../data`** — never copy it into the campaign.
+  2. **Append a row to `../../LINEAGE.md`** (Campaigns table): index `<NN>`, campaign name, date, the `approach`
+     tag, the FROZEN primary metric, *what changed from the predecessor* (or "— (first)"), headline result
+     (leave `pending` until exp 000), verified discoveries (none yet), `@KB-key` (—), status `active`.
+  3. Resolve the charter **Relationship to sibling campaigns** block — KEEP + fill `{{SIBLING_FROZEN_MUTABLE}}`
+     and `{{CONSUMED_ARTIFACTS}}` if this campaign is **coupled** to a sibling (what it FREEZES vs MUTATES; which
+     `../../shared/<artifact>` it consumes); DELETE it if independent.
+  4. **Keep** the campaign `CLAUDE.md` project-context block. *(Standalone: DELETE both the Relationship block
+     and the `CLAUDE.md` project-context block.)*
+  5. A verified finding that is a fact about the **system** (not just a config that scored well) is later
+     **promoted** from `results/DISCOVERIES.md` to the project `../../DISCOVERIES.md` (survives fork-and-archive);
+     note this in the handoff so the loop agent knows the promotion path.
 - **Literature (per the topic-11 level)** — the ongoing-search rule and the `LITERATURE.md` file are
   decided separately:
-  - *Ongoing-search rule in `program.md`:* for **none**, resolve the `[[OPTIONAL — literature search
+  - *Ongoing-search rule in `charter.md`:* for **none**, resolve the `[[OPTIONAL — literature search
     enabled]]` block as DELETE; for **only-when-needed** / **extensive**, keep it and fill
     `{{LITERATURE_LEVEL}}` with the chosen intensity (search-when-stuck vs proactive-and-periodic).
   - *`LITERATURE.md` itself:* keep it and **seed it with summaries of any literature the user provided**
@@ -302,17 +358,20 @@ obeying `PLACEHOLDERS.md`:
   `docs/SIMULATION_VALIDATION.md` for it — a tailored V&V&UQ plan from
   `${CLAUDE_PLUGIN_ROOT}/docs/SIMULATION_VALIDATION.md` — and wire its gates into the **core docs**: a
   **verify-before-validate gate** (the simulator must pass code + solution verification before any
-  simulator-based result is trusted) plus the **sim-to-experiment guardrail** in `program.md`; the
+  simulator-based result is trusted) plus the **sim-to-experiment guardrail** in `charter.md`; the
   simulator's **assumptions, domain of validity, and V&V status** in `docs/PHYSICS.md`; and keep
   *calibration ≠ validation* (hold out independent validation data). Register it in the README and the
-  `program.md` Protocol Index.
+  `charter.md` Protocol Index.
 - **Seed the index and the user's directions:** fill `results/INDEX.md` with its exp 000 row (the loop
   agent maintains it thereafter). Put the user's *ideas to try* (topic 12) as the opening JOURNAL
-  **NEXT** items, attributed to the user; fold the *do-not-try* items into `program.md`'s FROZEN /
+  **NEXT** items, attributed to the user; fold the *do-not-try* items into `charter.md`'s FROZEN /
   out-of-scope list.
-- **Multi-campaign / multi-stage:** if this project will host more than one loop (including a staged
-  plan from topic 11), append the `_<NAME>` suffix to `docs/program_<NAME>.md`, `configs_<NAME>/`,
-  `results_<NAME>/`; otherwise keep the plain names.
+- **Sibling campaigns & multi-stage (project model, §5):** in a **project**, a second track/approach/stage is
+  a **sibling campaign** — its own `campaigns/<NN>_<slug>/` with its own charter + ledger, coupled via the
+  charter *Relationship to sibling campaigns* block and shared promoted artifacts (`../../shared/`) — **not** a
+  `_<NAME>`-suffixed file inside one tree. Scaffold each by re-running this skill in the project (a new
+  `LINEAGE.md` row per sibling). *(Standalone fallback only — when NOT in a project — a multi-stage plan may use
+  the in-tree `_<NAME>` suffix on `docs/charter_<NAME>.md` / `configs_<NAME>/` / `results_<NAME>/`.)*
 - Seed `results/scoreboard.tsv` with its header; leave `results/logbook.md` (append-only full record),
   `results/JOURNAL.md` (the working window), and `results/DISCOVERIES.md` with their intros + the first
   **NEXT** pointer (queue exp 000). The logbook, scoreboard, and `diagnostics/` logs are **append-only and
@@ -335,19 +394,34 @@ enforcement hook only take effect in a session that **starts in the campaign fol
 session was already open when they were written, so it has loaded neither. Instruct the user to launch a
 fresh session from the campaign directory:
 ```
-cd "<campaign dir>"
+cd "<absolute path to campaign dir>"
 claude --dangerously-skip-permissions
 ```
+**Give the absolute path, never one relative to this setup session's cwd.** The fresh session's shell has
+no memory of where this session was running — a relative or partial path that resolved correctly here will
+point at the wrong place (or nowhere) in the new terminal. Resolve the campaign dir to its full path before
+handing over the command.
 *(add `--plugin-dir "<KIT_DIR>"` if running the kit per-session rather than installed).* Point them at
-`docs/program.md` (re-read every iteration) and state the first action: **implement `scripts/metric.py` +
+`docs/charter.md` (re-read every iteration) and state the first action: **implement `scripts/metric.py` +
 make `--selftest` pass, then run experiment 000 (the baseline gate).** Have them confirm with `/context`
 that `CLAUDE.md` is loaded before the loop starts. The campaign is then ready to run continuously.
+- **In a project:** the campaign lives at `campaigns/<NN>_<slug>/` and its opening `../../LINEAGE.md` row is
+  `status: active`. Remind the loop agent that shared data/docs are `../../data` + `../../shared/` (referenced,
+  never copied — the ancestor `../../CLAUDE.md` carries the project rules), and that a verified **system-level**
+  finding is later promoted from `results/DISCOVERIES.md` to the project `../../DISCOVERIES.md`.
+- **If the loop runs agents beyond the main session** (Task subagents, SDK-spawned generation/critic
+  roles): those contexts inherit **nothing** from `CLAUDE.md` — their prompts replace the doctrine stack.
+  Before the first real experiment, run the prompt-surface audit
+  (`docs/reference/prompt-surface-audit.md`): capture each role's context *as rendered* (including
+  dynamically generated blocks) and verify every relied-upon rule is physically present; re-run it after
+  any prompt change.
 
 ## Notes
 - This skill SCAFFOLDS; it does not run the loop. After hand-off, the loop-running agent executes
-  `docs/program.md`.
-- Never overwrite existing files without confirmation; if the target dir already has a campaign, treat
-  it as a multi-campaign add (suffix) or stop and ask.
+  `docs/charter.md`.
+- Never overwrite existing files without confirmation. If the target already holds a campaign, add a
+  **sibling campaign** in the project (a new `campaigns/<NN>_<slug>/` + `LINEAGE.md` row) — or, standalone, a
+  `_<NAME>`-suffixed track — or stop and ask.
 - **Imported / relocated / hand-built trees silently lose the verify gate.** A tree not generated by this
   skill (copied in, assembled from frozen inputs, or moved) usually lacks `.claude/settings.json` +
   `scripts/guard_discoveries.py`, so the DISCOVERIES verify gate is absent and the doctrine prose in

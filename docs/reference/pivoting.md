@@ -30,6 +30,7 @@ Name which of these you're looking at — the diagnosis picks the move:
 | **Implementation-capped** | The idea is fine but *this* implementation limits it (a weak solver, a coarse grid, a poor initialization, an under-tuned hyperparameter). | Refine in place — improve the implementation; don't abandon the idea. |
 | **Fixed-choice-fought** | You're fighting a choice you've frozen (a parameterization, a representation, a constraint) that the idea needs to bend. | Change that one fixed choice — a medium jump, not a full pivot. |
 | **Near-miss** | It almost works — a consistent small effect in the right direction, within the noise. | Gather more evidence / sharpen the test before deciding; don't pivot on a near-miss. |
+| **Inherited-value-wrong** | One-lever experiments across ≥2 lever families pin at the *same* floor (within the metric's replicate spread), or the best result sits far from its own a-priori expectation and no lever moves the gap. | Not a pivot at all — the error is *upstream* of every lever: run `assumption-audit` (re-measure the top inherited suspect from scratch) before spending more experiments. |
 
 A near-miss is the most-misread case: a consistent trend whose spread overlaps the comparison is a reason
 to **gather more** (more seeds, more data, a sharper test) — not to declare failure *or* success. (This is

@@ -106,9 +106,13 @@ Label, don't blend. Pick the scheme that fits the artifact and keep it consisten
    axes are labeled with units; text is legible. Copy used figures into the report's figure dir so it is
    self-contained.
 7. **Verify (Standard 3).** Run the report-time check below.
-8. **Assemble & compile.** Build in a fresh directory outside any working tree; apply the right register
-   and the provenance labels; compile and **self-correct until clean** — or emit the Overleaf folder if
-   there is no local compiler (see *Assemble & compile*).
+8. **Assemble & compile.** Build into a fresh **in-tree** output directory — in a campaign, the campaign's
+   `final_report/`; for a project-level or cross-campaign writeup, the project's single `reports/` home;
+   standalone, a fresh local dir. Keep LaTeX build artifacts (`.aux/.log/.out/.fls`) out of source control
+   via `.gitignore`, but the compiled PDF lives **in-tree beside its source** (the outputs shelf is in the
+   tree — see `final-report` and the project `reports/`). Apply the right register and the provenance labels;
+   compile and **self-correct until clean** — or emit the Overleaf folder if there is no local compiler
+   (see *Assemble & compile*).
 9. **Grade against the five standards + the checklist** before declaring done.
 
 ## Verify before you finalize (Standard 3 — the mandatory step)
@@ -125,8 +129,10 @@ re-check what a reader will *act on*, not every digit.
 - **Internal consistency:** totals/sums, units, cross-references, and figures all agree with the numbers
   in the text, and the **abstract matches the body**.
 - **Citations:** every reference resolves to the real source — exact title, full author list, year, venue,
-  identifier — via `cite-check`. A link that 404s, redirects, or points to a different paper is not a
-  citation. If you cannot find it, **flag it**; never invent or approximate one.
+  identifier — via `cite-check`, its **claim-support confirmed from the full text, not the abstract**
+  (abstract-only support is carried as PROVISIONAL and the claim softened to match). A link that 404s,
+  redirects, or points to a different paper is not a citation. If you cannot find it, **flag it**; never
+  invent or approximate one.
 - **Flag premises:** any claim resting on a **QUESTIONABLE ASSUMPTION**, or a PROVISIONAL/unverified
   result, is marked as such — never presented as settled.
 - **Emit a claim→evidence manifest** (the verification ledger): a table mapping **each load-bearing claim →
@@ -135,6 +141,14 @@ re-check what a reader will *act on*, not every digit.
   actually ran). Every headline claim must trace to a real artifact; a claim with no entry doesn't go in
   the document. Keep it in full for an internal audience, or as an appendix for a shareable one — so the
   report's own trustworthiness is auditable.
+
+## Normalization pass (standard form — distinct from correctness)
+
+A final read for **notation and standard form**, kept separate from the correctness re-check above:
+consistent symbols / units / sign conventions, field-standard nomenclature, idiomatic over idiosyncratic
+phrasing. This is a *more-standard-way* pass — it may **never change a result, a number, or its meaning**
+(that is a correctness edit, routed back through *Verify before you finalize*). Where the standard form is
+ambiguous, flag it — don't silently rewrite.
 
 ## Section arc (physics-report default — adapt or omit per report type)
 
@@ -190,6 +204,7 @@ results/methods report:
 - [ ] Internal consistency holds: totals, units, cross-references, abstract ↔ body.
 - [ ] Reproducibility pointers (configs/commands/seeds/data) are present for the headline result.
 - [ ] It compiles clean (or the Overleaf folder is emitted) — no `??`, no missing figures, no TODOs.
+- [ ] Normalization pass done: notation/units/nomenclature consistent and in standard form; no result or meaning changed.
 
 Then tell the user where the `.tex` / `.pdf` (or the doc) and the generated figures live, and give a 3–4
 line summary of the headline result and its strongest evidence.

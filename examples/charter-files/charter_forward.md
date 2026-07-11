@@ -3,7 +3,7 @@
 The slim core of a **targeted, continuously-running** campaign whose **sole goal is to improve the
 forward model** — to drive the residual between the **forward-projected field of a uniformly
 saturated lattice** and the **measured data at 285 G and 300 G** as low as possible, honestly. Read
-this every iteration. Sibling to `docs/program_residual.md` / `docs/program_residual_v2.md`: it
+this every iteration. Sibling to `docs/charter_residual.md` / `docs/charter_residual_v2.md`: it
 inherits their scientific-rigor scaffolding but **inverts what is mutable** — here the forward
 *physics code itself* is the thing being improved.
 

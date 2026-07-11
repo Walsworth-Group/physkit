@@ -49,7 +49,10 @@ researcher new to AI tools, who will not catch a fabricated DOI — so the citat
    relevant sections; **cache** what you fetch so you don't re-pull. For a large review, delegate parallel
    query threads to **sub-agents** (context economy) and synthesize centrally.
 
-3. **Read for the right things** (not a generic summary):
+3. **Read for the right things** (not a generic summary) — **screen on abstracts, conclude on full text.** A
+   load-bearing judgment (this *transfers* · this *supports* the claim · this is the *closest* prior art) comes
+   from the relevant full-text section, not the abstract; abstracts only *triage* which papers earn a deep
+   read, and any conclusion still resting on one is provisional. Read for:
    - **Key results & the field's trajectory** — what's settled, and *what just became possible* (a new method,
      a new regime, a new instrument) that opens directions (Wieman decision 1).
    - **The closest prior art to the user's problem** — has this been tried? If it was **abandoned, why?**
@@ -66,7 +69,9 @@ researcher new to AI tools, who will not catch a fabricated DOI — so the citat
 
 5. **Verify every citation — the mandatory gate (`cite-check`).** Before the brief is delivered, confirm each
    reference against the actual source: exact **title, full author list, year, venue, and DOI/arXiv id**, and
-   that the paper **actually supports the claim** it's cited for. A reference that 404s, redirects, or points
+   that the paper **actually supports the claim** it's cited for — **read from the full-text section, not the
+   abstract** (a claim supportable only from an abstract is carried as **provisional** — cite-check PROVISIONAL —
+   and the brief says so, never laundered into "established"). A reference that 404s, redirects, or points
    to a different paper is **not a citation** — drop or fix it; one you cannot confirm is **flagged as
    unconfirmed, never invented or approximated.** Prefer the arXiv version of the record.
 
@@ -92,6 +97,12 @@ reference is clickable and **cite-check-verified**. Standalone: a message or a s
 
 ## The failure modes to guard against
 - **Fabricated or misattributed citations** — the cardinal sin; the `cite-check` gate exists for exactly this.
+- **Abstract-driven conclusions** — grading a paper's support (or what it's even *about*) from its abstract;
+  the abstract is the sales pitch, written to sound broader and cleaner than the paper delivers. Screen on it,
+  conclude on the full text — a claim you can support only from an abstract is provisional, not established.
+- **Confirmation-seeking search** — when the task is "find papers that *support* X" you are primed to accept a
+  keyword-matching abstract. Ask instead what the literature *says* about X; a well-evidenced paper that
+  **complicates or refutes** X is a *successful* result (a well-evidenced negative is a success), not a failed row.
 - **Manufactured consensus** — smoothing over real disagreement to sound authoritative; name the conflict instead.
 - **Recency/availability bias** — over-weighting what's easy to find or newest; seek the foundational work too.
 - **"I don't recall seeing it" as evidence of novelty** — absence in your search is not proof the field hasn't
@@ -100,8 +111,8 @@ reference is clickable and **cite-check-verified**. Standalone: a message or a s
 ## Checklist
 - [ ] Purpose scoped with the user (depth + what-to-extract set accordingly).
 - [ ] Multiple queries run (core + analogues + recent); arXiv-first; fetches cached.
-- [ ] Read for trajectory, closest prior art (+ why-abandoned), methods, and **what transfers** — not a generic summary.
+- [ ] Read for trajectory, closest prior art (+ why-abandoned), methods, and **what transfers** (load-bearing judgments from full text, not the abstract) — not a generic summary.
 - [ ] Brief organized established / contested / open, with a methods table + priority-ranked reading list.
-- [ ] **Every citation cite-check-verified** (title/authors/year/venue/id + claim-support); unconfirmed ones flagged, none invented.
+- [ ] **Every citation cite-check-verified** (title/authors/year/venue/id + claim-support **from full text, not the abstract**); abstract-only support carried as provisional, unconfirmed ones flagged, none invented.
 - [ ] Honesty labels applied (established vs synthesis vs uncertain); field disagreements and search limits stated.
 - [ ] Campaign: `LITERATURE.md` written/refreshed and `PHYSICS.md` references seeded (kept in sync).

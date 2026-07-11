@@ -1,0 +1,19 @@
+# Instrument & measurement — {{PROJECT_TITLE}}
+
+The measurement apparatus / detector / observational setup and its parameters — the concrete rig that produces
+this project's data. (The **object of study** and the **governing physics** are in `PHYSICS.md`; units / signs /
+frames in `CONVENTIONS.md`.) Every campaign references this at `../../shared/INSTRUMENT.md`; never copy it.
+
+## The instrument
+{{INSTRUMENT_DESCRIPTION}}   <!-- what measures what — e.g. NV widefield magnetometer · telescope + detector · spectrometer -->
+
+## Parameters (with provenance)
+| Parameter | Value | Units | Source / how known |
+|---|---|---|---|
+| {{INSTR_PARAM_1}} | {{INSTR_VALUE_1}} | {{INSTR_UNITS_1}} | {{INSTR_SOURCE_1}} |
+
+## Measurement model — what the raw data actually is
+{{MEASUREMENT_MODEL}}   <!-- how instrument readings map to physical quantities: the forward measurement chain -->
+
+## Known artifacts / systematics
+{{INSTRUMENT_ARTIFACTS}}   <!-- drifts, backgrounds, calibration caveats — the recurring gotchas to guard against -->

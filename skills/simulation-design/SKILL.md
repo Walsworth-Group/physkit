@@ -45,6 +45,12 @@ Carry the **physics inventory** from `frame-problem` into the simulation:
   free parameters.
 - The **assumptions** the model rests on, and the **domain of validity** (parameter ranges, regimes) — and
   commit to never extrapolating beyond it unflagged.
+- **Nuisance/calibration parameters must track independent ground truth, not their own history.** A
+  registration, background, or drift-correction parameter re-solved with its *own previous estimate* as the
+  effective prior converges to something stable-looking that is really just its own accumulated drift — a
+  silent walk with no error signal (`debug`'s silent-bug catalog: self-referential nuisance-parameter
+  anchoring). State explicitly what ground truth each nuisance parameter is anchored to and confirm the fit
+  can't be satisfied by chasing itself.
 - The **discretization choices** (mesh/timestep/basis/tolerance) and what controls their error.
 - Where the **dimensionless groups** (`dimensional-analysis`) put you — they decide which terms dominate and
   what resolution the stiff/dominant scales demand.
@@ -67,6 +73,13 @@ Decide every check *now*, as a concrete plan `correctness-suite` will later exec
   experiment and is among the most expensive failures to catch late.
 - **Convergence study** — refine until the answer stops moving, and **separate numerical error from model
   error** so a data gap isn't blamed on the wrong one.
+- **Sequential/per-step fits can hide systematic error via state co-adaptation.** A fit run frame-by-frame or
+  step-by-step (a time series, a hysteresis sweep, a sequential update) can look individually reasonable at
+  every step while collectively absorbing real signal into drifting per-step nuisance parameters — the
+  residuals look clean because the model quietly adapted, not because it's right. Plan a **joint or
+  monotonicity constraint across steps** (shared parameters, an enforced monotone trend, a global refit) as
+  part of the verification plan whenever consecutive fits share a nuisance parameter — it's what restores the
+  residuals as a trustworthy diagnostic (`verify`'s residual-nature interrogation).
 
 **Validation — is it right for reality?** Plan this *before* you fit anything:
 - **Identify the validation data up front** and hold it out — compare to measurement or an established

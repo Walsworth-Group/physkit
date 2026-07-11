@@ -49,11 +49,22 @@ Different claims fail in different ways. Lead with the check that would actually
 - **A computed number / result → recompute it from a fresh run.** Re-run the producing computation and
   confirm the value matches — **every reported number, not just the headline**. A number that doesn't
   reproduce, or that was only ever stated once and never recomputed, is REFUTED. Convergence ≠ correctness:
-  re-derive the value, don't trust that the solver converged. **Label which metric path each number is** (a
+  re-derive the value, don't trust that the solver converged. A number the *model* produced (mental
+  arithmetic, an "estimated" or remembered value) rather than code is REFUTED on sight — there is nothing to
+  reproduce; regenerate it from code first. (A pre-run a-priori estimate is exempt — it exists to be checked
+  against the code, not reported as the result.) **Label which metric path each number is** (a
   relaxed/auxiliary score vs the frozen primary metric); an unlabelled number can't be compared
   apples-to-apples or drive a promotion.
 - **A fit or a prediction → interrogate the *nature* of the error (see below), not just its magnitude**,
   in addition to recomputing it.
+- **A claim that two quantities agree (or disagree) → test it in units of the combined uncertainty, don't
+  eyeball it.** For *a ± σ_a* and *b ± σ_b* (independent errors), the tension is
+  *t = |a − b| / √(σ_a² + σ_b²)*: *t ≲ 1* agree, *t ≈ 2* mild tension, *t ≳ 3* a real discrepancy — a
+  physical difference or an underestimated error bar, never "close enough." **141 ± 0.003 is not in
+  agreement with 142** (*t ≈ 330*), yet two values agreeing only because both bars are huge is a weak
+  agreement, not a confirmation. No error bar on either side → not comparable; get one first. Correlated
+  errors → subtract the covariance (√(σ_a² + σ_b² − 2σ_ab)). Resolve a real tension, never average it
+  (universalism; distinct from §4's noise-floor test of one delta against its own spread).
 - **A claim / comparison → falsify it with code.** Write controls: verify against known examples (inputs
   whose answer you can derive or look up), test edge/degenerate/extreme inputs, randomize inputs, search
   for counterexamples. Beat the **trivial baselines** (all-zeros / constant / mean / a trivial physical
@@ -80,15 +91,25 @@ examine the residuals for structure.**
 - Be precise about overfitting: claim it only from a *specific signature* (a gain that doesn't hold on
   held-out data; a fit better than the known truth), **never** as a catch-all, and **never** when the
   change *raised* raw fit error (that cannot be overfitting). Separate statistical from systematic error.
+- **A per-step/sequential fit's clean residuals can be manufactured, not earned.** When consecutive fits
+  (frame-by-frame, step-by-step) share a drifting nuisance parameter, each step can silently co-adapt to
+  absorb real signal — residuals look random precisely because the model quietly moved to hide the
+  structure, not because it's right (`simulation-design` §3). Before trusting clean per-step residuals as
+  "done," check whether a joint or monotonicity-constrained refit across steps reproduces them — if the
+  constrained fit's residuals show structure the per-step fit's didn't, the per-step version was absorbing
+  error, not explaining it.
 
 ### 4 · Prefer an independent, mechanism-diverse check
 The strongest verification comes from a *different route* reaching the same answer: a second method, an
 independent re-derivation, a certifying solver, an analytic cross-check. For any substantial or
 load-bearing claim, **spawn a fresh agent** (Agent tool, `subagent_type: general-purpose`) and give it the
 adversarial prompt below, so it re-derives from scratch in its own context rather than inheriting your
-assumptions. Replicate across seeds/perturbations for anything stochastic, and use a **statistical test**
-for close calls — a difference smaller than the spread is not automatically noise (real effects can be
-weak), but it's not automatically real either.
+assumptions. **Pass the why, never the reasoning:** tell the spawned agent what this claim *gates* (a
+promotion, a report, a decision) and the stakes — an agent that knows why the check matters verifies
+harder than one handed a bare task — but never share your generating reasoning or expected answer, which
+would contaminate its independence. Replicate across seeds/perturbations for anything stochastic, and use
+a **statistical test** for close calls — a difference smaller than the spread is not automatically noise
+(real effects can be weak), but it's not automatically real either.
 
 ### 5 · Bounds & physicality
 Confirm the result is physically possible: within hard bounds (probabilities in [0,1], known ranges), **no
@@ -181,7 +202,7 @@ When the claim is a candidate result in an autoresearch campaign, verification i
 "looks like a win" and writing it into `results/DISCOVERIES.md`. A promotion is not real until this returns
 CONFIRMED.
 
-**Step 0 — learn the campaign (parametrize the check).** Read `docs/program.md` (or `program_<NAME>.md`)
+**Step 0 — learn the campaign (parametrize the check).** Read `docs/charter.md` (or `charter_<NAME>.md`)
 and note: the **FROZEN primary metric** + direction and the **FROZEN scorer** path; the **run command** and
 **baseline (exp 000)**; the **guardrail**, diagnostics, and any **ceilings**; the **levers** and the
 **FROZEN / READ-ONLY / MUTABLE** lists (in particular, *is code a lever?* — forward-model campaigns mutate
@@ -222,12 +243,16 @@ spread column in the scoreboard.)
 Fill every `<…>` from Step 0. Omit the bracketed CODE/FORWARD block if code is not a lever. Choose the
 reproduce mode by run cost.
 
-> You are an independent verifier for the campaign at `<campaign dir>`. Read its `docs/program.md` for the
+> You are an independent verifier for the campaign at `<campaign dir>`. Read its `docs/charter.md` for the
 > metric and rules. **Assume the following result is WRONG and try to refute it.** Your default verdict is
 > REFUTED unless the evidence forces CONFIRMED.
 >
 > Candidate: `<config path>`. Claimed: `<METRIC> = <value>` (`<direction>` = better; baseline exp 000 =
 > `<baseline>`), guardrail `<GUARDRAIL> = <value>`, plus `<any ceilings / diagnostics claimed>`.
+>
+> **Why this check matters:** `<what the claim gates — promotion to current-best / a report figure / a
+> go-no-go decision>`. Your verdict is that gate; the work will be published, so the result must be
+> defensible. *(You are told the stakes, not the original reasoning — that is deliberate.)*
 >
 > Report what you actually observe (numbers, not vibes). **Falsify with code, not prose** — verify against
 > known examples, test edge/degenerate/extreme inputs, randomize inputs, search for counterexamples. A
@@ -256,7 +281,13 @@ reproduce mode by run cost.
 >    guardrail)? Examine the residuals for **systematic structure vs random noise** — structure means a bug
 >    or unaccounted-for physics, not just error to report. Claim overfitting only from a specific signature,
 >    never when the change *raised* raw fit error.
-> 6. **Guardrail.** Confirm `<GUARDRAIL>` passes (not materially worse than baseline; overfit flag False).
+> 6. **Guardrail — confirm it can fail, not just that it passed.** A guardrail that would read the *same*
+>    regardless of the lever under test is not exercising the code path it's meant to guard — it gives false
+>    confidence, worse than no guardrail. Check: does `<GUARDRAIL>` actually depend on this experiment's
+>    change (perturb the lever and confirm the guardrail value moves), or does it pass identically either way?
+>    If it can't be shown to fail on a deliberately bad input, flag it as untested, don't credit the pass.
+>    Only once that's established, confirm `<GUARDRAIL>` passes (not materially worse than baseline; overfit
+>    flag False).
 > 7. **Bounds & units.** Physically possible? Every fitted parameter inside its range; nothing above its
 >    ceiling. Impossible → bug/leak → REFUTED until explained.
 > 8. **Generalization.** Improvement holds across the whole evaluation (`<all conditions / held-out split>`),
@@ -287,7 +318,7 @@ reproduce mode by run cost.
   and the physics inventory a structured residual points back to), `correctness-suite` (which turns a
   hard-won check here into a standing regression gate), `record-decision` (the *why* of a non-obvious
   check). `report`'s report-time verification step composes this skill.
-- The campaign `program.md` names this skill in its *Independent verification* section — honor the extra
+- The campaign `charter.md` names this skill in its *Independent verification* section — honor the extra
   checks it lists.
 
 ## Before you call it verified — checklist
@@ -295,6 +326,7 @@ reproduce mode by run cost.
 - [ ] New/derived equation → dimensional check + a limiting case, first.
 - [ ] Every reported number recomputed from a fresh run (not transcribed).
 - [ ] Fit/prediction → residuals examined for structure vs random noise.
+- [ ] Any "these agree/disagree" claim tested via the combined-uncertainty tension (*t = |a−b|/√(σ_a²+σ_b²)*), not eyeballed; error bars on both sides; a real tension resolved, not averaged.
 - [ ] Falsified with code (known examples, edge cases, counterexamples); beats trivial baselines.
 - [ ] Result within physical bounds and its a-priori range; **every fitted parameter inside its physical range** (a physically-shaped free-amplitude lever not credited as a physical prediction; a known input that *hurts* treated as an anomaly, not overridden with a fudge factor).
 - [ ] Every reported number **labelled with its metric path**; a cross-frame result passed the **frame-consistency check** (`docs/reference/coordinate-frames.md`).
@@ -302,4 +334,5 @@ reproduce mode by run cost.
 - [ ] Load-bearing facts resolved to the highest-authority source (not a derived statistic); any INFERRED/RECALLED fact falsification-tested before it's relied on.
 - [ ] Any irreversible action was gated on a CONFIRMED diagnosis (highest-authority artifact read), not a derived statistic.
 - [ ] Substantial claim → an independent / mechanism-diverse route (often a fresh agent) agreed.
+- [ ] Campaign mode: the correctness suite (`tests/correctness_checks.py`) is green, or explicitly N/A — a red suite blocks promotion.
 - [ ] Verdict graded; load-bearing assumption named; disputes recorded append-only (campaign mode).

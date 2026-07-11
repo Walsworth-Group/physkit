@@ -1,6 +1,6 @@
 ---
 name: campaign-status
-description: Periodic health-check, journal consolidation, and N-experiment checkpoint for a running autoresearch campaign. Use when the user asks for campaign status, a health check, a checkpoint, "where do we stand", or to consolidate/trim a long journal — or automatically every N experiments per the loop. Reads the scoreboard, journal, discoveries, and program.md to summarize progress against the baseline and trivial references, flag plateaus and unverified current-bests, run hygiene checks (every result saved, disputes preserved, the metric self-test passing), consolidate the journal when it grows long, and queue the next orthogonal directions as the NEXT pointer. Read-mostly — it never edits the scoreboard, results, or the frozen scorer/physics. NOT for scaffolding a campaign (new-campaign), verifying a single finding (verify), or writing the end-of-campaign report (final-report).
+description: Periodic health-check, journal consolidation, and N-experiment checkpoint for a running autoresearch campaign — and, at a project root, a cross-campaign checkpoint. Use when the user asks for campaign status, a health check, a checkpoint, "where do we stand", project status / "how's the whole investigation", or to consolidate/trim a long journal — or automatically every N experiments per the loop. In a campaign it reads the scoreboard, journal, discoveries, and charter.md to summarize progress against the baseline and trivial references, flag plateaus and unverified current-bests, run hygiene checks (every result saved, disputes preserved, the metric self-test passing), consolidate the journal when it grows long, and queue the next orthogonal directions as the NEXT pointer. At a PROJECT root it reads LINEAGE.md to report across campaigns and checks cross-campaign FROZEN/MUTABLE (sibling-coupling) consistency. Read-mostly — it never edits the scoreboard, results, or the frozen scorer/physics. NOT for scaffolding a campaign (new-campaign) or project (new-project), forking an invalidated campaign (fork-campaign), verifying a single finding (verify), or writing the end-of-campaign report (final-report).
 ---
 
 # campaign-status — the operator's checkpoint
@@ -14,8 +14,38 @@ the journal, and re-points the loop at the most promising orthogonal directions.
 a dated checkpoint note, and snapshotting the session transcript to `transcripts/` (provenance). It never
 edits the scoreboard, results, configs, or anything FROZEN.
 
+## Two scopes — campaign checkpoint (default) vs project checkpoint
+- Invoked **inside a campaign** (`docs/charter.md` present) → the per-campaign checkpoint (the rest of this
+  skill, the default).
+- Invoked at a **project root** (`PROJECT.md` + `LINEAGE.md` + `campaigns/`) → the **cross-campaign** checkpoint
+  in *Project mode* (next section). Detect by which files are present; if both scopes are plausible (a project
+  root that is also mid-campaign work), do the project pass first, then descend into the active campaign.
+
+## Project mode — the cross-campaign checkpoint
+At a project root, step back over the WHOLE investigation, not one loop:
+1. **Read `LINEAGE.md`** — the index of every campaign + session. Report, per campaign: its status
+   (active / superseded / archived(forked) / done), the headline result, whether its current-best is
+   independently **verified**, and its verified discoveries. Flag any `active` row whose result is blank/stale.
+2. **Cross-campaign FROZEN/MUTABLE consistency (§5).** For each coupled pair — from each charter's *Relationship
+   to sibling campaigns* block — confirm the declarations are mutually consistent: **what campaign A FREEZES and
+   promotes to `../../shared/`, campaign B must treat as fixed** (and consume from `../../shared/`, never A's
+   working folder); a lever A froze must not be silently mutated by B. Surface any conflict or **undeclared**
+   cross-campaign dependency loudly — that is exactly how a forward-model change silently invalidates a sibling's
+   results (the `fork-campaign` trigger, §4.4b).
+3. **Promotion & provenance hygiene.** Verified **system-level** findings are promoted from a campaign's
+   `results/DISCOVERIES.md` to the project `DISCOVERIES.md` (they survive fork-and-archive); durable decisions
+   live in `ENGINEERING_NOTES.md`. Archived(forked) campaigns carry a `FROZEN.md` and stay listed in `LINEAGE.md`.
+4. **Run the project validator** for the deterministic structure/portability checks and fold its flags in:
+   `python "${CLAUDE_PLUGIN_ROOT}/skills/new-campaign/scripts/validate_campaign.py" <project_root>` (it
+   auto-detects the project tree — required files, every campaign indexed in `LINEAGE.md`, no local shared-doc
+   copies, no absolute paths in configs).
+5. **Report** across campaigns: what's active, what's plateaued, which sibling coupling needs attention, and the
+   next cross-project move — spin a sibling campaign (`new-campaign`), **fork an invalidated campaign
+   (`fork-campaign`)**, or promote a verified finding. A change that *invalidates* a campaign's findings is a
+   fork trigger, **not** a quiet version bump — name it as such.
+
 ## When to invoke
-- Every **N experiments** (the checkpoint cadence named in `docs/program.md`).
+- Every **N experiments** (the checkpoint cadence named in `docs/charter.md`).
 - When the JOURNAL has grown long (~150+ lines) and needs consolidation.
 - On demand — "where do we stand?", "is the campaign healthy?", "run a checkpoint".
 - **Not only on a count.** Reflection is the campaign's error-correction step — don't let it wait for the
@@ -25,7 +55,7 @@ edits the scoreboard, results, configs, or anything FROZEN.
   important *and* the hardest, precisely because the immediate work crowds them out).
 
 ## Step 0 — learn the campaign
-Read `docs/program.md` (or `docs/program_<NAME>.md`) for the primary metric + direction, the guardrail,
+Read `docs/charter.md` (or `docs/charter_<NAME>.md`) for the primary metric + direction, the guardrail,
 the baseline/floor, the levers, the checkpoint cadence N, and whether literature search is enabled. Read
 the protocols it points to: `docs/protocols/checkpoint.md` and `docs/protocols/journal_consolidation.md`.
 Also read **`docs/PROJECT_ORIENTATION.md`** (goal, expectations, goal-linked tasks) and
@@ -76,18 +106,33 @@ Flag (don't silently fix) anything wrong:
   `guard_discoveries` PreToolUse hook. An imported / hand-built / relocated tree frequently *loses* it,
   leaving the gate decorative (a real campaign once ran with no `.claude/` at all). If missing, flag loudly
   and re-run the `new-campaign` `.claude` wiring step.
+- **The prompt surface is current** (loops running agents beyond the main session — Task subagents,
+  SDK-spawned roles): the prompt-surface audit has been re-run since the most recent prompt change, with
+  every relied-upon rule present in each role's context *as rendered*, dynamic blocks included
+  (`docs/reference/prompt-surface-audit.md`). A rule that fell out of a rendered context is not in force,
+  however loudly the charter states it.
 - The **current-best is independently verified** — if a config is acting as current-best or a DISCOVERY
   without a CONFIRMED `verify` verdict, recommend running `verify` on it now. The hook guards *DISCOVERIES
   writes* only — it does **not** see scoreboard edits, so a current-best can be promoted unverified; a
   current-best / DISCOVERY-backed row whose **`verified` column is blank** is a hygiene failure to surface.
 - **Comparability tags present** — every scoreboard row carries `metric_version` + `data_version`, and no
   "current best" ranks rows scored under *different* versions; a cross-version comparison is a silent error
-  (re-score contenders under the current version first).
+  (re-score contenders under the current version first). If a version change **invalidates** prior findings
+  (rankings no longer hold, an approach was scored on wrong infrastructure) — as opposed to a rank-preserving
+  bump — that is a **`fork-campaign`** clean break (archive + fresh ledger + re-verified carry-forward), not a
+  quiet bump (§4.4).
 - **No premature "done / blocked / at-ceiling."** If the JOURNAL or DISCOVERIES declares the campaign
   finished, optimal, or blocked on new data, confirm an **adversarial attempt to beat it was actually made**
   (an orthogonal lever tried, a reasoned why-any-gain-is-non-physical argument). An unfalsified "we're done"
   is a flag to **resume**, not accept — surface it loudly and queue the orthogonal directions. A plateau with
   the guardrail still moving (generalization-limited, not capacity-limited) especially means keep going.
+- **Resume anchors reflect the latest session (stale-digest guard).** The source of truth for resuming is
+  physkit's **own** record — the newest `handoff` (in `archive/`), the JOURNAL, and the scoreboard; confirm the
+  latest handoff actually covers the most recent work (a handoff that read only the campaign tree can *misstate
+  its own state*). Any **external** resume digest (e.g. a user-maintained `_claude-archive/INDEX.md`) is
+  **advisory only**: if its stated latest / "Active range" date lags the newest session log or JOURNAL entry,
+  flag it stale ("digest ends `<date>`, work ran to `<date>`") and advise regenerating it with whatever produced
+  it — never let an external digest override physkit's own handoff/journal on resume.
 - **Dispute records are intact** (the JOURNAL's append-only verifier/user challenges) — never trimmed.
 - PROVISIONAL findings are tracked and not silently treated as settled.
 - The metric **self-test still passes** (`python scripts/metric.py --selftest`) and diagnostics were
@@ -123,7 +168,13 @@ pivot, not more special-casing; a near-miss argues for gathering more evidence, 
 deliberately** — rank the candidate directions by *importance × tractability × cost* and commit the top few,
 rather than defaulting to the next lever in line (Wieman decision 14). Write the few most promising directions
 as the JOURNAL **NEXT** pointer. If plateaued and literature search is
-enabled, trigger a search (per `docs/program.md`) and fold its top priorities in.
+enabled, trigger a search (per `docs/charter.md`) and fold its top priorities in.
+If the plateau *resists* lever escalation — one-lever experiments across ≥2 lever families pinned at the
+same floor, or the current best far from its own a-priori expectation with no lever moving the gap —
+suspect an **inherited** cause no lever can fix and recommend running `assumption-audit` before more
+optimization runs: enumerate the values the current best inherits (calibrations, derived quantities,
+classifications) with provenance, and spend ONE discriminating experiment that solves for the top
+suspect's value from scratch rather than "confirming" the incumbent.
 
 ### 5. Report
 Append a short dated checkpoint note to the JOURNAL (best metric, trend, top issues, next directions),

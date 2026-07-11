@@ -32,8 +32,11 @@ this template is a prompt list, not boilerplate.)
   <!-- Shapes and dtypes of the main arrays, what each axis means, masked/NaN handling. -->
 
 ## Known gotchas / past bugs
+A living catalog — **append one line per bug you've already paid for**, as `symptom → check` (the fast-
+recognition companion to the `correctness-suite` regression gate; `debug` adds an entry after each fix).
 - {{KNOWN_GOTCHAS}}
-  <!-- The #1 recurring bug for this domain and how to detect it (e.g. a self-test that must pass). -->
+  <!-- One line per bug: <symptom you'd see> → <the check that catches it>. Seed with the #1 recurring bug
+       for this domain (e.g. "fidelity > analytic ceiling → wrong drive regime; assert Ω/A"). -->
 
 ## Environment gotchas (fill for this machine; delete lines that don't apply)
 <!-- Recurring, turn-wasting environment traps — capture them once so no future session rediscovers them. -->

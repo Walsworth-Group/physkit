@@ -74,6 +74,9 @@ Keep notation and links consistent with the rest of the work; reference related 
 ## Composition
 - **`frame-problem`** — a parked physical effect or a key assumption gets a decision record so its
   rationale and revisit-trigger survive.
+- **Sign-off tracking** (`docs/PRINCIPLES.md` Ctx 9) — a timed-out or unanswered approval request is recorded
+  as "no sign-off obtained" at the time, not inferred later from an unrelated go-ahead; resurface it
+  proactively rather than letting the gap go unnoticed.
 - **`verify`** — the *why* of a non-obvious check, and the premise behind a QUESTIONABLE ASSUMPTION verdict.
 - **`simulation-design` / `correctness-suite`** — the rationale for a tool choice, a discretization, or a
   non-obvious regression gate.

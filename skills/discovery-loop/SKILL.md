@@ -163,7 +163,7 @@ Realize that value:
 - Every elite artifact saved by label with its evaluation, reflection trace, and snapshot (reproducibility).
 
 ## Composition
-- **`new-campaign`** scaffolds archetype G (this is the loop its `program.md` runs); the FROZEN evaluator +
+- **`new-campaign`** scaffolds archetype G (this is the loop its `charter.md` runs); the FROZEN evaluator +
   benchmark are the campaign's frozen metric.
 - **`verify`** certifies each promoted discovery (discover-then-certify; anti-memorization; novelty).
 - **`correctness-suite`** guards the FROZEN evaluator/harness itself.
