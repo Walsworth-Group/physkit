@@ -139,12 +139,12 @@ Items not yet built are listed so the index is a complete map of the intended ki
 | attribute-mechanism | `skills/attribute-mechanism/SKILL.md` | 2,5,3 | new (mechanism attribution — "simulate before you attribute"; composes frame-problem/dimensional-analysis/signal-extraction-pitfalls/debug/verify) |
 | assumption-audit | `skills/assumption-audit/SKILL.md` | 3,4 | new (plateau → diagnosis mode-change; solve-don't-confirm + operating-point validity; lab-loop keeper) |
 
-### Project skills (on-demand; `layer: campaign`)
+### Project skills (`layer: campaign`)
 
 | id | path | addresses | status |
 |---|---|---|---|
-| new-project | `skills/new-project/SKILL.md` | 7,8 | new (scaffolds the Project home above campaigns; composes new-campaign) |
-| fork-campaign | `skills/fork-campaign/SKILL.md` | 2,1 | new (invalidation clean break §4.4b; composes new-campaign + verify) |
+| new-project | `skills/new-project/SKILL.md` | 7,8 | new — **default path, not on-demand**: every campaign lives in a project, so `new-campaign` Step 0.1 runs this whenever no project home exists (and it composes new-campaign for the first campaign) |
+| fork-campaign | `skills/fork-campaign/SKILL.md` | 2,1 | on-demand; new (invalidation clean break §4.4b; composes new-campaign + verify) |
 
 ### Campaign skills (on-demand; `layer: campaign`)
 
@@ -158,7 +158,7 @@ Items not yet built are listed so the index is a complete map of the intended ki
 | experiment-design | `skills/experiment-design/SKILL.md` | 4 | new (archetype H) |
 | model-selection | `skills/model-selection/SKILL.md` | 2,4 | new (archetype I) |
 
-### Project scaffold (`layer: campaign`; materialized per project by `new-project`)
+### Project scaffold (`layer: campaign`; materialized by `new-project` for the project every campaign lives in)
 
 | id | path | kind | addresses | status |
 |---|---|---|---|---|
@@ -179,16 +179,17 @@ Items not yet built are listed so the index is a complete map of the intended ki
 | id | path | kind | addresses | status |
 |---|---|---|---|---|
 | program | `templates/campaign/docs/charter.md.tmpl` | scaffold-template | 3,4 | ported+refined |
-| physics | `templates/campaign/docs/PHYSICS.md.tmpl` | scaffold-template | 5 | ported+refined (inventory) |
+| physics | `templates/project/shared/PHYSICS.md.tmpl` | scaffold-template | 5 | ported+refined (inventory); shared per project — the campaign-local copy was retired with standalone mode |
 | intake | `templates/campaign/INTAKE.md.tmpl` | scaffold-template | 8 | new |
 | project-orientation | `templates/campaign/docs/PROJECT_ORIENTATION.md.tmpl` | scaffold-template | 7,8 | new |
 | engineering-notes | `templates/campaign/docs/ENGINEERING_NOTES.md.tmpl` | scaffold-template | 7 | new |
 | verification-plan | `templates/campaign/docs/VERIFICATION_PLAN.md.tmpl` | scaffold-template | 2 | new |
 | expensive-evaluation | `templates/campaign/docs/protocols/expensive-evaluation.md.tmpl` | protocol | 4,6 | new |
 | artifacts-protocol | `templates/campaign/docs/protocols/artifacts.md.tmpl` | protocol | 7 | ported+refined |
-| campaign-claude | `templates/campaign/CLAUDE.md.tmpl` | scaffold-template | 1,2,7 | new (always-on per-campaign doctrine + hard gates) |
+| campaign-claude | `templates/campaign/CLAUDE.md.tmpl` | scaffold-template | 1,2,7 | always-on per-campaign doctrine: a FROZEN, provenance-stamped snapshot of `CORE.md` rendered by `new-campaign` (Step 3) into `{{PHYSKIT_SPINE}}` + the campaign hard gates. Freeze-and-stamp, NOT `@`-imported or hash-checked (kit-dev `CLAUDE.md` §single-source) |
 | discoveries-guard | `templates/campaign/scripts/guard_discoveries.py.tmpl` | scaffold-template | 2 | new (PreToolUse hook: blocks unverified DISCOVERIES write) |
-| hook-settings | `templates/campaign/.claude/settings.json.tmpl` | scaffold-template | 2 | new (wires the guard hook; uses `{{PYTHON_CMD}}`) |
+| loop-heartbeat | `templates/campaign/scripts/loop_heartbeat.py.tmpl` | scaffold-template | 9 | new (Stop hook: refuses an unearned end-of-turn; stop via `results/STOP` or a recorded `stop_request.json`) |
+| hook-settings | `templates/campaign/.claude/settings.json.tmpl` | scaffold-template | 2,9 | new (wires the guard + heartbeat hooks; uses `{{PYTHON_CMD}}`) |
 | claude-general | ~~`templates/CLAUDE.general.md`~~ | scaffold-template | 1,2,7 | **retired 2026-07-03** — was a duplicate of the spine and drifted; `docs/CORE.md` is the single source. Users import it from their project `CLAUDE.md` (`@<kit>/docs/CORE.md`) or copy its body (see `GETTING_STARTED.md` §1) |
 
 ### Report assets
@@ -225,13 +226,16 @@ Every principle context should have at least one `frozen` or always-loaded home 
 | 6 Discovery-loop | PRINCIPLES; `discovery-loop`, archetype G (cheatsheet), expensive-evaluation |
 | 7 Records & reproducibility | CORE (context economy — doctrine, unfrozen per dec #10 2026-07-03); this index, `handoff`, `record-decision`, scaffold |
 | 8 Autonomy & collaboration | CORE (frozen-adjacent: clarify-the-goal); `new-campaign`, frame-problem |
-| 9 Operating unattended | CORE (Running unattended) + PRINCIPLES §9; `charter.md` (Getting Unstuck + promotion), `campaign-status`, `expensive-evaluation`, `hardware-in-the-loop` (archetype E), ENGINEERING_NOTES (landmines), the CLAUDE.md gates + DISCOVERIES hook, `prompt-surface-audit` |
+| 9 Operating unattended | CORE (Running unattended) + PRINCIPLES §9; `charter.md` (Getting Unstuck + Ending the loop + promotion), `campaign-status`, `expensive-evaluation`, `hardware-in-the-loop` (archetype E), ENGINEERING_NOTES (landmines), the CLAUDE.md gates + the DISCOVERIES and loop-heartbeat hooks, `prompt-surface-audit` |
 
 **Open gaps:** none of the backlog tiers remain — Tiers 0–5 and the deferred discovery-loop/archetype G are
 all built. Remaining work is testing/iteration, not net-new artifacts. *(Context 9 overlaps 7–8 by design;
 its organization vs those contexts is flagged for revisit.)*
 
 ## Changelog
+- **v0.7 (unreleased)** — re-classed `new-project` from an on-demand Project skill to the **default path**, and the project
+  scaffold as the home every campaign has: the standalone / bare-campaign mode is retired, so `new-campaign`
+  Step 0.1 finds the project home or runs `new-project` to create it. Sign-off: approved in-session 2026-07-18.
 - **v0.6** — added the 2026-07 lab-loop keepers: `assumption-audit` (skills-table row + Ctx 3/4 coverage —
   the plateau → diagnosis mode-change; solve-don't-confirm + operating-point validity) and
   `prompt-surface-audit` (reference-doc row + Ctx 9/1 coverage — rendered-context auditing for multi-agent

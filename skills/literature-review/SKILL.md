@@ -78,7 +78,7 @@ researcher new to AI tools, who will not catch a fabricated DOI — so the citat
 6. **Deliver honestly.** Distinguish **what's established in the literature** from **your synthesis** from
    **what's uncertain or you couldn't find**; label each. State the field's open disagreements and the limits
    of the search (what you didn't cover). In a **campaign**, write or refresh **`LITERATURE.md`** (summaries +
-   the ranked roadmap) and seed **`docs/PHYSICS.md`** (governing physics + references) — keep the two in sync.
+   the ranked roadmap) and seed **`../../shared/PHYSICS.md`** (governing physics + references) — keep the two in sync.
 
 ## Output
 A scannable, **cited** brief: established / contested / open · a methods table · the closest prior art (+ what

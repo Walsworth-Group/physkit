@@ -52,6 +52,14 @@ Do NOT reach for it when a single lever family is merely unfinished (keep mining
 (`debug`), or when the question is which lever to try next (`pivoting.md`). This skill asks a different
 question: *what does every experiment believe that nobody has re-measured?*
 
+**Rule out the cheaper rival diagnosis first.** The cross-family floor has a second explanation that does
+not involve a wrong inherited value: the space may be **interaction-dominated**, so that no lever moves the
+metric *alone* while a combination would. One-at-a-time search cannot escape such a space by construction —
+it reads exactly like an upstream constraint. Before auditing the inheritance, spend one small factorial or
+paired-lever run across the two families that floored; if the pair moves what neither lever moved, the
+plateau is an interaction, not a bad assumption, and this skill is the wrong tool. It is the cheaper test,
+and getting it backwards means re-measuring a calibration that was fine.
+
 ## The method
 
 1. **Enumerate the inheritance.** List every value the current-best configuration carries that was not

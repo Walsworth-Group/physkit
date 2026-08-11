@@ -61,6 +61,13 @@ The silent bugs that produce a plausible-but-wrong number (worse than a crash, b
   that define it.
 - **Non-converged solve reported as a result** — an optimizer/linear solve that didn't converge, or an
   ill-conditioned matrix inverted anyway; a number off a non-converged or non-finite solve is noise.
+- **A silent failure whose output *imitates* the effect you are looking for** — the dangerous cousin of the
+  above, and the one no generic check catches. The run returns exit 0, no NaNs, and an **ordinary convergence
+  metric**, while its output has collapsed into something that reads exactly like the sought signature (a
+  solver that scrambles a stiff configuration to $|m| \approx 0$ looks like the moment reduction under study).
+  Nothing is numerically wrong, so every health check passes. The gate has to be a **physical magnitude floor
+  calibrated on a validated corpus** — the range the quantity actually takes on runs you trust — asserted on
+  every run, not the solver's own status. Suspect it first whenever a result is both dramatic and convenient.
 - **NaN / inf propagation** — a single bad value (a `0/0`, a `log(0)`, an overflow) silently poisoning the
   output; find the *first* one.
 - **Seed / nondeterminism** — unset RNG state making results irreproducible across runs/machines.

@@ -108,11 +108,11 @@ Label, don't blend. Pick the scheme that fits the artifact and keep it consisten
 7. **Verify (Standard 3).** Run the report-time check below.
 8. **Assemble & compile.** Build into a fresh **in-tree** output directory — in a campaign, the campaign's
    `final_report/`; for a project-level or cross-campaign writeup, the project's single `reports/` home;
-   standalone, a fresh local dir. Keep LaTeX build artifacts (`.aux/.log/.out/.fls`) out of source control
-   via `.gitignore`, but the compiled PDF lives **in-tree beside its source** (the outputs shelf is in the
-   tree — see `final-report` and the project `reports/`). Apply the right register and the provenance labels;
-   compile and **self-correct until clean** — or emit the Overleaf folder if there is no local compiler
-   (see *Assemble & compile*).
+   outside any project (a one-off memo), a fresh local dir. Keep LaTeX build artifacts
+   (`.aux/.log/.out/.fls`) out of source control via `.gitignore`, but the compiled PDF lives **in-tree
+   beside its source** (the outputs shelf is in the tree — see `final-report` and the project `reports/`).
+   Apply the right register and the provenance labels; compile and **self-correct until clean** — or emit
+   the Overleaf folder if there is no local compiler (see *Assemble & compile*).
 9. **Grade against the five standards + the checklist** before declaring done.
 
 ## Verify before you finalize (Standard 3 — the mandatory step)

@@ -46,12 +46,12 @@ a protocol).
 | 1 | **Scientific integrity & honesty** | Find what is true, not an exciting result; never move the goalpost; label and contextualize every number. | CORE doc; `report` / `final-report`; metric labels |
 | 2 | **Verification & correctness** | Assume wrong until *independently* verified; check by mechanism-diverse and certifying means; grade claims. | `verify`; `correctness-suite`; this doc §2 |
 | 3 | **Problem-solving & getting unstuck** | A crash is a bug, not a bad idea; debug by ladder; diagnose before pivoting; treat anomalies and residuals as information. | `debug`; `charter.md` (Getting Unstuck); `campaign-status` |
-| 4 | **Experimental design & rigor** | One lever per experiment (co-vary only deliberately); bound expectations a priori; replicate; tier when compute warrants. | `charter.md` loop; `verify` |
+| 4 | **Experimental design & rigor** | One lever per experiment by default (move several deliberately — the cost is attribution, not validity); bound expectations a priori; replicate; tier when compute warrants. | `charter.md` loop; `verify` |
 | 5 | **Physics & simulation practices** | Reason dimensionally; minimally-sufficient models; verify→validate→UQ; prove convergence; prefer interpretable artifacts; mind sim-to-real. | **`SIMULATION_VALIDATION.md`**; `frame-problem`; `simulation-design`; `correctness-suite`; `PHYSICS.md` |
 | 6 | **Discovery-loop methodology** | Choose what to evolve and the search engine; scope generation to lever functions; remember feedback; spend evaluations well; discover-then-certify. | `discovery-loop` skill; discovery archetype; expensive-eval doc |
 | 7 | **Records, context & reproducibility** | Full reproducibility is mandatory (docs + code + data, self-contained per experiment); record everything; keep the loaded core tiny. | snapshot convention; `handoff` / `record-decision`; scaffold; the index |
 | 8 | **Autonomy & collaboration** | **Clarify the goal before acting**; do the work you can decide; weigh compute (not coding) time; support human-in-the-loop; freeze the honesty core under self-improvement. | CORE stance; `new-campaign` interview; design note (meta-loop) |
-| 9 | **Operating unattended** | Push the work forward without a human in the loop: **don't stop prematurely**, be autonomous-but-safe, monitor what you launch, confirm before irreversible acts, and make the integrity checks un-skippable. | `charter.md` loop + Getting Unstuck; `campaign-status`; `expensive-evaluation`; the CLAUDE.md gates + DISCOVERIES hook |
+| 9 | **Operating unattended** | Push the work forward without a human in the loop: **don't stop prematurely**, be autonomous-but-safe, monitor what you launch, confirm before irreversible acts, and make the integrity checks un-skippable. | `charter.md` loop (+ Getting Unstuck, Ending the loop); `campaign-status`; `expensive-evaluation`; the CLAUDE.md gates + the DISCOVERIES and loop-heartbeat hooks |
 
 ---
 
@@ -97,7 +97,7 @@ a protocol).
 - **Anomalies and residuals are information** — a surprising run or a structured error is a lead, not a nuisance; don't write it off as noise without proof. Investigate before discarding, and record any exclusion and its cause (never silently drop data).
 
 ### 4 · Experimental design & rigor
-- **Change one lever per experiment** so the effect is attributable — *default, not a hard rule*: deliberately test an interdependent **co-varying pair** when parameters depend on each other, and say so.
+- **Change one lever per experiment** so the effect is attributable — *default, not a hard rule*. Move several together when it earns its cost: **coupled levers** (holding one fixed measures a broken configuration, so one-at-a-time is *wrong* here, not merely slow), a **screen** of a region, or a **designed interaction test** that resolves main effects. Say which, and record the entangled set. Multi-lever spends *attribution*, not validity: the measured score stands and may be promoted, but the causal claim ("lever L is why") is QUESTIONABLE until disentangled — and a multi-lever **negative kills only the combination**, never its members (a lever that helps can be masked by one that hurts more). The verification apparatus is aimed at positives, so the confounded *negative* is the one that escapes scrutiny and silently retires a good direction.
 - **Bound expectations a priori** — compute the ceiling, floor, and order of magnitude before running; a result outside the envelope is a bug or a discovery, decided before celebrating.
 - **Discriminate where the hypotheses diverge.** A null result measured in a regime where the competing hypotheses predict the *same* outcome proves nothing — test where they disagree. A "no effect" seen only where the effect must vanish under *either* hypothesis is not evidence against it (e.g. testing a stiffness difference only in saturation, where both stiff and soft predict no canting).
 - **Anchor every load-bearing fact to the most authoritative source, and settle statically-answerable questions before spending an expensive run.** When several sources describe the same system — paper text/figure, leftover or post-publication code, a *shipped artifact* (trained weights, released data), human recollection — rank them by authority and resolve each load-bearing fact (the architecture/method, the recipe, normalization, units, conventions) to the **highest-authority artifact available** by *reading the artifact* (parse the saved model, probe the data's real statistics, run the released weights), not inferring it from a lower-authority proxy *(a statistic you derived from the data is itself such a proxy — weaker than the source it came from)*. **Tag each fact's provenance:** *PINNED* (from an authoritative artifact or empirical probe) · *REPORTED* (stated in text) · *INFERRED* (from an untrusted proxy, e.g. modified code) · *RECALLED* (from memory) · *REASONED* (your own engineering/design judgment, resting on no external claim about the system). A load-bearing fact still at INFERRED/RECALLED is a **blocker to resolve — ask, don't default — and a claim to *falsify* before expensive work rests on it**, especially when a cheaper discriminator is already in hand; and a question a cheap static check (an artifact parse, a data probe) can answer is answered *before* a multi-hour run is spent assuming it. This is the cheapest way to avoid a faithful reproduction of the *wrong* spec — and the trap where "match the published number" quietly drives you to reproduce the original's bug.
@@ -132,6 +132,7 @@ a protocol).
 
 ### 7 · Records, context & reproducibility
 - **Full reproducibility is mandatory** — for every experiment, both the *documentation of what was done* and the *exact code + data* to redo it are preserved and **self-contained** (a per-experiment snapshot subdirectory; large/external data pinned by source + checksum + generation command + seed). A result is not "saved" until both exist. *(Per-experiment snapshots also preserve superseded code for free; git is optional, recommended for shared/large projects.)*
+- **Give work worth keeping an organized home — even with no campaign scaffold to make one.** Outside a campaign's directory tree the discipline still holds: real artifacts, findings, and the reasoning behind them earn a sensible subdirectory and a short, maintained index (what's where, and why) — not a deliverable left only in the conversation or as loose files scattered across a shared directory. The campaign layer structures this automatically; plugin-only / ad-hoc work must do it deliberately.
 - **Record everything, including failures** — and the **"expected vs found"** line (the gap is the insight); if it is not in the record, it did not happen.
 - **A result is not saved until its verdict is written — and reconstruct state from the full trail, not just the artifacts.** A result on disk with no completed narrative and no graded verdict is the commonest thing lost at a session boundary. And because artifacts under-represent what actually happened, state reconstructed only from the settled files can misstate reality (declaring a finished deliverable "never done"): read the trail — the transcript, sibling directories — before asserting what exists.
 - **A memory / durable-note write is a ledger write — hold it to the same bar.** The harness memory channel (and any cross-session note) is durable and **silently re-injected into future sessions**, bypassing the verify and append-only-dispute gates. Don't persist a conclusion as settled until it's verified; **tag its confidence/provenance** (the §4 PINNED / REPORTED / INFERRED tags); prefer recording the open question over a confident answer; and when a persisted conclusion changes, **retract it in place and reconcile the index** — a superseded claim, or a stale always-loaded index line, silently steers the next session. *(Context 1's "the record carries its own corrections", applied to the memory channel — the one durable store that isn't under the ledger's gates.)*
@@ -160,6 +161,11 @@ going.**
   result: try to beat it (an orthogonal lever, a freer model, a cheap what-if) and give the reasoned argument
   for why any gain that appears is non-physical, *before* declaring the campaign over. A plateau is a pivot
   signal; after a real win, re-open previously shelved directions (a discovery changes what else is possible).
+  **Stopping is a decision that gets recorded, not a turn that happens to end** — name the reason in the
+  durable record (a fork only the human can settle, an irreversible act awaiting confirmation, a real
+  external blocker, or a direction finished with nothing left untried). An unrecorded stop is
+  indistinguishable from a crash, and a "finished" claim that never had to name its untried levers is
+  unfalsifiable after the fact.
 - **Be maximally autonomous within the mandate; escalate only a genuine fork.** Do the work you can decide
   yourself; don't stall on (mis-estimated) implementation time, and don't ask what a cheap check would settle.
   Reserve the human for a real fork — an ambiguous goal, a trade-off only they can weigh, or an
@@ -187,6 +193,9 @@ going.**
 - **Enforce, don't exhort — make the integrity-critical check un-skippable.** A norm that lives only in prose
   is skipped under time pressure. Wire the checks that guard integrity (independent verification before a
   promotion) as gates/hooks, and *assert the gate is actually present* — don't merely trust that it is.
+  The agent should not be *able* to promote an unverified result — or to end a live loop without recording
+  why: termination is the one action prose cannot gate, because the prose stops running when the agent does,
+  so an unattended loop needs a stop *gate* (an end-of-turn that must be earned), not a stop *reminder*.
 - **Audit the prompt surface — doctrine only governs an agent whose rendered context contains it.** A
   subagent's prompt *replaces* the doctrine stack rather than inheriting it, and an SDK-spawned loop role
   may load none of the always-on files; a rule that is "in the kit" is not thereby in force. Before
@@ -211,6 +220,22 @@ Karpathy skills collection. Per-context literature citations and the Zimmer-comm
 the content master and feed the paper; verify any external attribution with `cite-check` before publishing.
 
 ## Changelog
+- **v1.11** — Context 9 sharpened on both faces (from `PRINCIPLE_TAXONOMY_v2.md` v3.12, master): *don't stop
+  prematurely* += **stopping is a decision that gets recorded, not a turn that happens to end** (name the
+  reason; an unrecorded stop is indistinguishable from a crash, and a "finished" claim that never had to name
+  its untried levers is unfalsifiable after the fact); *enforce, don't exhort* += **termination is the one
+  action prose cannot gate**, because the prose stops running when the agent does — an unattended loop needs a
+  stop *gate*, not a stop *reminder*. Motivating evidence (2026-08-03): campaigns stopping after each completed
+  experiment despite the norm being stated in three places. Enforced by the `loop_heartbeat` Stop hook +
+  `charter.md` §Ending the loop.
+- **v1.10** — Context 7 += **give work worth keeping an organized home** (even with no campaign scaffold: a
+  sensible subdirectory + a short **maintained index**, what's where and why; never a deliverable left only
+  in the conversation or as loose files scattered across a shared directory). Generalizes the campaign
+  scaffold's organization discipline to **plugin-only / ad-hoc** sessions — the same
+  enforcement-evaporates-without-the-scaffold pattern as v1.5. Motivating evidence: user finding 2026-07-15
+  (agents save & organize well inside campaigns but often not at all in ad-hoc sessions launched from the
+  same directory). Propagated from the content master (`PRINCIPLE_TAXONOMY_v2.md` O-6, v3.11) and mirrored
+  into CORE (working-loop step 6).
 - **v1.9** — Context 9 += **audit the prompt surface** (doctrine only governs an agent whose rendered
   context contains it: subagent prompts *replace* the doctrine stack, SDK loop roles may load no always-on
   files, and dynamically rendered surfaces are audited for missing doctrine and stowaway contamination

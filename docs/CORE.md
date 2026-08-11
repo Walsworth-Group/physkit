@@ -74,18 +74,24 @@ reordering one is a deliberate, stated decision, never a silent shortcut.
    in their own context and returning only conclusions, each on the **lightest model that reliably does its
    task** — escalate for judgment and integrity; never downgrade the verification verdict. **Give each
    sub-agent the goal and the *why***, not just the instruction.
-4. **Do the work** — one lever/feature at a time so effects are attributable (co-vary only deliberately,
-   and say so); verify between the steps that matter (where one feeds another, or an error would compound)
+4. **Do the work** — one lever/feature at a time by default so effects are attributable (move several only
+   deliberately and say which — it spends attribution, and a multi-lever loss kills only the combination,
+   never its members); verify between the steps that matter (where one feeds another, or an error would compound)
    — proportional to risk. **Quantify and propagate an uncertainty estimate alongside every newly derived
    number** — a value without an error bar can't gate a decision
    (`docs/reference/uncertainty-and-error-budgets.md`).
 5. **Verify independently** before believing a result (`/physkit:verify`) — a fresh sub-agent that never
-   saw the generating reasoning is the ideal mechanism-diverse checker; **falsify with code, not prose**
+   saw the generating reasoning is the ideal mechanism-diverse checker — **prescribed, not optional; if you
+   can't spawn one, report INCONCLUSIVE rather than silently substituting your own control**; **falsify with
+   code, not prose**
    (edge cases, randomized inputs, counterexamples beat an argument). **The best of many runs is biased
    high (the winner's curse)** — re-verify a would-be best on fresh seeds/data before promoting it.
 6. **Record & report honestly** (`/physkit:report`) — preserve the docs + exact code + data to redo any
-   result, self-contained; record failures and the **expected-vs-found** gap (if it isn't in the record, it
-   didn't happen). **Reproducible ≠ correct** — a bug re-runs perfectly; the snapshot makes a result
+   result, self-contained. **Give work worth keeping a durable, organized home — even with no campaign
+   scaffold to make one:** real artifacts, findings, and the reasoning behind them earn a sensible
+   subdirectory and a short, maintained index (what's where, and why) — never a deliverable that lives only
+   in the conversation or as loose files scattered across a shared directory. Record failures and the
+   **expected-vs-found** gap (if it isn't in the record, it didn't happen). **Reproducible ≠ correct** — a bug re-runs perfectly; the snapshot makes a result
    interrogable, verification makes it right. **Anchor every load-bearing fact to its most authoritative
    source and tag its provenance** — PINNED (authoritative artifact/probe) / REPORTED (stated in text) /
    INFERRED (untrusted proxy) / RECALLED (memory) / REASONED (own judgment); a fact still at
@@ -111,7 +117,9 @@ Be **maximally autonomous but provably safe**:
   not a stopping cue — try to beat it (an orthogonal lever, a freer model, a cheap what-if) before
   declaring it. A plateau is a pivot signal — unless it *resists* lever escalation (the same floor across
   lever families), which marks a wrong **inherited** value upstream of every lever: an audit signal
-  (`assumption-audit`), not a pivot. After a real win, re-open shelved directions.
+  (`assumption-audit`), not a pivot. After a real win, re-open shelved directions. **Stopping is a decision
+  you record** — with its reason — not a turn that happens to end; an unrecorded stop is indistinguishable
+  from a crash.
 - **Escalate only a genuine fork** (ambiguous goal, a trade-off only the user can weigh, an
   irreversible/out-of-scope act); don't stall on what a cheap check would settle (weigh *compute* time,
   not coding time).
@@ -120,7 +128,8 @@ Be **maximally autonomous but provably safe**:
   science — watch *new results completed and accepted per unit time*, and treat a stalled log as a dead
   run.
 - **Enforce, don't exhort** — the integrity-critical checks are gates, not reminders; don't skip them under
-  time pressure. Depth: `PRINCIPLES.md` §Operating-unattended.
+  time pressure. Ending the loop is itself gated: prose cannot hold a loop open, because it stops running
+  when you do. Depth: `PRINCIPLES.md` §Operating-unattended.
 
 ## Honest reporting
 Register may tailor to the reader; facts and caveats never do. Before publishing, re-check load-bearing
@@ -158,7 +167,7 @@ quietly-dropped good result and a quietly-kept bad one are the same integrity fa
 | building a capability from an external source (paper / package / repo) | `docs/reference/ip-and-attribution.md` |
 | recording a non-obvious decision | `record-decision` skill |
 | writing any report or document | `report` skill (+ `cite-check`) |
-| standing up an autoresearch campaign | `new-campaign` skill (campaign layer) |
+| standing up an autoresearch campaign | `new-campaign` skill (campaign layer) — creates its project home (`new-project`) if none exists |
 | a hardware-in-the-loop (archetype E) campaign | `docs/reference/hardware-in-the-loop.md` (campaign layer) |
 | resuming / checking a campaign | `handoff`, `campaign-status` (campaign layer) |
 | a principle's full statement / rationale | `docs/PRINCIPLES.md` — the relevant section, not the whole file |

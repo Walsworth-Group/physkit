@@ -42,7 +42,8 @@ computer, no shared-drive dependency:
 ```
 
 **Option C — Persistent install from a local / shared-drive copy.** If the machine can see the `kit`
-folder directly:
+folder directly — including a `kit` folder you've unzipped from a distributed `physkit-kit.zip` (extract
+it to a short local path first, e.g. `C:\physkit\kit`):
 ```
 /plugin marketplace add "<KIT_DIR>"
 /plugin install physkit@physkit
@@ -66,34 +67,33 @@ re-injects every turn. Either add one import line pointing at the kit —
 `@<path-to-kit>/docs/CORE.md` — or copy the body of `docs/CORE.md` into a `CLAUDE.md` in your project
 folder. The import keeps you current automatically; the copy is the fallback if imports don't resolve on
 your setup. *(`CORE.md` is the single source — the former `templates/CLAUDE.general.md` duplicate was
-retired 2026-07-03.)* (For campaigns, `new-campaign` generates a campaign-specific `CLAUDE.md` for you —
-see §4.)
+retired 2026-07-03.)* (For campaigns it's the other way round: `new-campaign` generates a campaign-specific
+`CLAUDE.md` carrying a **frozen, provenance-stamped snapshot** of this spine — the campaign's reproducible
+doctrine record, not a live import — see §4.)
 
 ## 2. Start a campaign — the interview
 
-### First: a Project? (use one when the work will iterate)
-Most real investigations run **many attempts over time** on one physical system. PhysKit's home for that is a
-**Project** — one folder that holds the shared **data** and **physics/conventions/instrument** docs *once*
-(referenced by every campaign, never copied), a single **`LINEAGE.md`** index of what each attempt changed and
-found, and the campaigns + ad-hoc sessions themselves. It's what stops a months-long, many-version effort from
-duplicating gigabytes and breaking paths on every rename.
+### First: the Project home (every campaign lives in one)
+Every campaign lives inside a **Project** — one folder that holds the shared **data** and
+**physics/conventions/instrument** docs *once* (referenced by every campaign, never copied), a single
+**`LINEAGE.md`** index of what each attempt changed and found, and the campaigns + ad-hoc sessions themselves.
+There is no bare-campaign mode: in a Project, a campaign grows into a sibling, a fork, or an ad-hoc follow-up
+session with **zero reorganization** and no path rewrites.
 
-- **Starting a fresh line of research?** Run **`/physkit:new-project`** first — it scaffolds the Project home
-  (`PROJECT.md` · `LINEAGE.md` · shared `data/` + `shared/` · `campaigns/` · `sessions/` · `reports/`) and then
-  runs the campaign interview below for your first campaign.
-- **Adding another attempt to an existing Project?** Run **`/physkit:new-campaign`** inside it — it wires the new
-  campaign to the shared `../../data` + `../../shared/` and appends a `LINEAGE.md` row.
-- **A quick one-off** (no frozen metric, no successors)? A bare campaign is fine — but a Project costs nothing
-  extra and means zero reorganization when it grows.
-- **A change invalidated a campaign's findings** (a forward-model bug, a corrected metric)? Use
-  **`/physkit:fork-campaign`** — it archives the old campaign and starts a clean-ledger sibling, carrying forward
-  only findings that survive re-verification.
+**You don't have to make it yourself.** `/physkit:new-campaign` finds the Project home or scaffolds one
+(`PROJECT.md` · `LINEAGE.md` · `data/` · `shared/` · `campaigns/` · `sessions/` · `reports/`), then continues
+into the interview below — wiring the campaign to the shared `../../data` + `../../shared/` and appending its
+`LINEAGE.md` row. A campaign built before this default is **lifted into a Project** the same way.
 
-The interview below is the same whether the campaign is inside a Project or standalone. In your session, run:
+**If a change invalidated a campaign's findings** (a forward-model bug, a corrected metric), use
+**`/physkit:fork-campaign`** — it archives the old campaign and starts a clean-ledger sibling, carrying forward
+only findings that survive re-verification.
+
+In your session, run:
 
 ```
-/physkit:new-project      # a fresh line of research (scaffolds the Project, then the first campaign)
-/physkit:new-campaign     # a campaign inside an existing Project, or a standalone one-off
+/physkit:new-campaign     # the front door — creates or finds the Project home, then interviews
+/physkit:new-project      # start at the Project level instead; ends in the same campaign interview
 ```
 
 **What to expect.** The skill first harvests everything it can from what's already available — your
@@ -119,31 +119,46 @@ converges before the tree is generated, ask the agent to write the locked decisi
 settle — a plan that lives only in the chat is lost if the session drops (`handoff` covers this habit).
 
 Before writing anything, it shows you a **campaign spec** for sign-off — your chance to correct course.
-Then it generates a complete campaign folder and validates that nothing is left blank:
+Then it generates the tree — the Project home, if you don't already have one, and the campaign inside it —
+and validates that nothing is left blank:
 
 ```
-your-campaign/
-  docs/
-    charter.md            the loop charter the agent re-reads every iteration
-    PHYSICS.md            governing equations, methods, the effect inventory (a living doc)
-    CONVENTIONS.md        units, signs, ordering — the bug-prevention reference
-    VERIFICATION_PLAN.md  how you'll know the answer is right — drafted before the work
-    PROJECT_ORIENTATION.md  the goal, done-criteria, and the goal-linked task list
-    ENGINEERING_NOTES.md  the decision / "why" record (conditions + revisit-if triggers)
-    INSTRUMENT.md         the measurement rig / apparatus + sample parameters (when relevant)
-    protocols/            metric · baselines · checkpoint · journal_consolidation · artifacts · dataset · expensive-evaluation
-  configs/
-    _template.json      copy this per experiment
-    exp000_*.json …     one config per experiment   ·   RECOMMENDED.json  the current-best config
-  results/
-    scoreboard.tsv      the numbers (one row per experiment)
-    INDEX.md            the map (each experiment → its config, snapshot, result, figures, status)
-    JOURNAL.md          the working window + NEXT pointer   ·   DISCOVERIES.md  settled, verified findings
-    logbook.md          the full narrative record (append-only; never read whole)
-    snapshots/ images/ data/ diagnostics/    per-experiment artifacts
-  scripts/
-    metric.py           the FROZEN scorer (+ --selftest)   ·   run_campaign.py  the experiment runner
-  INTAKE.md   README.md   LITERATURE.md   (LITERATURE.md only if you enabled literature search or provided sources)
+your-project/
+  PROJECT.md            the system, the end goal, project-wide invariants, the data/shared pointers
+  LINEAGE.md            the index — every campaign and session, what it changed, what it found
+  DISCOVERIES.md        project-wide verified findings, promoted from campaigns (survive a fork)
+  ENGINEERING_NOTES.md  durable project-wide decisions and their "why"
+  CLAUDE.md             the project's always-on rules, auto-loaded anywhere in the tree
+  data/                 the canonical data, read-only — or a DATA_PATH.txt pointer to where it lives
+  shared/               referenced by every campaign, never copied
+    PHYSICS.md          governing equations, methods, the effect inventory (a living doc)
+    CONVENTIONS.md      units, signs, ordering — the bug-prevention reference
+    INSTRUMENT.md       the measurement rig / apparatus + sample parameters (when relevant)
+  sessions/             ad-hoc work — one <date>_<slug>/NOTES.md each, no frozen metric
+  reports/              the single home for project-level outputs
+  campaigns/01_<slug>/  the campaign the interview generates (siblings get 02_, 03_, …)
+    docs/
+      charter.md            the loop charter the agent re-reads every iteration
+      VERIFICATION_PLAN.md  how you'll know the answer is right — drafted before the work
+      PROJECT_ORIENTATION.md  the goal, done-criteria, and the goal-linked task list
+      ENGINEERING_NOTES.md  the decision / "why" record (conditions + revisit-if triggers)
+      protocols/            metric · baselines · checkpoint · journal_consolidation · artifacts · dataset · expensive-evaluation
+    configs/
+      _template.json      copy this per experiment
+      exp000_*.json …     one config per experiment   ·   RECOMMENDED.json  the current-best config
+    results/
+      scoreboard.tsv      the numbers (one row per experiment)
+      INDEX.md            the map (each experiment → its config, snapshot, result, figures, status)
+      JOURNAL.md          the working window + NEXT pointer   ·   DISCOVERIES.md  settled, verified findings
+      logbook.md          the full narrative record (append-only; never read whole)
+      snapshots/ images/ data/ diagnostics/    per-experiment artifacts
+    scripts/
+      metric.py           the FROZEN scorer (+ --selftest)   ·   run_campaign.py  the experiment runner
+      guard_discoveries.py  the hook that blocks a DISCOVERIES write with no recent verification
+      loop_heartbeat.py     the hook that keeps the loop running until you stop it (§4)
+    tests/                correctness_checks.py — the standing checks, green before a result is trusted
+    CLAUDE.md   .claude/settings.json     the campaign's always-on doctrine + the hook wiring
+    INTAKE.md   README.md   LITERATURE.md   (LITERATURE.md only if you enabled literature search or provided sources)
 ```
 
 ## 3. Get ready to run
@@ -170,9 +185,10 @@ claude --dangerously-skip-permissions
 `--plugin-dir "<KIT_DIR>"` to this command too.)*
 
 **This fresh session is required, not optional.** Starting Claude *inside the campaign folder* is what
-auto-loads the campaign's `CLAUDE.md` (the always-on doctrine + hard gates) and activates the
-DISCOVERIES enforcement hook. **Do not run the loop in the same session that scaffolded the campaign** —
-it has neither. Confirm with `/context` that `CLAUDE.md` is loaded before you start.
+auto-loads the campaign's `CLAUDE.md` (the always-on doctrine + hard gates) and activates the two
+enforcement hooks — the DISCOVERIES verify gate and the loop heartbeat that keeps the run going.
+**Do not run the loop in the same session that scaffolded the campaign** — it has neither. Confirm with
+`/context` that `CLAUDE.md` is loaded before you start.
 
 Then kick it off with a prompt like:
 
@@ -182,7 +198,29 @@ Then kick it off with a prompt like:
 **Why `--dangerously-skip-permissions`:** the loop runs unattended and makes many edits, runs, and
 file writes; without it you'd have to approve each one and the loop would stall. **Use it deliberately:**
 run it from the campaign's own folder, in a project you trust, so the agent's actions stay scoped to the
-work. Stop the loop any time with `Ctrl-C`.
+work.
+
+### Stopping the loop
+
+The campaign keeps going on its own: a `Stop` hook (`scripts/loop_heartbeat.py`) refuses an end-of-turn
+that isn't a real stop and hands the agent back its own `NEXT` pointer, because "the experiment finished"
+is not a reason to stop. So there are two ways to end a run:
+
+- **`Ctrl-C`** — immediate, mid-experiment. Nothing in flight gets logged.
+- **Create `results/STOP`** — the graceful stop. The agent finishes and logs the experiment it is running,
+  then exits cleanly. Do this from any other terminal while the loop runs; delete the file to resume.
+
+  ```bash
+  New-Item -ItemType File "results/STOP"
+  ```
+
+The agent can also end the run itself, but only by *recording why* in `results/stop_request.json` — an
+ambiguous goal that needs your call, a hard-to-reverse action awaiting your confirmation, a real external
+blocker, or a direction that is genuinely exhausted (which it may not claim while any lever it has named
+remains untried). Every stop is logged to `results/loop_stops.log`, so "why did this campaign end?" is
+always answerable from the ledger. If the loop is continued repeatedly without producing a new scoreboard
+row it releases itself and records a `STALL_RELEASE` — that means the run was alive but doing no science,
+and is worth diagnosing before you restart.
 
 **What to expect while it runs:** every experiment is logged to `results/scoreboard.tsv` (the numbers)
 and indexed in `results/INDEX.md` (a map to each experiment's config, snapshot, result, and figures),
@@ -198,6 +236,12 @@ graduate to `results/DISCOVERIES.md`. Check in whenever you like — the ledger 
   bug. Fix it before experiment 000 — the self-test exists precisely to catch this early.
 - **The loop keeps pausing for permission** → it wasn't launched with `--dangerously-skip-permissions`
   (or not from the campaign folder). Restart it as in §4.
+- **The loop stops after every experiment and needs nudging** → the heartbeat hook isn't firing. Check that
+  `.claude/settings.json` has a `Stop` entry for `scripts/loop_heartbeat.py`, that the python command in it
+  actually runs on this machine, and that the session was started *inside* the campaign folder (§4). An
+  imported or hand-assembled tree is the usual culprit — `/physkit:campaign-status` flags a missing hook.
+- **The loop won't stop** → create `results/STOP` (graceful) or press `Ctrl-C` (immediate). To disable the
+  heartbeat entirely for a debugging session, set `AUTORESEARCH_LOOP_HEARTBEAT=off` before launching.
 - **You want to change something the agent froze** (the metric, the core physics) → those need your
   explicit sign-off; just tell the agent — it won't change them on its own.
 - **A generated file still shows `{{PLACEHOLDER}}`** → generation didn't finish cleanly; ask the agent to

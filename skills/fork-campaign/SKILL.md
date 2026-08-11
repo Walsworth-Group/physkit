@@ -42,9 +42,9 @@ show the change *preserves the rankings*, treat it as (b) — the cost of a wron
 finding is far higher than a clean re-verification.
 
 ## Preconditions
-- This runs **inside a project** (`new-project` home): the source campaign is `campaigns/<src>/` and there is a
-  `../../LINEAGE.md`. (A standalone campaign with no project has no archive/LINEAGE machinery — offer to lift it
-  into a project first with `new-project`, or fork manually.)
+- The source campaign sits in its project — `campaigns/<src>/` with a `../../LINEAGE.md`; every campaign does.
+  (A **legacy bare campaign** is lifted into a project first — `new-campaign` Step 0.1 — since the
+  archive/LINEAGE machinery this skill needs exists nowhere else.)
 - Know **what broke** and **which findings it taints** before forking — usually the output of a `debug` /
   `verify` session that exposed the invalidating bug. Do not fork on suspicion; fork on a diagnosed cause.
 

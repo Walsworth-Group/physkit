@@ -10,6 +10,16 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{{PYTHON_CMD}} \"$CLAUDE_PROJECT_DIR/scripts/loop_heartbeat.py\""
+          }
+        ]
+      }
     ]
   }
 }

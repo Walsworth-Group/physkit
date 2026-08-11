@@ -6,8 +6,9 @@ number without re-validation + user sign-off (see docs/charter.md). You change w
 
 Primary metric: {{PRIMARY_METRIC}}  ({{PRIMARY_DIRECTION}} = better).
 
-Run `python scripts/metric.py --selftest` before trusting any ranking — it must pass (it gates
-experiment 000). The self-test is what catches a silent convention/sign/units slip.
+The self-test runs **automatically** before every experiment (via run_campaign) and must pass — it gates
+experiment 000 and catches a silent convention/sign/units slip. `python scripts/metric.py --selftest` runs
+it standalone.
 """
 from __future__ import annotations
 

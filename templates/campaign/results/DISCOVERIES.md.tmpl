@@ -1,9 +1,20 @@
 # DISCOVERIES — {{CAMPAIGN_TITLE}}
 
-Settled, multi-evidence findings — the campaign's accumulated knowledge. Write here ONLY after
-**(1)** multiple consistent experiments confirm the finding on `{{PRIMARY_METRIC}}` (with the
-guardrail behavior noted) **AND (2)** an independent verification (`{{VERIFY_SKILL}}`) returned
-CONFIRMED. A single good run is a JOURNAL entry, not a discovery. Number entries D1, D2, ….
+Settled, multi-evidence findings — the campaign's accumulated knowledge, **positive AND negative**.
+Write here ONLY after **(1)** multiple consistent experiments confirm the finding on
+`{{PRIMARY_METRIC}}` (with the guardrail behavior noted) **AND (2)** an independent verification
+(`{{VERIFY_SKILL}}`) returned CONFIRMED and wrote its verdict artifact — **every entry cites its
+`results/verdicts/<id>.json` by name** (the enforcement hook checks the citation). A single good run
+is a JOURNAL entry, not a discovery. Number entries D1, D2, ….
+
+**Steering-negatives are discoveries too.** A negative the campaign will *act* on — it kills a
+lever/topology branch, declares a ceiling, shelves a direction, or contradicts its a-priori
+prediction — is promoted here with its **kill tier** (from the verify verdict): **REFUTED**
+(mechanism understood, the idea cannot work → prunes) or **EVIDENCE AGAINST** (clean single negative
+→ shelved, revivable; independent entries may accumulate toward a prune). An **INCONCLUSIVE** kill
+(cause unattributed — the implementation, not the idea, may be at fault) never graduates: queue a
+fix-and-rerun unit instead. Number negative entries N1, N2, … and state the mechanism, not just the
+outcome. Routine below-best results stay on the scoreboard.
 
 > **Retractions live HERE, append-only — a reversed finding is never silently deleted or fixed only in a
 > side note (a memory file, a later journal line).** When new evidence overturns or narrows a discovery,
@@ -21,6 +32,16 @@ verification verdict; the metric delta vs the comparison baseline]
 **Details.** [mechanism / why it works; caveats and limits; ⇒ the actionable consequence for the levers]
 **Implications.** [over what range it holds; what it *newly predicts or enables*; which open question it bears
 on — the significance beyond this campaign, stated honestly (Wieman decision 27)]
+
+<!-- Steering-negative entry — use this shape for a verified kill (REFUTED or EVIDENCE AGAINST):
+## N1. [the direction killed/shelved, one line] — [REFUTED | EVIDENCE AGAINST]
+**Claim.** [what does not work, and within what scope]
+**Mechanism.** [WHY it fails — the reasoning/proof (REFUTED) or the clean experimental evidence
+(EVIDENCE AGAINST); never "it scored low"]
+**Evidence.** [exp IDs, scripts, artifacts; the verdict artifact: results/verdicts/<id>.json]
+**Steering effect.** [REFUTED: branch pruned. EVIDENCE AGAINST: shelved in results/queue.json with
+this entry cited; revivable by the planner; accumulation status if other N-entries bear on it]
+-->
 
 <!-- Retraction/revision entry — use this shape when a later finding overturns or narrows an earlier one:
 ## REVISES D1 — [what changed, one line]  (YYYY-MM-DD)

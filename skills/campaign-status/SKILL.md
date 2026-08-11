@@ -15,11 +15,13 @@ a dated checkpoint note, and snapshotting the session transcript to `transcripts
 edits the scoreboard, results, configs, or anything FROZEN.
 
 ## Two scopes — campaign checkpoint (default) vs project checkpoint
-- Invoked **inside a campaign** (`docs/charter.md` present) → the per-campaign checkpoint (the rest of this
-  skill, the default).
-- Invoked at a **project root** (`PROJECT.md` + `LINEAGE.md` + `campaigns/`) → the **cross-campaign** checkpoint
-  in *Project mode* (next section). Detect by which files are present; if both scopes are plausible (a project
-  root that is also mid-campaign work), do the project pass first, then descend into the active campaign.
+Every campaign lives inside a project, so **both scopes are always available** — which one you run is where
+you were invoked and how far back the user wants to step.
+- **Inside a campaign** (`docs/charter.md` present) → the per-campaign checkpoint (the rest of this skill,
+  the default).
+- **At the project root** (`PROJECT.md` + `LINEAGE.md` + `campaigns/`) → the **cross-campaign** checkpoint in
+  *Project mode* (next section). Asked for both, or ambiguous → project pass first, then descend into the
+  active campaign.
 
 ## Project mode — the cross-campaign checkpoint
 At a project root, step back over the WHOLE investigation, not one loop:
@@ -102,19 +104,41 @@ Flag (don't silently fix) anything wrong:
   (or scoreboard row) with no completed `logbook.md`/`JOURNAL.md` entry and no graded outcome is an
   **orphan**: results sitting on disk while their analysis/verdict was deferred and lost at a session
   boundary is the single most common ledger leak. Flag every orphan to be completed now.
-- **The verification gate is actually wired** — `.claude/settings.json` exists and registers the
-  `guard_discoveries` PreToolUse hook. An imported / hand-built / relocated tree frequently *loses* it,
-  leaving the gate decorative (a real campaign once ran with no `.claude/` at all). If missing, flag loudly
-  and re-run the `new-campaign` `.claude` wiring step.
-- **The prompt surface is current** (loops running agents beyond the main session — Task subagents,
-  SDK-spawned roles): the prompt-surface audit has been re-run since the most recent prompt change, with
-  every relied-upon rule present in each role's context *as rendered*, dynamic blocks included
-  (`docs/reference/prompt-surface-audit.md`). A rule that fell out of a rendered context is not in force,
-  however loudly the charter states it.
+- **The enforcement layer is actually wired — assert all of it, loudly.** An imported / hand-built /
+  relocated tree frequently loses the gates, leaving the doctrine decorative (a real campaign once ran with
+  no `.claude/` at all; two siblings ran 39 experiments with no gate). Check each:
+  - `.claude/settings.json` exists and registers the `guard_discoveries` PreToolUse hook;
+  - `scripts/guard_discoveries.py` present and current (the verdict-artifact version, not the retired
+    60-minute-window one);
+  - `predictions/` exists and **every scoreboard row has its `predictions/<exp_name>.json`** — report
+    coverage as n/N (the runner's spend gate makes new gaps impossible; a gap means the tree predates the
+    gate or bypassed the runner);
+  - `results/verdicts/` exists and **every DISCOVERIES entry cites a verdict artifact that resolves**
+    (exists, CONFIRMED, named refuter; kill entries carry a graduating tier);
+  - `configs/loop.json` parses, when the campaign runs supervisor mode.
+  Any miss: flag loudly and re-run the `new-campaign` `.claude`/wiring step.
+  **Also check `results/gate_failures.log`:** any line there is a recorded fail-open/allowed-on-error
+  bypass — treat a non-empty log as a hard hygiene failure and re-verify every finding written since its
+  earliest timestamp.
+- **The loop gate is wired, and the loop is actually producing** — `.claude/settings.json` also registers
+  the `loop_heartbeat` **Stop** hook (single-session mode; under `--supervise` the DRIVER is the liveness
+  monitor and workers legitimately end per-unit — the heartbeat stands down for driver-spawned workers).
+  Then read `results/loop_stops.log`: a `STALL_RELEASE` line is the loud one — the loop was continued to its
+  cap without producing a single new scoreboard row, so the wall-clock since the preceding entry bought
+  nothing. Diagnose *why* (a hung run, an erroring script, re-planning instead of executing) rather than
+  restarting into the same stall. `SENTINEL` / `STOP_REQUEST` lines are normal history; cross-check any
+  archived `exhausted` request in `results/stop_requests/` against the levers list — a direction declared
+  finished while an untried lever existed is a finding for the review.
 - The **current-best is independently verified** — if a config is acting as current-best or a DISCOVERY
-  without a CONFIRMED `verify` verdict, recommend running `verify` on it now. The hook guards *DISCOVERIES
-  writes* only — it does **not** see scoreboard edits, so a current-best can be promoted unverified; a
+  without a CONFIRMED `verify` verdict, recommend running `verify` on it now. The hook now also guards the
+  scoreboard `verified: CONFIRMED` / `NEW BEST` mark and `RECOMMENDED.json` (a token-marked promotion needs
+  a recorded CONFIRMED verdict); but a current-best asserted WITHOUT those tokens can still slip past, and a
   current-best / DISCOVERY-backed row whose **`verified` column is blank** is a hygiene failure to surface.
+- **The SHELVED pool is reviewed, not forgotten** — units shelved after two declinations or an
+  EVIDENCE-AGAINST kill sit in `results/queue.json` with their reasons; confirm each still deserves its
+  shelf (a promotion or frame change since it was shelved is a revival trigger for the planner), and that
+  accumulating EVIDENCE-AGAINST entries against one branch have been consolidated into a prune decision
+  rather than left dangling.
 - **Comparability tags present** — every scoreboard row carries `metric_version` + `data_version`, and no
   "current best" ranks rows scored under *different* versions; a cross-version comparison is a silent error
   (re-score contenders under the current version first). If a version change **invalidates** prior findings
@@ -137,8 +161,11 @@ Flag (don't silently fix) anything wrong:
 - PROVISIONAL findings are tracked and not silently treated as settled.
 - The metric **self-test still passes** (`python scripts/metric.py --selftest`) and diagnostics were
   tee'd to logs, not left in the console.
-- **The correctness suite is GREEN** — if the campaign maintains a `correctness-suite`, confirm it was
-  re-run after the latest core change and passes; a result standing on a red suite is not trustworthy.
+- **The correctness suite is GREEN** — confirm `results/correctness_state.json` is `green` (≥1 active
+  check) and was re-run after the latest core change. Only an affirmative green green-lights a promotion;
+  `red`/`empty` (zero active checks)/`error`/`absent` all BLOCK it (EH-9). If the campaign is promoting under
+  a `tests/CORRECTNESS_NA.md` waiver (absent/empty excused), surface that explicitly — a recorded N/A is
+  legitimate but must be a visible, deliberate decision, not an unnoticed gap.
 - **Every experiment has its reproducibility snapshot** (`results/snapshots/<label>/` — config + code +
   manifest); a result without one is not "saved".
 

@@ -30,6 +30,41 @@ placeholders by design — set each from your instrument's own tolerances (and,
 where possible, from a simulation of the measurement's sensitivity to the
 hazard), then record the chosen value in the charter.
 
+One framing consequence up front: in a qualified loop the **operational
+guarantees are deliverables equal to the number**. Uptime, graceful sharing,
+starvation-free scheduling, and quarantine hygiene are not infrastructure in
+service of the science — they are part of what the campaign produces. A
+precise result from a loop that starved for six hours and cannot say so is
+not a finished result.
+
+## 0. An example loop, assembled
+
+The sections below are components. This is one worked example of how they
+compose into a single iteration — an illustration, not a required skeleton.
+What transfers is the **ordering** (gate before you spend, quarantine before
+you score), not the step count.
+
+1. **PROPOSE** an acquisition within the lever space, carrying an **a-priori
+   bound**: an expected value, a range, and the ceiling argument that
+   justifies it (noise floor, coherence/lifetime wall, sampling limit). No
+   range, no dispatch — an unbounded proposal cannot be surprised by its own
+   result, so it cannot learn from one.
+2. **EMISSION GATE** (§7): deterministically reject fatally-flawed designs
+   and safety violations, returning the reason to the proposer. The cheapest
+   possible abort is the one that costs no instrument time.
+3. **DISPATCH** the work order with its provenance block (§2); the instrument
+   side acknowledges by sibling marker.
+4. **WHILE WAITING** (§3, §4, §7): off-instrument work only; poll at a calm
+   fixed cadence; keep the staleness-gated calibration current with the
+   starvation guard armed; re-assess the running acquisition and write the
+   abort sentinel on a deterministic fatal verdict below the completion
+   ceiling.
+5. **INGEST** through the quarantine gate (§6), score with the frozen metric,
+   append the scoreboard row (§8).
+6. **ANALYZE** expected-vs-found: a result outside the step-1 envelope is a
+   bug or a discovery, and which one is settled by evidence, not by which
+   you would rather it be. Log it, update the journal, repeat.
+
 ## 1. The readiness gate: qualify unattended on a known answer
 
 Before any campaign whose answer you care about, the **loop itself** must
@@ -44,9 +79,16 @@ unattended uptime; science acquisitions completed per unit time; fraction of
 acquisitions quarantined; zero starvation intervals longer than a set bound;
 state surviving a controlled restart; and agreement of the measured value
 with the accepted one within a pre-set tolerance (pass/fail, not a number to
-tune toward). A gate FAIL names the guard that was missing, the guard is
+tune toward). Enforce that last one mechanically by **blinding**: the loop
+never sees the accepted value, and only a referee outside the loop compares.
+"Not a number to tune toward" is a hope while the number is in context and a
+guarantee once it is not.
+
+A gate FAIL names the guard that was missing, the guard is
 built, and the full gate is re-run — fix-and-re-gate is the intended flow,
-not an embarrassment. Date the gate-pass event; later campaigns cite it.
+not an embarrassment. The same applies mid-campaign: a crash or a wedge is an
+**operations** bug to fix and re-gate, never a data point against the physics
+idea under test. Date the gate-pass event; later campaigns cite it.
 
 ## 2. The agent–instrument handshake: files, not sockets
 
@@ -128,7 +170,10 @@ the record. Two disciplines: thresholds are set **from the measurement's own
 tolerance** (simulate the hazard's effect on your observable, then pick the
 line), and a quarantine is never silent — it appears in the run records with
 its reason, because a quietly-dropped result and a quietly-kept bad result
-are the same integrity failure.
+are the same integrity failure. A third: thresholds may be **ratcheted only
+toward more faithful, never merely more lenient**, and every change is
+versioned. A threshold that loosens because too much is being quarantined is
+the metric-gaming move wearing a data-quality costume.
 
 ## 7. Abort provably-useless acquisitions — deterministically
 
@@ -164,10 +209,14 @@ counters, completed-work ledger — persists across restarts keyed to the
 durable file protocol of §2, so a controlled restart is a non-event and an
 uncontrolled one is recoverable.
 
+A hardware scoreboard therefore needs columns the compute archetypes do not:
+**`T_wall` estimated AND actual** (keeping the pair is what exposes an
+estimation bug before it has silently compounded), **calibration age at
+start** (so a stale-calibration result stays identifiable long after ingest),
+and **quarantine status with its reason**.
+
 ---
 
 *See also:* `ARCHETYPE_CHEATSHEET.md` §E (metric/levers/frozen for this
-archetype) · `examples/charter-files/charter_hardware_loop.md` (a filled
-charter exercising these patterns) · the `campaign-status` skill (periodic
-health checks — extend its checklist with §5's progress assertion for
-hardware campaigns).
+archetype) · the `campaign-status` skill (periodic health checks — extend its
+checklist with §5's progress assertion for hardware campaigns).

@@ -26,9 +26,13 @@ specialized to physical-simulation correctness.
 
 **Where it lives (campaign).** The scaffold ships at `tests/correctness_checks.py` (+ `tests/README.md`) —
 five skip-stubs (analytic-limit · invariants · parity · convergence · regression) you fill from
-`docs/VERIFICATION_PLAN.md`. `run_campaign.py` warns if it's absent and (under `--selftest`) runs it and
-warns on red; `verify` treats a red suite as a promotion blocker; re-run it after any core/FROZEN change
-(`docs/protocols/checkpoint.md`). Run: `python tests/correctness_checks.py` (exit 0 = green).
+`docs/VERIFICATION_PLAN.md`. `run_campaign.py` runs it on every experiment and records the status; only an
+**affirmative GREEN** green-lights a promotion — RED, **EMPTY** (zero active checks: the all-skip scaffold),
+ERROR, and ABSENT all BLOCK it via `guard_discoveries` (EH-9), so deleting or never-finishing the suite is
+not a way past the gate. A genuinely-no-simulator campaign records an explicit `tests/CORRECTNESS_NA.md`
+(a reviewable N/A decision) to proceed. `verify` treats a non-green suite as a promotion blocker; re-run
+after any core/FROZEN change (a stale green is rejected too, EH-8; `docs/protocols/checkpoint.md`). Run:
+`python tests/correctness_checks.py` (exit 0 = green · 1 = failed · 2 = empty).
 
 ---
 
@@ -121,6 +125,11 @@ This is the compounding payoff. **When a bug is found and fixed, add the check t
 a minimal reproducing case asserting the now-correct behavior — to the standing suite. When the verification
 plan turns up a new application-specific check, add it. The suite then only grows stronger, and the same bug
 can never silently return. New checks are appended as the work uncovers them.
+
+When the bug was a **silent failure whose output imitated the effect under study** (`debug`'s gotcha catalog)
+— exit 0, no NaNs, an ordinary convergence metric, and a result that reads like the sought signature — the
+regression check is a **physical magnitude floor calibrated on a validated corpus**, not a tighter tolerance
+on the solver's own status. Assert it on every run that writes the artifact, not only on the case that failed.
 
 ## Composition
 - **Upstream:** `simulation-design` / `frame-problem` hand over the V&V plan and the application-specific

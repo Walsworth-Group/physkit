@@ -1,43 +1,63 @@
 #!/usr/bin/env python3
-"""guard_discoveries.py — PreToolUse hook: block a DISCOVERIES write that wasn't independently verified.
+"""guard_discoveries.py - PreToolUse hook: a PROMOTION write must be independently CONFIRMED.
 
-Enforces the campaign's #1 hard gate: a finding may not be promoted to results*/DISCOVERIES.md unless
-an independent verification ran recently (the verify skill, which spawns a refuter sub-agent). Reads the
-PreToolUse hook JSON on stdin (tool_name, tool_input, transcript_path). Allows everything except a
-Write/Edit to a DISCOVERIES file with no recent verify event in the session transcript.
+Enforces the campaign's #1 hard gate on every promotion surface. A finding - POSITIVE or NEGATIVE
+(steering-negatives are discoveries too) - may not be promoted unless the verify skill's independent
+refuter recorded a promotable verdict artifact in results/verdicts/<id>.json:
+    {"claim": "...", "exp_id": "...", "verdict": "CONFIRMED", "kill_tier": null,
+     "refuter": "<agent/session id>", "utc": "...", "summary": "..."}
+For a NEGATIVE (kill-claim) finding, "kill_tier" is "REFUTED" or "EVIDENCE_AGAINST" (an "INCONCLUSIVE"
+kill never graduates - it queues a fix-and-rerun unit instead).
 
-FAIL-OPEN by design: any parsing/IO error -> allow (a hook bug must never brick a campaign). Flip
-FAIL_OPEN to False for strict mode. Window is configurable via AUTORESEARCH_VERIFY_WINDOW_MIN (default 60).
+Three promotion surfaces, two strictness tiers (merged design, 2026-08-08 - the citation protocol and
+the surface/recency protocol were built independently on two branches and are complementary):
+  * results*/DISCOVERIES.md writes - SUBJECT-MATCHED + FAIL-CLOSED: the entry must cite its verdict
+    file by name (incl. REVISES/retraction entries - an invalidation is as load-bearing as a promotion);
+    the cited artifact must be CONFIRMED with a named refuter and a graduating kill tier. Any guard
+    error on this surface DENIES - a bad DISCOVERIES write is the one unrecoverable ledger write.
+  * RECOMMENDED*.json (current-best) writes and scoreboard writes that INTRODUCE a `CONFIRMED` /
+    `NEW BEST` token - RECENCY-CHECKED + FAIL-OPEN-LOGGED: a CONFIRMED verdict artifact WITH A NAMED
+    INDEPENDENT REFUTER (and a graduating kill tier if any) must exist within AUTORESEARCH_VERIFY_WINDOW_MIN
+    (default 60) - the same refuter the DISCOVERIES surface requires, because hard gate #1's warrant is the
+    independent refuter, not merely that a CONFIRMED file exists (a self-authored / refuterless verdict does
+    not promote). These files are recoverable, so a guard *error* here allows BUT logs to
+    results/gate_failures.log (campaign-status hard-fails on a non-empty log); a refuterless verdict is a
+    clean, recoverable DENY (fix the verdict or run verify, then retry), not a bypass.
+Both surfaces also require an AFFIRMATIVE GREEN correctness suite (results/correctness_state.json, written
+by run_campaign) - not merely 'not red' (EH-9). RED, EMPTY (a freshly-scaffolded all-skip suite: zero active
+checks), ERROR, ABSENT, and a never-run (no state file) all block, because none is evidence the machinery is
+right - deleting/never-finishing the suite was the trivial silent bypass. ABSENT/EMPTY are excused only by an
+explicit tests/CORRECTNESS_NA.md (a recorded N/A decision, never a silent gap). A green is further rejected
+if STALE - recorded against a different FROZEN/core hash than the code on disk now (EH-8; the file set is
+scripts/frozen_core.py). No finding built on a red/empty/absent suite, or on a green that no longer matches
+the code it certified, is trustworthy.
 
-SCOPE (know the gaps this hook does NOT close — campaign-status covers them):
-  * It guards ONLY DISCOVERIES writes. It does NOT see scoreboard edits, so a "current best" can still be
-    promoted unverified — that is enforced by charter.md's promotion rule + the campaign-status hygiene check.
-  * It only fires if THIS tree wired it (.claude/settings.json registers it). An imported / hand-built /
-    relocated tree often has no .claude/ and runs with NO gate — campaign-status asserts the hook is wired.
-  * FAIL_OPEN means a parse/IO error silently allows the write; the campaign-status verified-column check is
-    the backstop that catches anything the hook let through.
+A normal scoreboard row append (no promotion token) is recording, not promotion - never gated. Writes
+to anything else are always allowed; unparseable stdin is allowed + logged (we cannot even tell what is
+being written).
+
+SCOPE (gaps campaign-status backstops): the scoreboard signal is token-based - a promotion phrased
+without those tokens slips past (verified-column check is the backstop); the hook only fires if THIS
+tree wired it (.claude/settings.json) - campaign-status asserts the wiring.
 """
 from __future__ import annotations
-import json, os, re, sys, glob
+import json
+import os
+import re
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
-FAIL_OPEN = True
+VERDICT_REF_RE = re.compile(r"verdicts[/\\]([\w\-.]+\.json)")
+PROMOTABLE = {"CONFIRMED"}
 WINDOW_MIN = int(os.environ.get("AUTORESEARCH_VERIFY_WINDOW_MIN", "60"))
-VERIFY_RE = re.compile(r"verif|refut|adversar|independent[- ]?check", re.I)
-
-
-def _ts(s):
-    try:
-        return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
-    except Exception:
-        return None
 
 
 def _allow():
     sys.exit(0)
 
 
-def _deny(reason):
+def _deny(reason: str):
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
         "permissionDecision": "deny",
@@ -46,69 +66,288 @@ def _deny(reason):
     sys.exit(0)
 
 
-def recent_verify(transcript_path, now):
-    """True if a verify skill or a refuter sub-agent ran within WINDOW_MIN before now."""
-    if not transcript_path or not os.path.isfile(transcript_path):
-        # try to find the newest jsonl in the same dir
-        cands = sorted(glob.glob(os.path.join(os.path.dirname(transcript_path or "."), "*.jsonl")),
-                       key=os.path.getmtime) if transcript_path else []
-        transcript_path = cands[-1] if cands else None
-    if not transcript_path or not os.path.isfile(transcript_path):
-        return None  # unknown -> caller decides via FAIL_OPEN
-    cutoff = now.timestamp() - WINDOW_MIN * 60
-    for line in open(transcript_path, encoding="utf-8", errors="replace"):
-        line = line.strip()
-        if not line:
-            continue
+def _campaign_root(fp: Path) -> Path | None:
+    """The dir holding scripts/ + configs/, walking up from the written file."""
+    for parent in fp.parents:
+        if (parent / "scripts").is_dir() and (parent / "configs").is_dir():
+            return parent
+    return None
+
+
+def _note_bypass(root: Path | None, reason: str):
+    """Fail-open must never be silent: record it so campaign-status can hard-fail on it."""
+    try:
+        log = (root or Path(".")) / "results" / "gate_failures.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now(timezone.utc).isoformat()}\tFAIL-OPEN\t{reason}\n")
+    except Exception:
+        pass
+
+
+def _edit_chunks(ti):
+    """Yield (new_text, old_text) pairs a Write / Edit / MultiEdit introduces."""
+    if ti.get("content") is not None:
+        yield str(ti.get("content", "")), ""
+    if ti.get("new_string") is not None:
+        yield str(ti.get("new_string", "")), str(ti.get("old_string", "") or "")
+    for e in (ti.get("edits") or []):
+        if isinstance(e, dict):
+            yield str(e.get("new_string", "")), str(e.get("old_string", "") or "")
+
+
+def _written_text(ti) -> str:
+    return "\n".join(new for new, _ in _edit_chunks(ti))
+
+
+def _read_correctness(root: Path | None) -> dict | None:
+    """The recorded correctness-suite state dict, or None if there is no readable state file."""
+    if root is None:
+        return None
+    state = root / "results" / "correctness_state.json"
+    if not state.is_file():
+        return None
+    try:
+        return json.loads(state.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _has_na_waiver(root: Path | None) -> bool:
+    """A recorded N/A decision: tests/CORRECTNESS_NA.md exists with a non-empty rationale. It excuses ONLY an
+    ABSENT or EMPTY suite (a campaign with genuinely no simulator to check) - never RED/ERROR (a real or
+    broken suite). Making the gap an explicit, reviewable file is the point: it kills the SILENT bypass
+    (delete/never-build the suite), not the possibility of a deliberate, recorded N/A."""
+    if root is None:
+        return False
+    w = root / "tests" / "CORRECTNESS_NA.md"
+    try:
+        return w.is_file() and bool(w.read_text(encoding="utf-8").strip())
+    except Exception:
+        return False
+
+
+def correctness_blocks_promotion(root: Path | None) -> str | None:
+    """Deny-reason if the correctness suite does NOT green-light a promotion, else None (EH-9).
+
+    Promotion requires an AFFIRMATIVE GREEN - not merely 'not red'. A freshly-scaffolded all-skip suite
+    (EMPTY), a missing suite (ABSENT), an unreadable/anomalous state (ERROR), and a never-run state (no file)
+    all block, because none is evidence the machinery is right; deleting or never-finishing the suite was the
+    trivial silent bypass this closes. ABSENT/EMPTY are excused by an explicit tests/CORRECTNESS_NA.md."""
+    st = _read_correctness(root)
+    status = str((st or {}).get("status", "")).strip().lower() if st is not None else None
+    if status == "green":
+        return None
+    if status in ("absent", "empty", None):
+        if _has_na_waiver(root):
+            return None
+        which = status.upper() if status else "MISSING (run_campaign has not run its FROZEN-infra gates)"
+        return (f"the correctness suite is {which} - no active checks guard the machinery, so it cannot "
+                "green-light a promotion. Add >=1 real check (correctness-suite skill) and re-run "
+                "run_campaign, or record an explicit N/A decision in tests/CORRECTNESS_NA.md (with a "
+                "rationale) if this campaign genuinely has no simulator.")
+    return (f"the correctness suite is {status.upper()} - a result built on a red/broken suite is not "
+            "trustworthy. Fix the suite and re-run run_campaign before promoting.")
+
+
+def _current_core_hash(root: Path | None) -> str | None:
+    """Hash the FROZEN/core files on disk NOW, via the campaign's OWN frozen_core.py (the single source of
+    truth for the core-file set - the guard must not fork that list). None if it cannot be determined."""
+    if root is None:
+        return None
+    scripts = root / "scripts"
+    if not (scripts / "frozen_core.py").is_file():
+        return None
+    try:
+        if str(scripts) not in sys.path:
+            sys.path.insert(0, str(scripts))
+        import frozen_core  # campaign-local; existence just confirmed
+        return frozen_core.core_hash(root)
+    except Exception:
+        return None
+
+
+def green_is_stale(root: Path | None) -> bool:
+    """True if the recorded correctness state is GREEN but was recorded against a DIFFERENT core than the code
+    on disk now (EH-8) - a stale green must not gate a promotion (edit the FROZEN scorer, then promote an old
+    result). Compares correctness_state.json's stored core_hash to a freshly computed one.
+
+    Fail-SAFE: any inability to judge (no state, not green, no stored hash, frozen_core missing/unimportable,
+    core unreadable) returns False. Staleness is an ADDED protection layer, so an error degrades to pre-EH-8
+    behavior - it never over-blocks a legitimate promotion."""
+    if root is None:
+        return False
+    st = _read_correctness(root)
+    if st is None:
+        return False
+    if str(st.get("status", "")).strip().lower() != "green":
+        return False                       # non-green is owned by correctness_blocks_promotion, not staleness
+    recorded = st.get("core_hash")
+    if not recorded:
+        return False                       # pre-EH-8 state carries no hash -> cannot judge staleness
+    current = _current_core_hash(root)
+    if not current:
+        return False                       # cannot hash the core now -> do not enforce
+    return recorded != current
+
+
+def _find_verdict(discoveries_path: Path, root: Path | None, name: str) -> Path | None:
+    candidates = [discoveries_path.parent / "verdicts" / name]
+    if root is not None:
+        candidates.append(root / "results" / "verdicts" / name)
+    for c in candidates:
+        if c.is_file():
+            return c
+    return None
+
+
+def _check_verdict(path: Path, name: str) -> str | None:
+    """Deny-reason if the cited verdict artifact does not clear the gate, else None."""
+    v = json.loads(path.read_text(encoding="utf-8"))
+    verdict = str(v.get("verdict", "")).strip().upper()
+    if verdict not in PROMOTABLE:
+        return (f"verdicts/{name} has verdict '{verdict or 'MISSING'}' - only CONFIRMED graduates "
+                "(PROVISIONAL/QUESTIONABLE stay working results with their caveat inline)")
+    tier = v.get("kill_tier")
+    if tier:
+        tier_norm = str(tier).strip().upper().replace(" ", "_")
+        if tier_norm not in {"REFUTED", "EVIDENCE_AGAINST"}:
+            return (f"verdicts/{name} kill_tier '{tier}' cannot graduate - an INCONCLUSIVE kill "
+                    "(cause unattributed) queues a fix-and-rerun unit; it does not prune")
+    # `or ""` NOT `, ""`: an explicit JSON null ("refuter": null) makes .get return None, and str(None)
+    # is the NON-EMPTY string "None" - which passed this check and promoted. That is exactly what a model
+    # leaves behind when it copies the verdict stub without filling the field, and it was observed live
+    # (CS-3-V Tier 3a: a real worker promoted a current-best on refuter:null). Missing key, "", "   ",
+    # null, and false must all deny; only a real id promotes.
+    if not str(v.get("refuter") or "").strip():
+        return (f"verdicts/{name} names no refuter - the verdict must come from an independent "
+                "agent, not the generating session")
+    return None
+
+
+def recent_promotable_verdict(root: Path | None) -> bool:
+    """True if a recent (within WINDOW_MIN) verdict artifact CLEARS THE FULL GATE - CONFIRMED, a graduating
+    kill tier if any, AND a named independent refuter (the same `_check_verdict` the DISCOVERIES surface
+    applies). Hard gate #1's warrant is the independent refuter, so a self-authored / refuterless CONFIRMED
+    verdict does NOT promote a current-best. Recency-, not subject-, matched (that residual is
+    campaign-status' backstop)."""
+    if root is None:
+        return False
+    vdir = root / "results" / "verdicts"
+    if not vdir.is_dir():
+        return False
+    cutoff = datetime.now(timezone.utc).timestamp() - WINDOW_MIN * 60
+    for p in sorted(vdir.glob("*.json")):
         try:
-            r = json.loads(line)
+            v = json.loads(p.read_text(encoding="utf-8"))
         except Exception:
             continue
-        ts = _ts(r.get("timestamp"))
-        if not ts or ts.timestamp() < cutoff:
+        try:
+            t = datetime.fromisoformat(str(v.get("utc", "")).replace("Z", "+00:00")).timestamp()
+        except Exception:
+            t = p.stat().st_mtime
+        if t < cutoff or str(v.get("verdict", "")).strip().upper() != "CONFIRMED":
             continue
-        if r.get("type") == "assistant" and VERIFY_RE.search(str(r.get("attributionSkill", ""))):
-            return True
-        msg = r.get("message", {})
-        if isinstance(msg, dict) and isinstance(msg.get("content"), list):
-            for it in msg["content"]:
-                if not isinstance(it, dict) or it.get("type") != "tool_use":
-                    continue
-                name = it.get("name", ""); inp = it.get("input", {}) or {}
-                if name == "Skill" and VERIFY_RE.search(str(inp.get("skill", "")) + str(inp.get("command", ""))):
-                    return True
-                if name in ("Agent", "Task") and VERIFY_RE.search(
-                        str(inp.get("subagent_type", "")) + str(inp.get("description", "")) + str(inp.get("prompt", ""))):
-                    return True
+        try:
+            if _check_verdict(p, p.name) is None:   # CONFIRMED + graduating kill tier + named refuter
+                return True
+        except Exception:
+            continue                                # unreadable/malformed here is fail-open (surface 2)
+    return False
+
+
+def scoreboard_promotion(ti) -> bool:
+    """True if this write INTRODUCES a `CONFIRMED` / `NEW BEST` token into the scoreboard."""
+    if "scoreboard" not in str(ti.get("file_path", "")).lower():
+        return False
+    for new, old in _edit_chunks(ti):
+        for tok in ("CONFIRMED", "NEW BEST"):
+            if tok in new and tok not in old:
+                return True
     return False
 
 
 def main():
     try:
         data = json.load(sys.stdin)
+        tool_name = data.get("tool_name", "")
+        ti = data.get("tool_input") or {}
+        fp_str = str(ti.get("file_path", ""))
     except Exception:
+        _note_bypass(None, "could not parse hook stdin")
         _allow()
+        return
+    if tool_name not in ("Write", "Edit", "MultiEdit"):
+        _allow()
+        return
+    fp = Path(fp_str) if fp_str else None
+    root = _campaign_root(fp) if fp else None
+
+    # ---- surface 1: DISCOVERIES writes - subject-matched, FAIL-CLOSED ----
+    if "DISCOVER" in fp_str.upper():
+        try:
+            suite_reason = correctness_blocks_promotion(root)
+            if suite_reason:
+                _deny("DISCOVERIES gate: " + suite_reason)
+                return
+            if green_is_stale(root):
+                _deny("DISCOVERIES gate: the correctness suite's green was recorded against a DIFFERENT "
+                      "version of the FROZEN/core code than what is on disk now (scripts/frozen_core.py) - a "
+                      "green does not survive an edit to the code it certified. Re-run the experiment (or the "
+                      "suite via run_campaign) so it validates the current core, then promote. Hard gate #1 / EH-8.")
+                return
+            refs = sorted(set(VERDICT_REF_RE.findall(_written_text(ti))))
+            if not refs:
+                _deny("DISCOVERIES gate: the entry cites no verdict artifact. Every DISCOVERIES entry "
+                      "(positive, negative, or REVISES) must cite its results/verdicts/<id>.json - run "
+                      "the verify skill (it spawns an independent refuter and writes the verdict "
+                      "artifact), get CONFIRMED, then cite the file in the entry. CLAUDE.md hard gate #1.")
+                return
+            problems = []
+            for name in refs:
+                found = _find_verdict(fp, root, name)
+                if found is None:
+                    problems.append(f"cited verdict artifact not found: verdicts/{name}")
+                else:
+                    reason = _check_verdict(found, name)
+                    if reason:
+                        problems.append(reason)
+            if problems:
+                _deny("DISCOVERIES gate: " + " | ".join(problems))
+                return
+            _allow()
+        except Exception as exc:
+            _deny(f"DISCOVERIES gate (fail-closed): could not validate the promotion ({exc}). Fix the "
+                  "verdict citation or the guard input and retry; a bad promotion is the one "
+                  "unrecoverable ledger write.")
+        return
+
+    # ---- surface 2: RECOMMENDED / scoreboard-token writes - recency-checked, FAIL-OPEN-LOGGED ----
     try:
-        if data.get("tool_name") not in ("Write", "Edit", "MultiEdit"):
+        is_promo = "RECOMMENDED" in fp_str.upper() or scoreboard_promotion(ti)
+        if not is_promo:
             _allow()
-        fp = str((data.get("tool_input") or {}).get("file_path", ""))
-        if "DISCOVER" not in fp.upper():
+            return
+        suite_reason = correctness_blocks_promotion(root)
+        if suite_reason:
+            _deny("promotion gate: " + suite_reason)
+            return
+        if green_is_stale(root):
+            _deny("promotion gate: the correctness suite's green was recorded against a DIFFERENT version of "
+                  "the FROZEN/core code than what is on disk now (scripts/frozen_core.py) - re-run the suite "
+                  "(run_campaign) so it validates the current core before marking a current-best. EH-8.")
+            return
+        if recent_promotable_verdict(root):
             _allow()
-        now = datetime.now(timezone.utc)
-        verified = recent_verify(data.get("transcript_path"), now)
-        if verified is True:
-            _allow()
-        if verified is None and FAIL_OPEN:
-            _allow()  # couldn't read transcript; don't brick the campaign
-        _deny(
-            f"DISCOVERIES gate: no independent verification found in the last {WINDOW_MIN} min. "
-            f"Before promoting a finding, run the verify skill (it spawns an independent refuter sub-agent) "
-            f"and get CONFIRMED, then write DISCOVERIES.md. See CLAUDE.md hard gate #1."
-        )
-    except Exception:
-        if FAIL_OPEN:
-            _allow()
-        _deny("DISCOVERIES gate: guard error (strict mode). Run the verify skill, then retry.")
+            return
+        _deny(f"promotion gate: no CONFIRMED verdict artifact with a NAMED INDEPENDENT REFUTER in "
+              f"results/verdicts/ within the last {WINDOW_MIN} min. A current-best / scoreboard promotion "
+              "needs the same independent refuter as a DISCOVERIES write (hard gate #1) - a self-authored or "
+              "refuterless CONFIRMED verdict does not graduate. Run the verify skill (it spawns the refuter "
+              "and writes the artifact with its id), then promote.")
+    except Exception as exc:
+        _note_bypass(root, f"promotion-surface guard error: {exc}")
+        _allow()
 
 
 if __name__ == "__main__":

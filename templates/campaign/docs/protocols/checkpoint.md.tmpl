@@ -3,6 +3,24 @@
 Fires every {{CHECKPOINT_EVERY}} experiments (`exp_id % {{CHECKPOINT_EVERY}} == 0`). Stop
 feature-chasing and reorient: confirm the campaign is still healthy and still pointed at the goal.
 
+## 0. The iteration contract (supervisor mode) — what iteration N must persist for N+1
+Under `--supervise`, **each iteration runs in a fresh agent context: the ledger is the loop's ONLY
+memory.** Work you did but did not record does not exist for the next iteration — and the driver
+enforces the hard core of this contract structurally (a unit that leaves it incomplete is retried once,
+then halts the loop). Before an iteration ends, it must have persisted:
+
+| What | Where | Checked by |
+|---|---|---|
+| The save-set: result JSON + figure + snapshot | `results/` (the runner's record gate) | driver + runner |
+| A completed logbook entry — narrative slots (Analysis / Expected-vs-found / Verification / NEXT) filled, not stubs | `results/logbook.md` | driver (structural) + `campaign-status` (content) |
+| The JOURNAL working window updated; **any landmine, anomaly, or cross-experiment observation written down** — the next agent cannot smell what you smelled, it can only read what you wrote | `results/JOURNAL.md` | `campaign-status` |
+| Queue state consistent: your unit accepted (removed) or declined (reason appended); new proposals appended with rationales | `results/queue.json` | driver |
+| A declination or ESCALATE, if either happened, with reasons | `results/queue.json` / `results/ESCALATE.md` | driver |
+
+The narrative-quality half of the contract (are the slots *filled well*, is the landmine actually
+actionable?) is `campaign-status`'s audit, not the driver's — the driver checks structure, humans and
+checkpoints check substance.
+
 ## 1. Re-anchor
 Re-read {{REANCHOR_DOCS}} and `results/DISCOVERIES.md`. Is the current line of work still the best use
 of effort, or has a discovery changed what's possible?
@@ -21,6 +39,9 @@ are exhausted? Is the current-best genuinely ahead of the floor by more than the
        narrative AND a graded verdict (a result whose analysis was deferred is the commonest leak).
      - VERIFY GATE WIRED: .claude/settings.json registers the guard_discoveries hook (imported/relocated
        trees lose it); the current-best row's `verified` column is not blank.
+     - LOOP GATE WIRED + PRODUCING: .claude/settings.json also registers the loop_heartbeat Stop hook;
+       results/loop_stops.log has no STALL_RELEASE (continued to the cap with no new scoreboard row =
+       wall-clock that bought nothing — diagnose the stall, don't just restart).
      - COMPARABILITY: every row carries metric_version + data_version; no current-best compares across
        versions (re-score under the current version first).
      - UPSTREAM PREPROCESSING (promotion check): the load-bearing preprocessing feeding the current-best

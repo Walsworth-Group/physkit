@@ -137,7 +137,7 @@ A classic recipe (**Naylor & Finger, 1967**): (1) build a model with high **face
   conserved quantities).
 - **Pin everything:** simulator version + dependencies + config + seed; a result that won't reproduce on
   another machine is a verification problem.
-- **Document assumptions + domain of validity** in `docs/PHYSICS.md`, and re-check them whenever a
+- **Document assumptions + domain of validity** in `../../shared/PHYSICS.md`, and re-check them whenever a
   discovery changes the physics.
 
 ## 5. Simulation-scored search loops (when a search/ML loop is scored by the simulation)
@@ -191,7 +191,7 @@ When you train a surrogate/emulator or manufacture training data:
 - [ ] **Anti reward-hacking:** if a loop optimizes against the simulator — feasibility/convergence gate on candidates; dual direct+downstream objective; winners cross-checked against higher fidelity / experiment.
 - [ ] **Evaluation budget** tracked and benchmarked vs a classical optimizer; a diminishing-returns stop in place (for expensive-eval loops).
 - [ ] **Surrogate/synthetic data:** surrogate validated against the true evaluator; any inversion-trained model passes an extrapolation test.
-- [ ] **Provenance:** simulator version / config / seed pinned; assumptions documented in `docs/PHYSICS.md`.
+- [ ] **Provenance:** simulator version / config / seed pinned; assumptions documented in `../../shared/PHYSICS.md`.
 
 ## References & standards
 Standard references for simulation V&V (per the Wikipedia article above):

@@ -38,8 +38,8 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 - Fill from the **interview** (goal, metric, physics, data, constraints, compute, time). Where the user
   defers (e.g. a parameter they'll fit later), write the placeholder's content as an explicit TODO with
   the deferral noted, not a silent guess.
-- Keep filled prose at the same altitude as the surrounding boilerplate — a filled `charter.md` should
-  read as naturally as a hand-written charter (see `examples/charter-files/`).
+- Keep fills clear, explicit, and concise — specific enough to act on without the interview that
+  produced them.
 
 ---
 
@@ -119,6 +119,7 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 | `{{PROMOTION_CONFIRM_RULE}}` | Extra confirmation needed to promote (e.g. "confirm with a 2nd seed"). |
 | `{{SPREAD_NOUN}}` | Name for the replicate spread (e.g. "seed/param", "seed-to-seed"). |
 | `{{VERIFY_SKILL}}` | The verify skill to invoke (e.g. `/physkit:verify`). |
+| `{{PHYSKIT_SPINE}}` | **Rendered by `new-campaign` Step 3 — not a simple fill.** The campaign-tailored, FROZEN snapshot of `docs/CORE.md` (provenance banner + tailored body) inlined into `CLAUDE.md`; the campaign's reproducible doctrine record. NOT `@`-imported and NOT vendored as a separate hash-checked file. See Step 3 for the tailoring + stamp procedure. |
 | `{{VERIFY_EXTRA_CHECKS}}` | Archetype-specific extra checks the verifier must do, as a clause FRAGMENT appended to "checks for metric contamination" (e.g. ", recomputes the ceilings, and checks the ceiling-vs-gap trap"). Don't repeat "metric contamination". |
 | `{{SYSTEMATIC_AXIS_NOTE}}` | A standalone sentence on the dominant systematic-error axis for this campaign. It follows "…find and fix the cause)." — don't repeat that phrase. |
 | `{{OVERFIT_MODE}}` | The campaign's characteristic overfit mode (e.g. "sim-to-real / val overfit"). |
@@ -210,18 +211,32 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 | `{{TOPIC}}` | A literature topic heading. |
 | `{{NEXT_SEQUENCE}}` | The recommended next-experiment sequence. |
 
-### Project & shared-doc references (in-project vs standalone campaign)
-Filled per **campaign mode** (detected by `new-campaign` Step 0.1). **In-project** campaigns reference the
-project's shared docs — **no local copy** (design §4.1); **standalone** campaigns keep their own `docs/`. Each
-value is a **relative path from the file that contains it**, so the depth differs by file — fill each
-occurrence with the path that actually resolves (the validator checks intra-tree doc links resolve).
+### Project & shared-doc references
+Every campaign lives inside a project, so these always resolve to the project's `shared/` docs — **never a
+local copy** (design §4.1; the validator rejects one). Each value is a **relative path from the file that
+contains it**, so the depth differs by file — fill each occurrence with the path that actually resolves (the
+validator checks intra-tree doc links resolve).
 
-| Placeholder | Meaning | In-project value (by file location) | Standalone value (by file location) |
-|---|---|---|---|
-| `{{PHYSICS_DOC}}` | Path to the governing-physics doc. | campaign-root (charter/README/INTAKE): `../../shared/PHYSICS.md` · `results/` (INDEX/DISCOVERIES): `../../../shared/PHYSICS.md` | campaign-root: `docs/PHYSICS.md` · `results/`: `../docs/PHYSICS.md` |
-| `{{CONVENTIONS_DOC}}` | Path to the conventions doc. | campaign-root: `../../shared/CONVENTIONS.md` · `results/`: `../../../shared/CONVENTIONS.md` | campaign-root: `docs/CONVENTIONS.md` · `results/`: `../docs/CONVENTIONS.md` |
-| `{{SIBLING_FROZEN_MUTABLE}}` | (coupled sibling campaigns only — else DELETE the block) What this campaign FREEZES that a sibling treats as MUTABLE, and vice versa. | — | — |
-| `{{CONSUMED_ARTIFACTS}}` | (coupled sibling campaigns only) The promoted `../../shared/<artifact>_<ver>/` artifacts this campaign READS (never a sibling's working folder). | — | — |
+| Placeholder | Meaning | Value (by file location) |
+|---|---|---|
+| `{{PHYSICS_DOC}}` | Path to the governing-physics doc. | campaign-root (charter/README/INTAKE): `../../shared/PHYSICS.md` · `results/` (INDEX/DISCOVERIES): `../../../shared/PHYSICS.md` |
+| `{{CONVENTIONS_DOC}}` | Path to the conventions doc. | campaign-root: `../../shared/CONVENTIONS.md` · `results/`: `../../../shared/CONVENTIONS.md` |
+| `{{SIBLING_FROZEN_MUTABLE}}` | (coupled sibling campaigns only — else DELETE the block) What this campaign FREEZES that a sibling treats as MUTABLE, and vice versa. | — |
+| `{{CONSUMED_ARTIFACTS}}` | (coupled sibling campaigns only) The promoted `../../shared/<artifact>_<ver>/` artifacts this campaign READS (never a sibling's working folder). | — |
+
+### Project-tree placeholders (`templates/project/`)
+Filled by `new-project` when it creates the home. A one-off project fills these from the campaign interview —
+they are not a second interview.
+
+| Placeholder | Meaning |
+|---|---|
+| `{{PROJECT_TITLE}}` | The project/investigation name (the `PROJECT.md`, `LINEAGE.md`, and project `CLAUDE.md` H1). |
+| `{{PHYSICAL_SYSTEM}}` | One line naming the physical system under investigation. |
+| `{{GOAL_STATEMENT}}` / `{{DECISION_SERVED}}` / `{{DONE_CRITERIA}}` | The end goal, the decision it serves, and what "done" looks like — the same answers that fill the campaign's `PROJECT_ORIENTATION.md`. |
+| `{{SYSTEM_INVARIANTS}}` | Project-wide invariants every campaign inherits (drawn from the topic-4 physics interview). |
+| `{{DATA_LOCATION}}` / `{{DATA_PATH}}` | The canonical-data decision: a read-only copy at `data/`, or the absolute path recorded in `data/DATA_PATH.txt`. This pointer is the project's ONLY absolute path. |
+| `{{PROMOTED_ARTIFACTS}}` | Frozen artifacts promoted to `shared/` — `— (none yet)` in a fresh project. |
+| `{{CAMPAIGN_1_NAME}}` / `_DATE` / `_APPROACH` / `_METRIC` / `_RESULT` / `_DISCOVERIES` / `_KBKEY` | The opening `LINEAGE.md` Campaigns row for the first campaign (`_RESULT` is `pending` until exp 000; `_DISCOVERIES` and `_KBKEY` are `—`). |
 
 ### Framing & planning docs (INTAKE · PROJECT_ORIENTATION · PHYSICS · VERIFICATION_PLAN · protocols/expensive-evaluation)
 These fill the setup/planning docs authored before the loop runs. The `*_PROPOSED` tokens hold the
@@ -272,6 +287,25 @@ restated (frozen) in `charter.md` / `metric.py` under their final names — see 
 | `{{STOP_CRITERION}}` | expensive-evaluation: the diminishing-returns stop criterion. |
 | `{{MIN_DELTA}}` | expensive-evaluation: the minimum improvement that counts as progress. |
 | `{{PATIENCE}}` | expensive-evaluation: how many non-improving evaluations to allow before stopping. |
+
+### Loop configuration (configs/loop.json — supervisor mode)
+Set from the campaign's **unit cost** during the interview; the cadence *inverts* with cost (expensive
+units → plan often, small k; cheap units → plan in strides, large k — keep planner overhead a small
+fraction of loop compute). The plateau threshold is dual-denominated (units AND wall-clock, whichever
+trips first). Rationale: `STRUCTURED_LOOP_PROPOSAL.md` §4.1 rule 4 / ADR-0008.
+
+| Placeholder | Meaning |
+|---|---|
+| `{{UNIT_COST_CLASS}}` | One word for a unit's cost scale: `seconds` / `minutes` / `hours` / `days`. |
+| `{{UNIT_COST_S}}` | Typical wall-clock seconds for one unit (number, order-of-magnitude is fine). |
+| `{{PLANNER_CADENCE_K}}` | Spawn the planner every k accepted units (also the default outstanding-units cap). |
+| `{{PLANNER_MODEL}}` | Model for the planner agent (judgment role — heavier tier; user-owned thereafter). |
+| `{{PLATEAU_M_UNITS}}` | Plateau trigger: no accepted result in m units. |
+| `{{PLATEAU_M_HOURS}}` | Plateau trigger: no accepted result in this much wall-clock (whichever trips first). |
+| `{{MAX_OUTSTANDING_UNITS}}` | Max units queued beyond planner review (default = `{{PLANNER_CADENCE_K}}`). |
+| `{{WORKER_MODEL}}` | Model for iteration workers (lightest that reliably does the task; user-owned). |
+| `{{ITERATION_TIMEOUT_HOURS}}` | Hard wall-clock cap on one worker iteration (> the Extended-tier run cap). |
+| `{{VERIFY_REPRO_THRESHOLD_S}}` | ADR-0008 tier boundary: unit cost at/below → full re-execution in verify; above → judgment + cheapest discriminating spot-check. |
 
 > **Alias note (proposed → final, and near-synonyms).** Several tokens name the **same quantity at
 > different stages or in different docs**; fill them consistently. The a-priori bound/range appears as

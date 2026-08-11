@@ -15,6 +15,20 @@ Every run MUST leave behind, for reproducibility:
     ·  an entry appended to results/logbook.md (this script appends the FACTS automatically; the agent
        completes the narrative slots - Analysis / Verification / NEXT - afterward)
 A result is not "saved" until it has a scoreboard row, a result_<NN>.json, its figure, AND its snapshot.
+
+ARTIFACT GATES (enforced here, in code - hard gates are gates, not reminders):
+  * PREDICTION GATE (spend): a run refuses to start without predictions/<exp_name>.json - a falsifiable
+    a-priori range written BEFORE the solve. A solve without a written prediction is a fishing trip.
+  * SAVE-SET GATE (record): the scoreboard row is appended ONLY after result_<NN>.json, the figure, and
+    the snapshot all exist on disk (hard gate 4 as code).
+Gate violations refuse loudly; an unexpected error *inside* a gate warns and proceeds (fail-open) -
+except that no fallback ever skips the prediction file requirement itself. Promotion (DISCOVERIES) is
+gated separately by scripts/guard_discoveries.py on verdict artifacts in results/verdicts/.
+
+Before the experiment runs, two FROZEN-infrastructure gates fire automatically: the metric self-test
+(hard-fails if the scorer is unimplemented or fails its scrambled-input null control) and the correctness
+suite (its status is recorded to results/correctness_state.json; a RED suite blocks promotion via the
+DISCOVERIES gate).
 """
 from __future__ import annotations
 
@@ -28,6 +42,7 @@ from pathlib import Path
 
 import numpy as np
 
+import frozen_core  # the FROZEN/core file set + content hash (single source of truth; guard reads it too)
 import metric  # the FROZEN scorer (compute_metric, selftest)
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -37,6 +52,9 @@ IMAGES = RESULTS / "images"
 SCOREBOARD = RESULTS / "scoreboard.tsv"
 SNAPSHOTS = RESULTS / "snapshots"
 LOGBOOK = RESULTS / "logbook.md"
+PREDICTIONS = ROOT / "predictions"       # a-priori predictions, one JSON per experiment (spend gate)
+VERDICTS = RESULTS / "verdicts"          # verify-skill verdict artifacts (promotion gate reads these)
+CORRECTNESS_STATE = RESULTS / "correctness_state.json"
 
 
 class _Tee:
@@ -85,10 +103,59 @@ def snapshot_experiment(cfg: dict, config_path: Path | None = None) -> Path:
         (dst / "config.json").write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     (dst / "manifest.txt").write_text(
         f"argv: {' '.join(sys.argv)}\npython: {sys.version.split()[0]}\nnumpy: {np.__version__}\n"
+        f"core_hash: {frozen_core.core_hash(ROOT)}\n"   # WHICH FROZEN/core code this experiment ran against (EH-8)
         f"utc: {_utc_stamp()}\n",
         encoding="utf-8",
     )
     return dst
+
+
+def check_prediction_gate(cfg: dict) -> dict:
+    """SPEND GATE: refuse to run without a falsifiable a-priori prediction written BEFORE the solve.
+
+    predictions/<exp_name>.json must exist and contain:
+        {"exp_name": "...", "predicted": {"low": <num>, "high": <num>}, "rationale": "<why, from units /
+         physical bounds / prior runs>"}
+    The prediction is the control on your bias (charter loop step 1); a result landing OUTSIDE [low, high]
+    is a red flag the analysis must explain before moving on. Violations refuse loudly. An unexpected
+    internal error warns and proceeds (fail-open, per the promote-path-only fail-closed rule) - but a
+    MISSING file is a violation, never an internal error.
+    """
+    p = PREDICTIONS / f"{cfg['exp_name']}.json"
+    if not p.is_file():
+        sys.exit(
+            f"PREDICTION GATE: {p} not found. Write the a-priori prediction BEFORE the run:\n"
+            '  {"exp_name": "%s", "predicted": {"low": <num>, "high": <num>}, "rationale": "<why>"}\n'
+            "A solve without a written prediction is a fishing trip (docs/charter.md, loop step 1)."
+            % cfg["exp_name"]
+        )
+    try:
+        pred = json.loads(p.read_text(encoding="utf-8"))
+        lo, hi = float(pred["predicted"]["low"]), float(pred["predicted"]["high"])
+        falsifiable = np.isfinite(lo) and np.isfinite(hi) and lo < hi and str(pred.get("rationale", "")).strip()
+    except Exception as exc:
+        sys.exit(f"PREDICTION GATE: {p} is malformed ({exc}). It must carry a numeric "
+                 '{"predicted": {"low": ..., "high": ...}} range and a non-empty "rationale".')
+    if not falsifiable:
+        sys.exit(f"PREDICTION GATE: {p} is not falsifiable - require finite low < high and a rationale. "
+                 "An unbounded or empty prediction gates nothing.")
+    print(f"prediction gate OK: {{PRIMARY_METRIC}} in [{lo:g}, {hi:g}] - {pred.get('rationale', '')[:100]}")
+    return pred
+
+
+def assert_save_set(exp_id: str, label: str, fig: Path) -> None:
+    """RECORD GATE (hard gate 4 as code): refuse the scoreboard row until the full save-set exists.
+
+    A result is not "saved" until result_<NN>.json, its figure, AND its snapshot are on disk - a row
+    appended without them is a number with no record behind it. This also means save_figure() must
+    actually write the figure before the first experiment can be recorded - implement it, don't stub it.
+    """
+    missing = [str(p) for p in (RESULTS / f"result_{exp_id}.json", fig, SNAPSHOTS / label)
+               if not p.exists()]
+    if missing:
+        sys.exit("SAVE-SET GATE: refusing the scoreboard row - missing artifacts:\n  "
+                 + "\n  ".join(missing)
+                 + "\nWrite them first (result JSON + figure + snapshot); see docs/protocols/artifacts.md.")
 
 
 def validate_method(cfg: dict) -> None:
@@ -162,19 +229,26 @@ def append_scoreboard_row(row: dict) -> None:
         f.write("\t".join(str(row.get(c, "")) for c in cols) + "\n")
 
 
-def append_logbook(cfg: dict, exp_id: str, label: str, score: float, diags: dict) -> None:
+def append_logbook(cfg: dict, exp_id: str, label: str, score: float, diags: dict,
+                   apriori: dict | None = None) -> None:
     """Append this experiment's entry to the append-only logbook (results/logbook.md).
 
     The FACTS are filled automatically (metric, guardrail, artifact paths, and the hypothesis/prediction
-    read from the config); the agent completes the narrative slots (Analysis / Verification / NEXT)
-    afterward. Append-only: this never edits or reads the rest of the file.
+    read from the prediction artifact + config); the agent completes the narrative slots
+    (Analysis / Verification / NEXT) afterward. Append-only: this never edits or reads the rest of the file.
     """
+    if apriori:
+        rng = apriori.get("predicted", {})
+        predicted_line = (f"[{rng.get('low')}, {rng.get('high')}] - {apriori.get('rationale', '')} "
+                          f"(predictions/{cfg['exp_name']}.json)")
+    else:
+        predicted_line = cfg.get("_predicted", "(missing - the prediction gate should have caught this)")
     # One bold-labelled field per line, as a Markdown bullet list, so fields render on separate lines
     # (a single newline renders as a space in Markdown, which would collapse them into one paragraph).
     entry = (
         f"\n## {exp_id} - {label} - {_utc_stamp()}\n"
         f"- **Hypothesis**: {cfg.get('_hypothesis', '(set _hypothesis in the config)')}\n"
-        f"- **Predicted**: {cfg.get('_predicted', '(set _predicted in the config)')}\n"
+        f"- **Predicted**: {predicted_line}\n"
         f"- **Change**: {cfg.get('_comment', '')}\n"
         f"- **Result**: {{PRIMARY_METRIC}} = {score:.4f}; {{GUARDRAIL_METRIC}} = {diags}\n"
         f"- **Analysis**: \n"
@@ -190,8 +264,13 @@ def append_logbook(cfg: dict, exp_id: str, label: str, score: float, diags: dict
         f.write(entry)
 
 
-def evaluate_and_record(cfg: dict, prediction, target) -> dict:
-    """Score with the FROZEN metric, run the guardrail, and write result_<NN>.json (+ figure)."""
+def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = None) -> dict:
+    """Score with the FROZEN metric, run the guardrail, and write result_<NN>.json (+ figure).
+
+    The scoreboard row is appended LAST, behind the save-set gate - a row exists only for a fully-saved
+    result. The a-priori range is echoed into the result JSON so an out-of-envelope score is visible in
+    the record, not only in the analysis narrative.
+    """
     score = metric.compute_metric(prediction, target)
     assert np.isfinite(score), "primary metric is non-finite - refuse to record a noise result"
     diags = guardrail(prediction, cfg)
@@ -207,11 +286,20 @@ def evaluate_and_record(cfg: dict, prediction, target) -> dict:
         "utc": _utc_stamp(),
         "config": cfg,
     }
+    if apriori:
+        result["apriori"] = apriori.get("predicted")
+        lo, hi = apriori["predicted"]["low"], apriori["predicted"]["high"]
+        if not (float(lo) <= float(score) <= float(hi)):
+            result["outside_apriori_range"] = True
+            print(f"RED FLAG: {{PRIMARY_METRIC}} = {score:.4g} is OUTSIDE the predicted range "
+                  f"[{lo}, {hi}] - a bug or a discovery; explain before moving on (charter, loop step 7).")
     head = label.split("_", 1)[0]                       # "exp<NN>" from "exp<NN>_<slug>"
     exp_id = (head[3:] if head.startswith("exp") else head) or "000"   # the number only, not slug digits
     if exp_id.isdigit():
         exp_id = exp_id.zfill(3)                         # zero-pad numeric ids (exp1 -> 001) so files sort/align
     (RESULTS / f"result_{exp_id}.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+
+    assert_save_set(exp_id, label, fig)   # RECORD GATE: no row until the save-set exists on disk
 
     append_scoreboard_row({
         "exp_id": exp_id,
@@ -222,35 +310,275 @@ def evaluate_and_record(cfg: dict, prediction, target) -> dict:
         # (run numerics = e.g. epochs, best_epoch, iterations, wall_clock, n_free_params, seed, n_reps)
         "notes": "",
     })
-    append_logbook(cfg, exp_id, label, score, diags)
+    append_logbook(cfg, exp_id, label, score, diags, apriori)
     print(f"[{label}] {{PRIMARY_METRIC}} = {score:.4f}  (figure: {fig.name}; logged to logbook.md)")
     return result
 
 
-def check_correctness_suite(run: bool) -> None:
-    """LIGHT correctness gate (doctrine: no finding built on a red suite is trustworthy).
+def require_metric_selftest() -> None:
+    """HARD-FAIL unless the FROZEN scorer passes its self-test. Runs automatically before every experiment
+    (was opt-in via --selftest). Doctrine: don't trust a ranking until the self-test passes - it gates
+    experiment 000. A campaign that hasn't implemented compute_metric()/_no_skill_floor() yet fails here with
+    a pointer to fix, not a raw traceback; a scorer that fails its null control fails here too.
+    """
+    try:
+        metric.selftest()
+    except NotImplementedError as exc:
+        sys.exit(f"metric selftest NOT RUNNABLE: {exc}\n"
+                 "  -> implement compute_metric() and _no_skill_floor() in scripts/metric.py, then re-run. "
+                 "The self-test (perfect case + scrambled-input null control) gates every experiment.")
+    except AssertionError as exc:
+        sys.exit(f"metric selftest FAILED: {exc}\n"
+                 "  -> the FROZEN scorer has a sign/convention/leakage bug. Fix it before running any "
+                 "experiment; a ranking from a scorer that fails its self-test is noise.")
 
-    Always warns if the standing suite is absent; when ``run`` is True (under ``--selftest``) it executes the
-    suite and warns on RED. Never blocks - ``verify`` treats a red suite as a promotion blocker, and it must
-    be re-run after any change to core/FROZEN code (docs/protocols/checkpoint.md).
+
+def check_correctness_suite() -> str:
+    """Run the standing correctness suite (if present), RECORD its status to results/correctness_state.json,
+    and WARN on anything that is not green. Returns "green" / "red" / "empty" / "error" / "absent". Runs on
+    every experiment.
+
+    Non-blocking for the run itself (so you can still iterate mid-fix) - but only an AFFIRMATIVE GREEN
+    green-lights a promotion. guard_discoveries refuses a promotion unless the suite is green (EH-9): RED (a
+    check failed), EMPTY (zero active checks - the freshly-scaffolded all-skip suite), ERROR, and ABSENT all
+    block, because none of them is evidence the machinery is right; a genuinely-no-simulator campaign records
+    an explicit tests/CORRECTNESS_NA.md instead (doctrine: no finding built on an unguarded machine is
+    trustworthy). The state also records a hash of the FROZEN/core files
+    (scripts/frozen_core.py); guard_discoveries rejects a promotion whose green was recorded against a
+    DIFFERENT core than the code on disk now (EH-8) - a green does not survive an edit to the code it
+    certified. The suite runs on every experiment, so the recorded green is fresh at experiment time; the
+    hash closes the promote-without-a-new-experiment path (edit the scorer, then promote an old result).
     """
     suite = ROOT / "tests" / "correctness_checks.py"
+    status = "absent"
+    rc = None
     if not suite.is_file():
-        print("WARNING: no correctness suite at tests/correctness_checks.py - the simulator is unguarded; "
-              "build one with the correctness-suite skill.")
-        return
-    if not run:
-        return
+        print("WARNING: no correctness suite at tests/correctness_checks.py - the simulator is unguarded, so "
+              "promotion is BLOCKED (EH-9, status=absent). Build one with the correctness-suite skill, or "
+              "record an explicit N/A in tests/CORRECTNESS_NA.md (with a rationale) if there is genuinely "
+              "no simulator to check.")
+    else:
+        try:
+            proc = subprocess.run([sys.executable, str(suite)], capture_output=True, text=True, timeout=600)
+            rc = proc.returncode
+            if proc.stdout:
+                print(proc.stdout.rstrip())
+            status = {0: "green", 1: "red", 2: "empty"}.get(rc, "error")   # EH-9: 2 = zero active checks
+            if status == "red":
+                print("WARNING: correctness suite is RED - a check FAILED. This result is recorded, but a RED "
+                      "suite BLOCKS PROMOTION (guard_discoveries refuses the DISCOVERIES write until it is "
+                      "green). Fix the suite before promoting anything built on this code.")
+            elif status == "empty":
+                print("WARNING: correctness suite has 0 ACTIVE checks (EMPTY) - the machinery is unguarded, so "
+                      "it BLOCKS PROMOTION (EH-9), same as RED. Add >=1 real check (correctness-suite skill), "
+                      "or record tests/CORRECTNESS_NA.md if this campaign has no simulator to check.")
+            elif status == "error":
+                print(f"WARNING: correctness suite exited {rc} (unexpected) - recording status=error, which "
+                      "BLOCKS PROMOTION (EH-9). Investigate the suite.")
+        except Exception as exc:  # a broken/slow suite must warn, never block the run
+            print(f"WARNING: could not run the correctness suite ({exc}); recording status=error "
+                  "(BLOCKS PROMOTION, EH-9).")
+            status = "error"
     try:
-        proc = subprocess.run([sys.executable, str(suite)], capture_output=True, text=True, timeout=600)
-    except Exception as exc:  # a broken/slow suite must warn, never block the run
-        print(f"WARNING: could not run the correctness suite ({exc}); continuing.")
-        return
-    if proc.stdout:
-        print(proc.stdout.rstrip())
-    if proc.returncode != 0:
-        print("WARNING: correctness suite is RED - a check FAILED. Results built on this code are not "
-              "trustworthy until it is green (this is a warning, not a hard stop).")
+        CORRECTNESS_STATE.write_text(
+            json.dumps({"status": status, "returncode": rc, "utc": _utc_stamp(),
+                        "core_hash": frozen_core.core_hash(ROOT)}, indent=2), encoding="utf-8")  # EH-8
+    except Exception:
+        pass
+    return status
+
+
+# ======================================================================================================
+# SUPERVISOR MODE (the loop driver) - code at the joints, LLM judgment at the nodes.
+#
+# `--supervise` runs the campaign as an orchestrated loop: a dumb, deterministic driver pops units from
+# results/queue.json, enforces the artifact gates, spawns a FRESH-context worker agent per unit (cwd =
+# campaign root, so the frozen CLAUDE.md spine + charter auto-load), validates what the worker left
+# behind, and halts loudly on anything it cannot validate. Judgment lives at the edges: workers steer by
+# proposing queue units; a bounded PLANNER agent replans on triggers. The driver never improvises -
+# retry once, then stop and notify. Halt-loud beats drift-silent.
+#
+# results/queue.json:
+#   {"next":    [{"config": "configs/exp<NN>_<slug>.json", "rationale": "...", "proposed_by": "...",
+#                 "declined": []}, ...],
+#    "shelved": [{"config": "...", "reasons": [...], "utc": "..."}, ...],
+#    "accepted_units": 0, "last_accept_utc": null, "units_since_planner": 0}
+# Workers may APPEND proposals and DECLINE the head (reasons recorded); only the planner reorders.
+# Two declinations shelve a unit (revivable by the planner) - the loop keeps moving, no human halt.
+# ======================================================================================================
+
+QUEUE = RESULTS / "queue.json"
+ESCALATE = RESULTS / "ESCALATE.md"
+LOOPCFG = ROOT / "configs" / "loop.json"
+# Override with e.g. AUTORESEARCH_AGENT_CMD="claude -p" if the CLI lives elsewhere on this machine.
+AGENT_CMD = (__import__("os").environ.get("AUTORESEARCH_AGENT_CMD") or "claude -p").split()
+
+WORKER_PROMPT = """You are the iteration worker for the autoresearch campaign in this directory.
+Your assignment is ONE unit: {config}. Re-read docs/charter.md ('The Experiment Loop' - you execute the
+loop steps for this single unit) and docs/protocols/checkpoint.md (what you must persist before you
+finish - the ledger is the loop's only memory; work you do not record did not happen).
+EXECUTE-OR-DECLINE: run the assigned unit through the full loop (a-priori prediction in
+predictions/<exp_name>.json FIRST, then the runner - it enforces the gates), OR, if the unit is moot or
+superseded by the latest results, DECLINE it: append your reason to its "declined" list in
+results/queue.json and say why in the journal. Never silently substitute a different experiment.
+You MAY append new proposed units to results/queue.json "next" (with rationales). Mid-unit anomalies:
+document + propose a probe unit - do not chase them ad hoc (charter: probe through the pattern).
+Long solver runs execute in YOUR shell, never inside a background subagent. If you hit a genuine fork
+only the user can weigh, write results/ESCALATE.md (what, why, the options) and finish your unit if
+possible. Before you exit: complete the logbook narrative slots for your unit and leave the JOURNAL
+working window + NEXT consistent with queue.json."""
+
+PLANNER_PROMPT = """You are the strategy planner for the autoresearch campaign in this directory,
+spawned because: {reasons}. Read docs/charter.md, docs/PROJECT_ORIENTATION.md, results/JOURNAL.md,
+results/scoreboard.tsv (aggregates), results/DISCOVERIES.md, and results/queue.json. Your mandate is
+READ-MOSTLY and strategy-only: rewrite results/queue.json "next" (ordered units with rationales -
+check lever/topology coverage against the charter's lever list; after a promotion, re-open shelved
+directions), review "shelved" (revive what a promotion or frame change has re-opened; consolidate
+accumulated EVIDENCE-AGAINST kills into a prune recommendation, recorded), and append a strategy note
+to results/JOURNAL.md. A reprioritization that rests on a claimed invalidation requires its verdict
+artifact in results/verdicts/ - do not steer on an unverified major-problem claim. You never launch
+solves, never edit the scoreboard, results, DISCOVERIES, or anything FROZEN. If the campaign faces a
+genuine fork only the user can weigh, write results/ESCALATE.md."""
+
+
+def _read_json(path: Path, default):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return default
+
+
+def _spawn_agent(prompt: str, model: str, timeout_s: float, label: str) -> bool:
+    """Run one fresh-context agent headlessly from the campaign root. True = exited cleanly."""
+    cmd = AGENT_CMD + ["--dangerously-skip-permissions"] + (["--model", model] if model else []) + [prompt]
+    print(f"[supervise] spawning {label} (model={model or 'default'}, timeout={timeout_s/3600:.1f}h)")
+    env = dict(__import__("os").environ, AUTORESEARCH_SUPERVISED="1")   # Stop hook stands down for workers
+    try:
+        proc = subprocess.run(cmd, cwd=ROOT, timeout=timeout_s, env=env)
+        return proc.returncode == 0
+    except subprocess.TimeoutExpired:
+        print(f"[supervise] {label} TIMED OUT after {timeout_s/3600:.1f}h")
+        return False
+
+
+def _unit_saved(config_path: Path) -> bool:
+    """Structural validation of what a worker must leave behind (the checkpoint contract's hard core)."""
+    try:
+        stem = json.loads((ROOT / config_path).read_text(encoding="utf-8"))["exp_name"]
+    except Exception:
+        return False
+    head = stem.split("_", 1)[0]
+    exp_id = (head[3:] if head.startswith("exp") else head) or "000"
+    exp_id = exp_id.zfill(3) if exp_id.isdigit() else exp_id
+    return ((RESULTS / f"result_{exp_id}.json").is_file()
+            and (SNAPSHOTS / stem).is_dir()
+            and stem in LOGBOOK.read_text(encoding="utf-8", errors="replace"))
+
+
+def supervise():
+    """The loop driver. Deterministic; judgment lives in the worker/planner agents it spawns."""
+    loop_cfg = _read_json(LOOPCFG, None)
+    if not loop_cfg:
+        sys.exit("supervise: configs/loop.json missing or unreadable - new-campaign generates it; "
+                 "the loop knobs are per-campaign (unit cost), not defaults.")
+    w, p, plat = loop_cfg["worker"], loop_cfg["planner"], loop_cfg["plateau"]
+    timeout_s = float(w["iteration_timeout_hours"]) * 3600
+    cfg_mtime = LOOPCFG.stat().st_mtime
+
+    while True:
+        if ESCALATE.is_file():
+            sys.exit(f"supervise: HALT - {ESCALATE} present (a genuine fork awaits the user). "
+                     "Resolve it, delete the file, and relaunch.")
+        if LOOPCFG.stat().st_mtime != cfg_mtime:
+            loop_cfg = _read_json(LOOPCFG, loop_cfg)
+            w, p, plat = loop_cfg["worker"], loop_cfg["planner"], loop_cfg["plateau"]
+            timeout_s = float(w["iteration_timeout_hours"]) * 3600
+            cfg_mtime = LOOPCFG.stat().st_mtime
+            print("[supervise] configs/loop.json changed - reloaded (logged).")
+
+        q = _read_json(QUEUE, {"next": [], "shelved": [], "accepted_units": 0,
+                               "last_accept_utc": None, "units_since_planner": 0})
+
+        # ---- planner triggers (spawn BEFORE popping so the planner can reorder/refill) ----
+        reasons = []
+        if len(q["next"]) < int(p.get("next_min_units", 2)):
+            reasons.append("NEXT queue low/empty")
+        if q.get("units_since_planner", 0) >= int(p["cadence_units"]):
+            reasons.append(f"cadence: {q['units_since_planner']} units since last planner review")
+        if q["next"] and q["next"][0].get("declined"):
+            reasons.append("head-of-queue declined: " + "; ".join(q["next"][0]["declined"]))
+        last = q.get("last_accept_utc")
+        if last:
+            idle_h = (_dt.datetime.now(_dt.timezone.utc)
+                      - _dt.datetime.fromisoformat(last)).total_seconds() / 3600
+            if idle_h > float(plat["wall_clock_hours"]):
+                reasons.append(f"plateau: {idle_h:.1f}h without an accepted result")
+        if reasons:
+            ok = _spawn_agent(PLANNER_PROMPT.format(reasons="; ".join(reasons)),
+                              p.get("model", ""), timeout_s, "planner")
+            if not ok:
+                sys.exit("supervise: HALT - planner failed/timed out. The queue cannot be trusted "
+                         "unreviewed; investigate, then relaunch.")
+            q = _read_json(QUEUE, q)
+            q["units_since_planner"] = 0
+
+        # ---- shelve twice-declined units; the loop keeps moving ----
+        keep = []
+        for u in q["next"]:
+            if len(u.get("declined", [])) >= 2:
+                q["shelved"].append({"config": u["config"], "reasons": u["declined"],
+                                     "utc": _utc_stamp()})
+                print(f"[supervise] shelved after two declinations: {u['config']}")
+            else:
+                keep.append(u)
+        q["next"] = keep
+        if not q["next"]:
+            QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
+            sys.exit("supervise: HALT - queue empty even after a planner pass. The campaign has run "
+                     "out of proposed directions; this is a stopping decision for the user (an "
+                     "unfalsified 'done' is INCONCLUSIVE - see the charter).")
+
+        unit = q["next"][0]
+        QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
+
+        # ---- one fresh-context worker per unit; retry once, then halt loud ----
+        cfg_path = Path(unit["config"])
+        for attempt in range(1 + int(w.get("retries", 1))):
+            ok = _spawn_agent(WORKER_PROMPT.format(config=unit["config"]),
+                              w.get("model", ""), timeout_s, f"worker[{unit['config']}]")
+            q = _read_json(QUEUE, q)
+            head = q["next"][0] if q["next"] else None
+            declined = bool(head and head.get("config") == unit["config"] and head.get("declined"))
+            done = _unit_saved(cfg_path)
+            if declined or done:
+                break
+            print(f"[supervise] unit not validated (attempt {attempt + 1}): "
+                  f"agent_ok={ok}, saved={done} - "
+                  + ("retrying once" if attempt == 0 else "out of retries"))
+        else:
+            sys.exit(f"supervise: HALT - {unit['config']} neither completed (save-set + logbook) nor "
+                     "declined after retries. Inspect results/diagnostics/ and the queue, then relaunch.")
+
+        # ---- accept / decline bookkeeping (liveness = accepted units per unit time) ----
+        # DONE IS TESTED FIRST, and it must stay that way. The save-set on disk is the ground truth for
+        # "this unit happened"; `declined` is a PERSISTED list that outlives the pass that wrote it and
+        # that nothing ever clears. Testing `declined` first classified a unit that was declined once and
+        # EXECUTED on a later pass as still-declined: it never left the head of the queue, never counted
+        # toward liveness, and was re-run on every subsequent iteration - an unbounded loop appending a
+        # real scoreboard row each time, with accepted_units pinned at 0 and last_accept_utc at None (so
+        # the plateau trigger fired forever too). That is the drift-silent failure this driver exists to
+        # replace - alive, logging, zero accepted science - and no agent has to misbehave to reach it:
+        # declining is sanctioned, one declination is below the shelve-at-two threshold, and a later
+        # worker may judge the unit runnable. Accepting drops the unit and its stale declinations with it.
+        if done:
+            q["next"] = [u for u in q["next"] if u.get("config") != unit["config"]]
+            q["accepted_units"] = int(q.get("accepted_units", 0)) + 1
+            q["last_accept_utc"] = _dt.datetime.now(_dt.timezone.utc).isoformat()
+            print(f"[supervise] accepted unit #{q['accepted_units']}: {unit['config']}")
+        else:
+            print(f"[supervise] unit declined -> planner will review: {unit['config']}")
+        q["units_since_planner"] = int(q.get("units_since_planner", 0)) + 1
+        QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
 
 
 def main():
@@ -258,13 +586,19 @@ def main():
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--config", type=Path, help="run one experiment from this config")
     g.add_argument("--baseline", action="store_true", help="run experiment 000 (the floor gate)")
-    ap.add_argument("--selftest", action="store_true", help="run the metric selftest + correctness suite first")
+    g.add_argument("--supervise", action="store_true",
+                   help="run the orchestrated loop: fresh worker agent per queue unit + planner on triggers")
+    ap.add_argument("--selftest", action="store_true",
+                    help="(deprecated: the metric self-test + correctness suite now run automatically before every experiment)")
     args = ap.parse_args()
 
-    check_correctness_suite(run=False)   # always: warn if the standing suite is absent
-    if args.selftest:
-        metric.selftest()
-        check_correctness_suite(run=True)   # LIGHT gate: run the suite, warn (never block) on red
+    if args.supervise:
+        supervise()   # the driver only orchestrates; each worker's experiment run fires the gates below
+        return
+
+    # FROZEN-infrastructure gates, automatic before every experiment (no longer opt-in via --selftest):
+    require_metric_selftest()      # EH-3: hard-fail unless the scorer passes its self-test
+    check_correctness_suite()      # EH-4/EH-9: run + record; only an affirmative GREEN green-lights promotion
 
     if args.baseline:
         # TODO(campaign): the simplest defensible baseline (see docs/protocols/baselines.md). It also
@@ -277,13 +611,18 @@ def main():
     sys.stdout = _Tee(DIAG / f"{stem}_{_utc_stamp()}.log")
     print(f"=== {stem} :: {{CAMPAIGN_TITLE}} ===")
 
+    apriori = check_prediction_gate(cfg)   # SPEND GATE: no run without a written a-priori prediction
+
     snapshot_experiment(cfg, args.config if not args.baseline else None)
+    pred_file = PREDICTIONS / f"{stem}.json"
+    if pred_file.is_file():                # the prediction is part of the reproducible record
+        shutil.copy2(pred_file, SNAPSHOTS / stem / "prediction.json")
     print(f"snapshot -> results/snapshots/{stem}/")
 
     validate_method(cfg)   # hard-fail before spending an evaluation on an unwired/unrecognized lever
     target = load_target(cfg)
     prediction = run_experiment(cfg)
-    evaluate_and_record(cfg, prediction, target)
+    evaluate_and_record(cfg, prediction, target, apriori)
 
 
 if __name__ == "__main__":

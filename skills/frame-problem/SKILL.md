@@ -138,7 +138,9 @@ Break the work into small, agile sub-steps you can do one at a time. For each st
 - **Build the simplest sufficient version first**, then add the deferred effects from the inventory one at a
   time — each addition is a step, and ideally each is independently checkable. Validating a simpler subcase
   first usually yields a stronger, better-validated final result.
-- **One lever at a time** so each step's effect is attributable (co-vary only deliberately, and say so).
+- **One lever at a time by default** so each step's effect is attributable. Move several together when it
+  earns its cost (coupled levers, a screen, an interaction test) — say which, and expect `verify` to grade
+  the attribution you spent.
 
 How much to persist (don't invent a doc for a small job):
 - **Trivial / short:** keep the steps in your head or a scratch list — just do them.

@@ -64,11 +64,14 @@ Keep notation and links consistent with the rest of the work; reference related 
 `frame-problem` artifact where relevant.
 
 ## Where it lives
-- **Campaign:** an append-only engineering-decisions record (e.g. `docs/ENGINEERING_NOTES.md`), separate
-  from `CONVENTIONS.md` and the experiment `JOURNAL`. One entry per decision; never rewrite history —
-  supersede an old entry with a new one and link them.
-- **General session:** a short `DECISIONS.md` (or a section of the project doc); graduates into the campaign
-  record if the work grows into one.
+Pick the tier by **what the decision outlives** — each an append-only record: one entry per decision, never
+rewrite history, supersede an old entry with a new one and link them.
+- **Campaign:** `docs/ENGINEERING_NOTES.md` — scoped to this loop; separate from `CONVENTIONS.md` (the
+  rules) and the experiment `JOURNAL` (what happened).
+- **Project:** the project root's `ENGINEERING_NOTES.md` — a decision that outlives one campaign (a
+  project-wide convention, a shared-physics or instrument choice) and that sibling campaigns inherit.
+- **Ad-hoc session:** the session's `sessions/<date>_<slug>/NOTES.md`; graduates to the project record once
+  a campaign comes to depend on it.
 - Trivial/short-lived work needs none — just decide.
 
 ## Composition

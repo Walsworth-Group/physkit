@@ -1,0 +1,68 @@
+"""frozen_core.py — the single source of truth for WHICH files are this campaign's FROZEN/core code, and a
+content hash over them. Imported by BOTH scripts/run_campaign.py (records the hash with the correctness-suite
+state and stamps it into each snapshot) and scripts/guard_discoveries.py (recomputes it at promotion time to
+reject a STALE green — a correctness suite that was green against a DIFFERENT version of the core than the one
+being promoted). Dependency-free and side-effect-free so the hook can import it cheaply and safely.
+
+CORE = the code whose correctness the suite certifies: the FROZEN scorer plus the suite itself. If either
+changes, a green recorded before the change no longer vouches for the code now on disk. run_campaign.py is
+NOT core — it is MUTABLE plumbing (levers / forwards / decoders / preprocessing), and a green suite does not
+certify it. A campaign whose frozen physics spans more files (a shared simulator, a forward model) declares
+them in configs/frozen_core.json: {"core_files": ["shared/sim.py", "scripts/forward.py"]} — paths relative to
+the campaign root; they EXTEND the defaults, they do not replace them. Never edit CORE_FILES_DEFAULT per
+campaign — that forks the one authority; use the override file.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+
+# Root-relative. The minimal defensible core: the FROZEN scorer and the standing suite that certifies it.
+CORE_FILES_DEFAULT = ("scripts/metric.py", "tests/correctness_checks.py")
+CORE_OVERRIDE = "configs/frozen_core.json"
+
+
+def resolve_core_files(root) -> list[Path]:
+    """The existing core files for `root`: the defaults plus any configs/frozen_core.json extension, sorted
+    and de-duplicated. A named-but-absent file is skipped (a not-yet-built suite is not core until it exists;
+    hashing over an absent file would make unrelated campaigns collide on the same hash)."""
+    root = Path(root)
+    rels = list(CORE_FILES_DEFAULT)
+    override = root / CORE_OVERRIDE
+    if override.is_file():
+        try:
+            extra = json.loads(override.read_text(encoding="utf-8")).get("core_files", [])
+            rels += [str(x) for x in extra if isinstance(x, str)]
+        except Exception:
+            pass  # a malformed override must never crash a hook; the defaults still hold
+    out: list[Path] = []
+    for rel in sorted(set(rels)):        # sort the RELPATHS so the order is deterministic and root-independent
+        p = root / rel
+        if p.is_file() and p not in out:
+            out.append(p)
+    return out
+
+
+def core_hash(root) -> str | None:
+    """A sha256 over the sorted (relpath, bytes) of the resolved core files, or None if none resolve or one
+    cannot be read. None means 'cannot determine' — callers must treat it as 'do not enforce staleness',
+    never as 'unchanged'."""
+    root = Path(root)
+    files = resolve_core_files(root)
+    if not files:
+        return None
+    h = hashlib.sha256()
+    for p in files:
+        try:
+            rel = p.relative_to(root).as_posix()
+        except ValueError:
+            rel = p.name
+        h.update(rel.encode("utf-8"))
+        h.update(b"\0")
+        try:
+            h.update(p.read_bytes())
+        except OSError:
+            return None   # a core file we cannot read -> we cannot vouch for the hash
+        h.update(b"\0")
+    return h.hexdigest()

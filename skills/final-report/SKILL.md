@@ -71,11 +71,10 @@ below are `report`'s five, expanded with where the campaign supplies each:
 Campaigns differ in how they store things, so **start by reading the campaign's own structure** rather
 than assuming filenames. You are looking for a handful of *roles*; find whatever file plays each role.
 (Campaigns scaffolded by this kit use standard homes — `docs/charter.md`, `results/scoreboard.tsv`,
-`results/JOURNAL.md`, `results/DISCOVERIES.md`, the governing physics/conventions/instrument docs
-(`docs/PHYSICS.md` · `docs/CONVENTIONS.md` · `docs/INSTRUMENT.md` for a standalone campaign, or the project's
-`../../shared/PHYSICS.md` · `../../shared/CONVENTIONS.md` · `../../shared/INSTRUMENT.md` when the campaign lives
-in a project), optional `LITERATURE.md`, `configs/`, `results/images/` — confirm they exist, and fall
-back to discovery for non-kit campaigns.)
+`results/JOURNAL.md`, `results/DISCOVERIES.md`, the governing physics/conventions/instrument docs at
+`../../shared/PHYSICS.md` · `../../shared/CONVENTIONS.md` · `../../shared/INSTRUMENT.md`, optional
+`LITERATURE.md`, `configs/`, `results/images/` — confirm they exist, and fall back to discovery for
+non-kit campaigns.)
 
 - **The charter / program doc** — defines the goal, the **primary metric**, what is **FROZEN** (physics,
   geometry, data, the metric itself), and which **levers** were explored. This is your north star: the
@@ -97,9 +96,9 @@ back to discovery for non-kit campaigns.)
 - **The figures** — outputs from the runs, especially the most refined ones. (Often a `results*/images/`
   or per-experiment output dirs.)
 - **Reference docs** — the governing physics (`PHYSICS.md` — equations, methods, system behavior),
-  conventions (`CONVENTIONS.md`), and the measurement rig / apparatus + sample parameters (`INSTRUMENT.md`).
-  In a **project** these are shared at `../../shared/`; in a standalone campaign they're in `docs/`. Pull
-  definitions and derivations from these rather than reconstructing them.
+  conventions (`CONVENTIONS.md`), and the measurement rig / apparatus + sample parameters (`INSTRUMENT.md`),
+  shared at `../../shared/` and **referenced, never copied**. Pull definitions and derivations from these
+  rather than reconstructing them.
 
 If a role has no obvious home, search for it (grep for the metric name, for "best", for citation URLs)
 before concluding it doesn't exist. Spend your first chunk of effort building an accurate map; the
@@ -166,7 +165,7 @@ step → the forward model → the fit/decoder → the metric out. Make the flow
 what, in what order, with which parameters).
 
 Include the **governing equations**, pulling them (and any campaign-specific derivations) from
-`docs/PHYSICS.md` where it exists rather than reconstructing them. Derive the relations that are
+`../../shared/PHYSICS.md` where it exists rather than reconstructing them. Derive the relations that are
 *specific to this campaign* (the forward map, the metric definition, any effective-parameter or
 correction derivations the campaign relied on) at a level that lets a reader follow and reproduce them.
 Cite standard textbook results rather than re-deriving them — derive what's novel, reference what's

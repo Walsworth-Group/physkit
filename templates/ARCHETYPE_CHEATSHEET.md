@@ -5,10 +5,9 @@ A reference for the `new-campaign` setup skill (and the researcher) when filling
 recurring archetypes (catalogued below as A–I). A campaign may match **none, one, or several** — determine which **apply**, and **inherit and merge** the
 metric/lever/FROZEN/failure-mode guidance from each relevant one (don't force a single best fit). If
 several apply *in sequence* rather than at once, that's a multi-stage campaign (see the note at the
-end). Then specialize the placeholders. Four of the archetypes are exemplified by real campaigns in
-`examples/charter-files/`; the generic `charter.md` template is the union of their rigor disciplines. The
-hardware-in-the-loop archetype (**E**) is fundamentally different from the compute-only ones and needs
-special treatment — see its section.
+end). Then specialize the placeholders. The generic `charter.md` template is the union of the archetypes'
+rigor disciplines. The hardware-in-the-loop archetype (**E**) is fundamentally different from the
+compute-only ones and needs special treatment — see its section.
 
 This cheat-sheet is the *selection guide*; the deeper doctrine lives in [`docs/PRINCIPLES.md`](../docs/PRINCIPLES.md)
 (§5 Simulation rigor & tooling, §6 Experiment & hardware, §9 Coding). Expand it freely as new
@@ -20,8 +19,6 @@ archetypes and patterns appear.
 ---
 
 ## A. Iterative fit / decoder optimization
-*Real example: `examples/charter-files/charter_residual.md` (NV residual minimization).*
-
 - **PRIMARY metric:** a scale-invariant goodness-of-fit on REAL data (R² / residual / log-likelihood /
   χ²), FROZEN. The model may relax to a continuous form, but the score evaluates the final
   (often quantized) answer.
@@ -37,8 +34,6 @@ archetypes and patterns appear.
   re-fit — test the pair).
 
 ## B. Forward-model / simulation improvement
-*Real example: `examples/charter-files/charter_forward.md` (NV forward model).*
-
 - **PRIMARY metric:** residual between the forward-projected prediction of a KNOWN configuration and
   measured anchors, FROZEN scorer. Here the **forward CODE is the mutable target** — this inverts what
   is frozen in archetype A.
@@ -63,8 +58,7 @@ archetypes and patterns appear.
   the decoder, design, or ML architecture against that now-frozen forward. See the multi-stage note below.
 
 ## C. Generative design
-*No real example in the kit yet — e.g. pulse-sequence design, permanent-magnet lattices, metamaterials,
-photonic structures.*
+*E.g. pulse-sequence design, permanent-magnet lattices, metamaterials, photonic structures.*
 
 - **PRIMARY metric:** a figure of merit on the DESIGNED object via a FROZEN evaluator/simulator (field
   uniformity/gradient, sequence fidelity/robustness, transmission, etc.). Bound it a priori with a
@@ -88,8 +82,6 @@ photonic structures.*
   slow and a fresh source of bugs. Record what you chose and why. (Full checklist: `docs/PRINCIPLES.md` §5.)
 
 ## D. ML-model training / classifier
-*Real example: `examples/charter-files/charter.md` (per-island ASI classifier).*
-
 - **PRIMARY metric:** a held-out test metric with EXACT labels (balanced accuracy / F1 / MSE), FROZEN.
   Report the **hard-subgroup split** — a mean propped up by an easy subgroup is not a win.
 - **LEVERS:** architecture (width/depth/attention/graph) · the input front-end/featurization · the
@@ -106,15 +98,19 @@ photonic structures.*
   points (cf. archetype C reward-hacking).
 
 ## E. Hardware-in-the-loop / experimental control
-*Illustrative example: `examples/charter-files/charter_hardware_loop.md` (a filled archetype-E charter
-distilled from a real qualified loop); full operational patterns in `docs/reference/hardware-in-the-loop.md`.
+*Full operational patterns — an example assembled loop, the readiness gate, the file handshake, the
+starvation guard, quarantine, deterministic abort — in `docs/reference/hardware-in-the-loop.md`.
 E.g. closed-loop tuning of an instrument: pulse calibration, field or
 voltage setpoints, sample conditions, alignment, readout optimization. **This archetype needs special
 treatment** — the "experiment" is a real measurement on real hardware, not a compute job.*
 
 - **PRIMARY metric:** a figure of merit read directly off the instrument (signal contrast, coherence
   time, gate/readout fidelity, SNR, count rate, yield), FROZEN. It carries BOTH statistical and
-  systematic error — never act on a single read; average and track the spread.
+  systematic error — never act on a single read; average and track the spread. **Consider normalizing
+  it by instrument time** (e.g. `1/(σ·√T_wall)` — precision per root instrument-hour): time is the
+  binding budget here, so a metric blind to it ranks a ten-hour marginal gain above a one-hour one.
+  Use the TRUE wall-clock from the run records (setup + measurement + overhead), never the nominal
+  sequence time.
 - **LEVERS:** the control parameters (timings, amplitudes/phases, field/voltage setpoints, flow/temp,
   alignment) · the measurement protocol (averaging, integration time, sequencing) · calibration routines.
 - **Usually FROZEN:** the safety limits (hard constraints, NOT levers); the scoring definition; the
@@ -134,15 +130,15 @@ treatment** — the "experiment" is a real measurement on real hardware, not a c
   - **Log the full instrument + environment state every run** ("thermostat in the box").
 - **Failure modes / guardrails:** artifacts masquerading as signal → null/control measurements + repeats;
   drift between comparisons → interleaving + re-measuring the reference; overfitting to one session's
-  conditions → confirm across sessions; unsafe excursions → a hard safety gate + human confirmation.
+  conditions → confirm across sessions; unsafe excursions → a hard safety gate + human confirmation;
+  promoting a run that was quarantined or whose calibration had gone stale → make **passed-quarantine +
+  calibration-in-window** an explicit precondition of promotion, checked alongside the verdict rather
+  than assumed from the fact that the acquisition completed.
   (The generic `charter.md` carries an optional "Hardware safety & irreversibility" block for this
   archetype; full operational doctrine in `docs/reference/hardware-in-the-loop.md`, principle-level in
   `docs/PRINCIPLES.md` §9.)
 
 ## F. Inverse problem / parameter estimation (with uncertainty)
-*Real example: `examples/charter-files/charter_ASI_CNN.md` (reconstruct the magnetization M from a single
-NV field projection).*
-
 - **PRIMARY metric:** fidelity of the **recovered quantity** (a parameter, field, or distribution) to
   truth. Truth is usually unknown, so use a FROZEN **validated composite** score on real data that is
   robust to the problem's ill-posedness — **not raw forward-residual**, which rewards degenerate/empty
@@ -162,7 +158,7 @@ NV field projection).*
   recovered value without an error bar is half a result.
 
 ## G. Program / equation / heuristic discovery (LLM-in-the-loop search)
-*No real example in the kit yet — e.g. discovering a turbulence closure, a symbolic law, a heuristic, an
+*E.g. discovering a turbulence closure, a symbolic law, a heuristic, an
 acquisition function, or a control policy. **This archetype is fundamentally different from A–F:** the
 object optimized is an **interpretable artifact the LLM generates** (a program / equation / design rule),
 not a parameter set; the "experiment" is a generate→evaluate→reflect step in a search loop. The operational
@@ -197,7 +193,7 @@ doctrine lives in the **`discovery-loop` skill** — this is the selection-guide
   simulator-scored search: `docs/SIMULATION_VALIDATION.md` §5; budget: `docs/protocols/expensive-evaluation.md`.)
 
 ## H. Active / optimal experimental design (sequential experiment selection)
-*No real example in the kit yet — e.g. Bayesian optimization of a material/process, active learning, an
+*E.g. Bayesian optimization of a material/process, active learning, an
 autonomous/self-driving lab, design-of-experiments. The "experiment" is a costly evaluation, and the loop's
 core decision is **which experiment to run next**, not how to improve a fixed model. Operational doctrine:
 the **`experiment-design`** skill.*
@@ -219,7 +215,7 @@ the **`experiment-design`** skill.*
   optimization — use established BO/OED tooling for the inner loop.)*
 
 ## I. Model selection / hypothesis discrimination
-*No real example in the kit yet — e.g. deciding which of several mechanisms/theories explains the data. The
+*E.g. deciding which of several mechanisms/theories explains the data. The
 deliverable is a **decision between explanations + its strength and scope**, not a best-fit curve.
 Operational doctrine: the **`model-selection`** skill.*
 
@@ -278,5 +274,5 @@ arrangement with *idealized* magnets — a baseline for (3) plus a solid optimiz
 simple; (2) design a protocol the user runs to measure their real magnets' imperfections; (3) optimize
 the arrangement of the *imperfect* magnets, building on (1) and the data from (2).
 
-The setup skill plans and proposes the staging, and gives each loop its own `charter_<NAME>.md`,
-`configs_<NAME>/`, `results_<NAME>/`.
+The setup skill plans and proposes the staging; each loop becomes a **sibling campaign** in the project —
+its own `campaigns/<NN>_<slug>/` with its own charter, ledger, and `LINEAGE.md` row.

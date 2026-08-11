@@ -6,7 +6,269 @@ All notable changes to the kit are recorded here. Format follows
 Dates are UTC. Each entry cites the run/finding that motivated it (the kit's own
 `campaign-review → improve-kit` loop) so a future reviewer can trace the "why".
 
+## [Unreleased]
+
+## [0.7.0] - 2026-08-11
+
+The structured-campaign-loop release: the loop's procedural skeleton moves from prose into code (gates in
+the runner, a deterministic supervisor driver, fresh context per iteration), each campaign carries a frozen
+provenance-stamped snapshot of the doctrine that governed it, and the promotion gate is bound to an
+affirmative, current correctness green. Two promote/accept-path bugs found by the second end-to-end pass are
+fixed here as well.
+
+**Deploy note.** The previously shipped plugin (0.6.0, cached from a 2026-07-21 commit) predates every
+change below, and both source and cache declared the same version — so an update had nothing to key on.
+This bump is what lets the release actually reach agents; refresh the plugin after installing it.
+
+### Fixed — two bugs on the promote/accept path (LT-1, LT-2, 2026-08-10)
+
+Both found by a new out-of-repo loop-test fixture (a four-coil uniformity toy with known ground truth,
+run as static / gate / driver tiers), built because the 2026-08-08 acceptance harness lived in a session
+scratchpad and died with it — leaving F-2, EH-8, EH-9 and ML-4 shipped but never exercised end-to-end.
+
+- **`"refuter": null` promoted a finding on both surfaces.** `guard_discoveries._check_verdict` used
+  `str(v.get("refuter", ""))`, and `str(None)` is the non-empty string `"None"`, so an explicit JSON null
+  passed the independent-refuter check — hard gate #1's whole warrant. Missing key, `""` and whitespace
+  all denied correctly; only `null` slipped, which is precisely what a model leaves behind when it copies
+  the verdict stub without filling the field (and precisely the artifact F-2's own evidence describes).
+  Now `str(v.get("refuter") or "")`.
+
+- **A declined-then-completed unit livelocked the supervisor driver.** `declined` was read from a
+  persisted list that nothing clears, and was tested before `done`, so a unit that was declined once and
+  executed on a later pass was never accepted, never removed from the head of the queue, and was re-run
+  on every subsequent iteration — appending a real scoreboard row each time while `accepted_units` stayed
+  at 0 (measured: 137 rows, zero accepted). That is the drift-silent failure the structured loop exists to
+  replace, reachable with every actor following the documented protocol. The driver now tests `done`
+  first: the save-set on disk is the ground truth for "this unit happened".
+
+### Changed — one lever per experiment is a default, not a law (ML-1..ML-5, 2026-08-10)
+
+The rule was absolute on every operational surface, which foreclosed two legitimate cases: **interaction-
+dominated spaces** (levers that behave differently in combination — a space one-at-a-time search cannot
+explore by construction) and **exploratory screening**. A fork was already present — the principles master
+has said "default, not a hard rule" since v3.7, while the charter loop said "Pick **ONE** lever."
+
+**The reframe: multi-lever spends *attribution*, not validity.** Moving several levers together is
+legitimate for coupled levers (where holding one fixed measures a broken configuration, so one-at-a-time is
+*wrong* rather than merely slow), a screen, or a designed interaction test. Campaign surfaces carry only the
+light form — weigh the cost, record which levers moved. The discipline lives in `verify`.
+
+- **A current-best may be promoted without knowing why it won.** The empirical claim ("config X scores Y")
+  is attribution-independent and may be CONFIRMED and promoted; the **causal** claim ("lever L is why")
+  cannot be CONFIRMED while levers are entangled — it is QUESTIONABLE ASSUMPTION with the confounded set as
+  its named premise. The *No claim-splitting* rule is now scoped explicitly: it guards the config's
+  validity, not attribution among its levers.
+- **A multi-lever negative kills only the combination.** This is the asymmetric risk: the verification
+  apparatus is aimed at positives, so a multi-lever win meets the refuter, the verdict artifact, and the
+  promotion gate, while a multi-lever loss just updates the journal. The mechanism to hunt is **masking** —
+  lever A helps, B hurts more, the combination scores below baseline, and both get retired. The combination
+  may earn `EVIDENCE_AGAINST`; every member is INCONCLUSIVE and **remains untried**.
+- **New verdict fields** `confounded_levers` / `disentangler` / `resolves_confounded`. Confounding is a
+  property of the design, orthogonal to the verdict — the same shape as `kill_tier`. Deliberately not a
+  boolean: a non-empty set *requires* the disentangling experiment, and the debt closes only when a later
+  verdict names the levers it separated. `verify` gained a *Confounded attribution* section that fires
+  whenever more than one lever moved.
+- **`loop_heartbeat` refuses an `exhausted` stop while any lever sits in confounded limbo.** Without it a
+  confounded negative empties `untried_levers` and one bad combined experiment can end a campaign.
+- **`assumption-audit`** now rules out the cheaper rival diagnosis first: a cross-family floor may be an
+  interaction-dominated space rather than a wrong inherited value.
+
+### Removed — the example charters; archetype guidance replaces them (EX-1/EX-2, 2026-08-10)
+
+`examples/` is gone. `new-campaign` now starts from `templates/campaign/` and the archetype guidance,
+never from another campaign's filled charter. Motivated by a user finding: the four pre-v0.3 charters
+(archetypes A/B/D/F) were self-documented as out of date — their own README told the reader they
+"predate the current methodology" and were "not current best-practice templates" — and, being *filled*
+single-subfield instances (all NV-magnetometry/ASI), they anchored the setup interview toward their
+specific metric, lever, and guardrail choices.
+
+- **Removed** `examples/charter-files/` entirely: the four stale charters, then
+  `charter_hardware_loop.md` once its content was folded into guidance (below).
+- **Folded into `docs/reference/hardware-in-the-loop.md`** — everything the archetype-E charter carried
+  that the reference doc did not: a new **§0 "An example loop, assembled"** (the six-step iteration —
+  propose with an a-priori bound → emission gate → dispatch → while-waiting → ingest → analyze — as an
+  illustration of how §2–§8 compose, since the doc had every component but never the ordering);
+  operational guarantees as **deliverables equal to the number** (intro); **blinding** the accepted
+  value from the loop so "not a number to tune toward" is mechanical rather than aspirational (§1);
+  a crash mid-campaign is an **operations bug to fix and re-gate**, never evidence against the physics
+  idea (§1); quarantine thresholds **ratchet only toward more faithful**, versioned (§6); the hardware
+  scoreboard columns — `T_wall` estimated AND actual, calibration age at start, quarantine
+  status+reason (§8).
+- **Folded into `ARCHETYPE_CHEATSHEET.md` §E:** normalizing the primary metric by instrument time
+  (`1/(σ·√T_wall)`, true wall-clock from run records, not nominal sequence time) — time is the binding
+  budget, so a metric blind to it ranks a ten-hour marginal gain above a one-hour one; and
+  passed-quarantine + calibration-in-window as an explicit **precondition of promotion**.
+- **Fill guidance de-stylized** (`new-campaign` Step 3, `PLACEHOLDERS.md`): the old rule asked the
+  filling agent to match the boilerplate's *voice* and read "as naturally as a hand-written charter" —
+  a human-reader premise. Now: clear, explicit, concise, specific enough to act on without the
+  interview that produced it.
+
+### Added — the structured campaign loop: gates in code + supervisor mode (CS-3, 2026-08-07)
+
+The charter stays the campaign's constitution; its procedural skeleton now lives in **structure** —
+motivated by campaign 03, where every prose gate was present and skipped (2 verify calls / ~184 solves)
+while the one code-enforced gate held. Full spec: `synthesis/STRUCTURED_LOOP_PROPOSAL.md`; ADR-0008.
+
+- **Artifact gates in the runner** (`run_campaign.py.tmpl`): the **prediction gate** (no solve without a
+  falsifiable a-priori range in `predictions/<exp>.json`, written before the run, snapshotted with it) and
+  the **save-set gate** (no scoreboard row until result JSON + figure + snapshot exist). Out-of-envelope
+  scores stamped into the result JSON as red flags.
+- **`guard_discoveries` redesigned**: per-finding **verdict artifacts** (`results/verdicts/<id>.json`,
+  written by `verify` with a named refuter) replace the 60-minute transcript-window heuristic; every
+  DISCOVERIES entry cites its verdict file; **fail-closed on the promote path**. Negative-tested (11 cases).
+- **Steering-negatives are discoveries** (`DISCOVERIES.md.tmpl`, `charter.md.tmpl`, `verify`): a negative
+  the campaign acts on is promoted under the same gate with a **kill tier** — REFUTED (prunes) /
+  EVIDENCE AGAINST (shelved, revivable, accumulates) / INCONCLUSIVE (never graduates; fix-and-rerun).
+  `verify` gains the negative-refuter checklist (implementation error / strawman / insufficient search /
+  mechanism) and **ADR-0008 cost-tiered reproduction** (re-score from raw always; full re-execution below
+  the `loop.json` threshold; judgment + cheapest discriminating spot-check above — never zero).
+- **Supervisor mode** (`run_campaign.py --supervise`): a deterministic driver pops units from
+  `results/queue.json`, spawns a **fresh-context worker agent per unit** (frozen spine + charter auto-load),
+  validates the **iteration contract** (`protocols/checkpoint.md` §0 — the ledger is the loop's only
+  memory), and spawns a read-mostly **planner agent** on triggers (queue low, cadence *k*, declination,
+  dual-denominated plateau). Execute-or-decline; two declinations shelve (revivable); `ESCALATE.md` halts;
+  empty queue halts as an explicit stopping decision. Halt-loud beats drift-silent. Smoke-tested (5
+  scenarios, stub agents).
+- **`configs/loop.json`** (new template): per-campaign knobs set at scaffold from unit cost (cadence
+  *inverts* with cost), user-owned thereafter; planner/worker models configurable. 10 new placeholders.
+- **Wiring**: `new-campaign` interviews the knobs (topic 8), seeds `queue.json` (exp 000 + user ideas),
+  creates the gate dirs, and hands off via `--supervise`; `campaign-status` asserts the whole enforcement
+  layer + reviews the SHELVED pool; `validate_campaign.py` requires `loop.json`, `queue.json`,
+  `predictions/`, `results/verdicts/`.
+
+### Changed — campaign `CLAUDE.md` freezes-and-stamps the doctrine spine (2026-08-07)
+
+- **`new-campaign` now renders a campaign-tailored, FROZEN snapshot of `docs/CORE.md` into each campaign's
+  `CLAUDE.md`** (the new `{{PHYSKIT_SPINE}}` block), stamped with its provenance (physkit version · CORE ref ·
+  date · spine hash) and a "do not hand-edit" banner. The snapshot is part of the campaign's reproducible
+  record — deliberately **not** re-synced against a later CORE.md, and **not** an `@CORE.md` import or a
+  vendored+hash-checked `PHYSKIT_CORE.md` copy. The template's old thin "Frozen core" 5-bullet summary is
+  removed, subsumed by the full Constitution the snapshot carries; the campaign-specific HARD GATES + frozen-
+  metric identity stay. Motivation: a real campaign (`03_hbn_vb_circular`) ran a week with the spine out of
+  context (0 CORE-phrase occurrences; 2 verify calls in ~2095 tool calls). Scoped in kit-dev `CLAUDE.md`
+  §single-source (developing-the-kit minimizes forks; using-the-kit freezes-and-stamps). This addresses
+  doctrine **availability**, distinct from the Opus-5 instruction-*precedence* regression (2026-08-06 Theme F).
+  Loci: `templates/campaign/CLAUDE.md.tmpl`, `skills/new-campaign/SKILL.md` (Step 3), `templates/PLACEHOLDERS.md`,
+  `docs/DOCTRINE_INDEX.md`; ledger `synthesis/BUILD_BACKLOG.md` CS-1/CS-2.
+### Added — a comparison's scorer is a candidate for being wrong; a disputed verdict escalates to a blinded third party (`E--ASI` `sw_freeze_audit`, 2026-08-03 → 08-06)
+
+Motivating evidence: `@transcript_asi-swfreeze_2026-08-03` — a day in which an independent verification pass
+refuted **4 of 6** of the session's own load-bearing claims, was then itself refuted on the one claim it had
+reversed, and the agent's rebuttal of *that* was refuted in turn by a blinded adjudication. The same
+conclusion was argued for three times by three different wrong arguments, each with one defect: **a
+comparison whose scorer, reference, or starting point was entangled with one of the things being compared** —
+a scorer that was the incumbent's own response family; a "neutral" arbiter silently importing the incumbent's
+fitted nuisance parameter (agreement to 2.8e−14); a sweep scored against its own starting point, making zero
+shift the argmin for *every* candidate. Separately, four distinct statistic-choice slips in one day, and a
+MuMax run that scrambled to `|m| ≈ 7e-4` behind exit code 0, no NaNs, and an ordinary convergence metric —
+reading exactly like the effect under study, at a cost of ~7 GPU-hours.
+
+- **`verify` §2 gains an entanglement gate** — name the scorer, the reference, and the starting point, and
+  state what each shares with the candidates. Two tells: the argmin is the incumbent for *every* candidate,
+  or the neutral arbiter reproduces one candidate's fitted parameter exactly. The campaign refuter prompt
+  (step 4, metric integrity) and the checklist carry the same check.
+- **`verify` §4b — when the verdict is disputed, escalate; don't defer and don't re-litigate.** A third
+  agent, blinded (positions relabelled, provenance stripped, told not to weight by source) and required to
+  run a check *neither* analysis ran. Its verdicts include *both wrong*. A dispute closed by argument rather
+  than by a new measurement is still open — and a rebuttal you wrote yourself is not independent of the
+  reasoning the checker was called to test. Campaign mode routes load-bearing disagreements here.
+- **`verify` §3 — does the statistic answer the question you asked?** Mean where a max belongs (a
+  sign-changing quantity nearly cancels); an unpaired spread on a paired comparison; a central statistic
+  where the hypothesis is "rare and large"; a fitter fed *(data − model)*.
+- **`debug`'s gotcha catalog gains the silent failure that *imitates* the hypothesis** — the gate is a
+  physical magnitude floor calibrated on a validated corpus, not the solver's own status. `correctness-suite`
+  §4 says the same about promoting that class of bug to a standing gate.
+
+### Changed — sub-agent delegation is pre-authorized; the prompt surface includes the harness (user report + `E--ASI` session, 2026-08-06)
+
+Motivating evidence: Claude Code 2.1.221 appends *"Do not call the AgentTool unless the user requested it"*
+to every session on `claude-opus-5` — compiled into the CLI (array `GUp`), gated on the
+`opus_5_prompt_bundle` model capability plus a server kill-switch, so it is absent from every settings file,
+absent from the kit, and absent on every other model. Agents obeyed it over the kit: hard gate #1's refuter
+skipped, prescribed skills abandoned mid-run, loops paused to ask permission. In one session the agent
+stated it "followed that over the skill's prescription" and substituted controls of its own design; two
+headline correlations (r = 0.873, 0.879) reached a report that a belated independent check invalidated —
+the *wrong-configuration* control scored 0.882.
+
+- **Campaign `CLAUDE.md` carries a standing authorization.** A skill that prescribes a sub-agent *is* the
+  request; never pause a loop to ask, never substitute a self-run check. Inability to spawn is a BLOCKER —
+  record it and stop, don't promote on a self-run check.
+- **`verify` §4 closes the silent-substitution path:** no sub-agent ⇒ the check is **INCONCLUSIVE**. A
+  control you designed yourself tests the confounds you thought of — which are the ones you already handled.
+- **`prompt-surface-audit.md` gains a sixth surface** (the harness-injected, model-conditional bundle) and
+  with it a second audit direction: the other five surfaces fail by *omission*, this one by *contradiction*,
+  so grep the render for a rule's **opposite**, not only for the rule.
+- **`CORE.md` step 5 and the dev `CLAUDE.md` step 3** state the same in the two spines.
+
+### Added — the loop keeps running until you stop it (a Stop gate, not a reminder) (user report, 2026-08-03)
+
+Motivating evidence: campaigns "aren't actually able to run autonomously for long periods — they end up
+stopping after a task is complete." The anti-premature-stop norm was already in the kit three times over, in
+prose; a turn ends when the model emits no tool call, and prose does not survive that moment. So it is a gate
+now — the kit's own "enforce, don't exhort" applied to the one action prose cannot reach: termination.
+
+- **New `scripts/loop_heartbeat.py`** (Stop hook, wired in `.claude/settings.json` alongside
+  `guard_discoveries`). It refuses an end-of-turn and hands the agent back the campaign's own next action —
+  the `JOURNAL` **NEXT** pointer, the open threads, the next exp id. Never a generic "keep going".
+- **Three ways a loop may end, all recorded.** `results/STOP` (human, graceful — the agent finishes and logs
+  the experiment in flight, unlike `Ctrl-C`) · `results/stop_request.json` (agent, earned: a reason code from
+  a closed vocabulary — `user-fork` / `irreversible-action-confirm` / `hard-blocked` / `exhausted` — plus
+  evidence) · the stall release. Every stop lands in `results/loop_stops.log`, so "why did this campaign end?"
+  is answerable from the ledger.
+- **`exhausted` is hard-gated:** refused while `untried_levers` is non-empty, and it requires a
+  `campaign-status` run within 2 h. A campaign may not declare itself finished while holding a lever it has
+  itself named as untried.
+- **Anti-runaway:** ~25 continuations with no new scoreboard row escalates the reason, then releases the loop
+  and records `STALL_RELEASE` — a loop that is alive and producing nothing is a dead run, not progress.
+- **Safe by construction:** inert until the campaign is live (so it can't trap the session still building the
+  tree), never blocks `SubagentStop` (which would trap the independent refuter), fails open with a logged
+  bypass, and `AUTORESEARCH_LOOP_HEARTBEAT=off` disables it.
+- Threaded through `charter.md` (new **Ending the loop** section + step 12), `CLAUDE.md` (hard gate 5),
+  `new-campaign`, `validate_campaign.py`, `campaign-status`, `checkpoint.md`, `GETTING_STARTED` (a
+  **Stopping the loop** section + troubleshooting), `CORE`, `PRINCIPLES`, and `DOCTRINE_INDEX`. Regression
+  suite: `kit/skills/new-campaign/scripts/test_loop_heartbeat.py` (32 checks).
+
+### Changed — every campaign lives in a project; standalone mode retired (user request, 2026-07-18)
+
+- **`new-campaign` Step 0.1 now *establishes* the project home rather than detecting a mode.** It uses the
+  ancestor project if one exists, else runs `new-project` to create it, then continues. Physics / conventions /
+  instrument are always `../../shared/…`; data is always `../../data`; a `LINEAGE.md` row is always appended;
+  the campaign `CLAUDE.md` project-context block is always kept. The charter's *Relationship to sibling
+  campaigns* block stays conditional — **coupling** decides it, not project membership.
+- **The bare-campaign mode is gone**, and with it the `_<NAME>`-suffix multi-stage fallback: each stage is a
+  sibling campaign. A legacy bare tree is **lifted into a project** (Step 0.1). Threaded through
+  `new-project`, `fork-campaign`, `campaign-status`, `handoff`, `final-report`, `report`, `record-decision`,
+  `verify`, `literature-review`, `GETTING_STARTED`, `README`, `INSTALL_FOR_TESTERS`, `DOCTRINE_INDEX`, `CORE`,
+  `PLACEHOLDERS`, `ARCHETYPE_CHEATSHEET`, and `SIMULATION_VALIDATION`.
+- **The validator enforces it.** A campaign with no project home fails; a campaign-local copy of a shared doc
+  fails (previously caught only at project scope); `sessions/` joined the required project dirs; and project
+  detection now matches on the parent directory *name*, so a `sessions/<date>_<slug>/` folder is no longer
+  mistaken for a campaign.
+- **Retired** `templates/campaign/docs/PHYSICS.md.tmpl` + `CONVENTIONS.md.tmpl` — their unique content (the
+  Buckingham-π dimensionless-groups bullet; the symptom→check gotchas catalog) was merged into
+  `templates/project/shared/` first. **Fixed** `templates/project/LINEAGE.md.tmpl`, whose 7 ceremonial example
+  placeholders made a fresh project fail validation.
+- Motivation: a bare campaign that later needs a sibling, a fork, or an ad-hoc follow-up session requires
+  reorganization plus path rewrites, and `sessions/` existed only in a project — so bare campaigns had nowhere
+  to put non-campaign work. Cost measured, not estimated: ~5 near-empty files (the shared docs move, they don't
+  multiply); a rendered one-off project validates clean on the documented interview placeholders alone.
+  Record: **ADR-0007** (`synthesis/DECISION_RECORDS.md`) — carries the B8 revisit-if. Sign-off: approved
+  in-session 2026-07-18. Ledger: `synthesis/BUILD_BACKLOG.md`.
+
 ## [0.6.0] - 2026-07-11
+
+### Added — organize ad-hoc work (working-loop step 6 / Traceability; user finding, 2026-07-15)
+
+- **CORE loop step 6 + PRINCIPLES §7 (Traceability) — give work worth keeping an organized home even with
+  no campaign scaffold.** Real artifacts, findings, and the reasoning behind them earn a sensible
+  subdirectory and a short, **maintained index** (what's where, and why) — never a deliverable that lives
+  only in the conversation or as loose files scattered across a shared directory. Generalizes the
+  discipline the campaign scaffold enforces automatically to **plugin-only / ad-hoc** sessions (the same
+  enforcement-evaporates-without-the-scaffold pattern as the 2026-07-01 ASI plugin-only keepers).
+  Motivation: user finding 2026-07-15 — agents save & organize well inside campaigns but often not at all
+  in ad-hoc sessions launched from the same directory. Recorded as PRINCIPLES v1.10; propagated from the
+  content master `synthesis/PRINCIPLE_TAXONOMY_v2.md` O-6 (v3.11). Sign-off = this change's approval.
+  Ledger: `synthesis/BUILD_BACKLOG.md` (AH1).
 
 ### Added — assumption-audit skill + prompt-surface-audit doctrine (lab-loop keepers, 2026-07-07)
 

@@ -1,0 +1,32 @@
+{
+  "_doc": "Loop configuration - the machine-readable knobs the driver (scripts/run_campaign.py --supervise) reads. Set at scaffold time by new-campaign from this campaign's unit cost (the WHY lives in docs/charter.md, 'How the loop runs'); human-editable mid-campaign - the driver logs any change it detects. Knob semantics: STRUCTURED_LOOP_PROPOSAL s4.1 rules 2-4.",
+  "unit_cost": {
+    "class": "{{UNIT_COST_CLASS}}",
+    "typical_wall_clock_s": {{UNIT_COST_S}}
+  },
+  "planner": {
+    "_doc": "Fresh-context strategy agent: spawned when NEXT runs low, every cadence_units accepted units, on a declination, at a plateau, after a REFUTED verdict, or after a promotion. Writes ONLY strategy artifacts (results/queue.json + a journal strategy note).",
+    "cadence_units": {{PLANNER_CADENCE_K}},
+    "next_min_units": 2,
+    "model": "{{PLANNER_MODEL}}"
+  },
+  "plateau": {
+    "_doc": "No accepted result in this many units OR this much wall-clock, whichever trips first (dual-denominated: 5 units is a fine plateau test at 1 s/unit and a two-week blind spot at 24 h/unit).",
+    "units": {{PLATEAU_M_UNITS}},
+    "wall_clock_hours": {{PLATEAU_M_HOURS}}
+  },
+  "queue": {
+    "_doc": "Max units queued beyond planner review, so speculative queue-stuffing can't become fishing at scale (default: the planner cadence).",
+    "max_outstanding_units": {{MAX_OUTSTANDING_UNITS}}
+  },
+  "worker": {
+    "_doc": "Fresh-context iteration agent, one queue unit per spawn. Long solver runs execute under the driver or the worker's shell - NEVER inside a background subagent (10-min stall abort masquerades as a failed solve).",
+    "model": "{{WORKER_MODEL}}",
+    "iteration_timeout_hours": {{ITERATION_TIMEOUT_HOURS}},
+    "retries": 1
+  },
+  "verify": {
+    "_doc": "ADR-0006 tier: unit cost at/below the threshold -> full from-scratch re-execution; above -> judgment-focused verify + the cheapest discriminating spot-check (never zero re-execution). Derived numbers are ALWAYS recomputed from raw artifacts regardless.",
+    "full_reproduction_threshold_s": {{VERIFY_REPRO_THRESHOLD_S}}
+  }
+}

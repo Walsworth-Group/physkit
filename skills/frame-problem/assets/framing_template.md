@@ -36,7 +36,8 @@ equations, on held-out/independent data). *Verify before validate; calibration �
 - [ ] Application-specific checks / known gotchas: <field-standard checks for THIS problem>.
 
 ## Decomposition — steps, with checkpoints where it matters
-Build the simplest sufficient version first; add deferred effects one at a time; one lever per step.
+Build the simplest sufficient version first; add deferred effects one at a time; one lever per step by
+default (several only deliberately — note which steps do it and why).
 
 | # | Step (what it produces) | Depends on | Check at this step? |
 |---|---|---|---|

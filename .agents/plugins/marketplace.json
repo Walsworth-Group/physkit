@@ -1,0 +1,20 @@
+{
+  "name": "physkit",
+  "interface": {
+    "displayName": "PhysKit"
+  },
+  "plugins": [
+    {
+      "name": "physkit",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

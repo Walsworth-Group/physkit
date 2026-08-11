@@ -2,9 +2,10 @@
 name: new-project
 description: >-
   Scaffold a PROJECT — the home for a whole investigation into one physical system, above individual campaigns.
-  Use when the user starts a new line of research that will span multiple attempts/versions over time, or when
-  the first campaign of a new investigation is being set up: phrasings like "start a new project", "set up the
-  ASI investigation", "make a home for this whole line of work", "we'll have several campaigns on this system".
+  EVERY campaign lives in one, so this runs on the default path: `new-campaign` invokes it automatically
+  whenever no project home exists. Use it directly when the user starts a new line of research, or when lifting
+  a legacy bare campaign into a home: phrasings like "start a new project", "set up the ASI investigation",
+  "make a home for this whole line of work", "we'll have several campaigns on this system".
   It interviews for the physical system, end goal, and the CANONICAL shared data + shared docs, then generates
   the project tree (PROJECT.md charter, LINEAGE.md index, data/ or a data pointer, shared/, campaigns/,
   sessions/, reports/, and a project CLAUDE.md) so that every future campaign shares one data copy by relative
@@ -20,11 +21,13 @@ A **Project** is one physical system investigated over many **Campaigns** (versi
 "what each version changed and found" lives in one index. See `synthesis/PROJECT_STRUCTURE_DESIGN.md` for the
 full model. Read `docs/PRINCIPLES.md` §1 for the interview stance.
 
-## When a Project (vs just a campaign)
-Scaffold a Project when the work will host **more than one campaign over time**, or shares data/docs across
-attempts (the common case — almost every real investigation iterates). A one-off with a single frozen metric
-and no expected successors can be a bare campaign; but prefer a Project so evolving into multi-campaign needs
-zero reorganization.
+## Every campaign lives in a project — there is no bare-campaign mode
+So you arrive here two ways: **directly** (the user is starting a new line of research) or **called by
+`new-campaign`** (Step 0.1 found no project home). When called, the interview below is largely already
+answered — carry those answers in, fill the tree, and **return**; do not call back into `new-campaign`, which
+is mid-run and resumes on its own. A one-off pays ~5 near-empty files for the home (the physics / conventions /
+instrument docs *move* into `shared/`, they don't multiply) and in exchange grows into a sibling campaign, a
+fork, or an ad-hoc session with **zero reorganization** and no path rewrites.
 
 ## Interview (gather, don't assume)
 1. **Physical system & end goal** — what system, what decision the investigation serves, what "done" looks like.
@@ -67,8 +70,10 @@ Copy from `${CLAUDE_PLUGIN_ROOT}/templates/project/`, strip `.tmpl`, fill placeh
 - **Strip `.tmpl` on write.** Fill every `{{PLACEHOLDER}}`; run the validator when done.
 
 ## Then the first campaign
-Invoke **`new-campaign`** to scaffold the first campaign under `campaigns/`, wired to `../../data` + `../../shared`,
-and append its opening row to `LINEAGE.md`. Do not duplicate the interview — carry over what you gathered here.
+If `new-campaign` called you, **return to it** — it scaffolds the campaign under `campaigns/` itself. If the user
+came here directly, invoke **`new-campaign`** to scaffold the first campaign, wired to `../../data` +
+`../../shared`, and append its opening row to `LINEAGE.md`. Either way, do not duplicate the interview — carry
+over what you gathered here.
 
 ## Verify
 Run the bundled validator on the **project root** (it auto-detects project vs campaign trees) and fix anything it flags:

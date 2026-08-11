@@ -41,8 +41,8 @@ stopped.**
 ## Mission
 {{MISSION_STATEMENT}} — by optimizing {{LEVER_SUMMARY}}, maximizing the single FROZEN metric
 **`{{PRIMARY_METRIC}}`** ({{PRIMARY_DIRECTION}} = better) on {{EVAL_TARGET}}, with
-{{GUARDRAIL_SUMMARY}} co-tracked as a guardrail (necessary-but-not-sufficient). **Run continuously
-until manually stopped.**
+{{GUARDRAIL_SUMMARY}} co-tracked as a guardrail (necessary-but-not-sufficient). **Run continuously until
+stopped** — see "Ending the loop" for the only three ways that happens.
 
 ## The ONE metric (FROZEN — never edited mid-campaign)
 `{{PRIMARY_METRIC}}` = {{METRIC_DEFINITION}}. {{PRIMARY_DIRECTION}} = better. Computed by
@@ -94,11 +94,13 @@ Experiment 000 (ONCE, before the loop): BASELINE GATE
       {{VALIDATION_CHAIN}} chain end-to-end. Record in scoreboard + JOURNAL. (protocols/baselines.md)
 
 WHILE not interrupted:
-  1. HYPOTHESIZE & PREDICT — Pick ONE lever (below). BEFORE running, write the EXPECTED
-                    {{PRIMARY_METRIC}} (a point value AND a plausible range) and WHY, grounded in
+  1. HYPOTHESIZE & PREDICT — Pick the change: ONE lever (below) by default. BEFORE running, write the
+                    EXPECTED {{PRIMARY_METRIC}} (a point value AND a plausible range) and WHY, grounded in
                     units, physical bounds, and prior runs. The prediction is the control on your bias.
-  2. IMPLEMENT    — {{IMPLEMENT_VERB}}; new config configs/exp<NN>_<slug>.json (copy _template.json). ONE
-                    lever per experiment.
+  2. IMPLEMENT    — {{IMPLEMENT_VERB}}; new config configs/exp<NN>_<slug>.json (copy _template.json).
+                    Moving several levers together is legitimate — coupled levers, screening a region,
+                    hunting an interaction — but weigh the cost first: it buys reach and spends
+                    attribution. Record which levers moved; `{{VERIFY_SKILL}}` grades what that costs you.
   3. {{RUN_STEP_NAME}}  — {{RUN_COMMAND}}   (the FROZEN metric; OBEY the caps below).
   4. EVALUATE     — {{PRIMARY_METRIC}} (PRIMARY) + {{SECONDARY_METRICS}} via {{EVAL_WRITER}}.
   5. {{SANITY_STEP}}    — {{GUARDRAIL_CHECK}} (logged, NOT primary).
@@ -116,8 +118,70 @@ WHILE not interrupted:
                     finding changes the physics.
  10. CONSOLIDATE  — if JOURNAL > ~150 lines, trim to recent + open threads (protocols/journal_consolidation.md).
  11. CHECKPOINT   — if exp_id % {{CHECKPOINT_EVERY}} == 0, run protocols/checkpoint.md.
- 12. REPEAT
+ 12. REPEAT      — go to step 1 for the next experiment. Do NOT end the turn: a completed experiment is
+                    not a stopping cue (see "Ending the loop" below).
 ```
+
+### How the loop runs — supervisor mode (default) vs interactive
+The loop above is the **per-unit procedure**; *who repeats it* is the mode:
+
+- **Supervisor mode (`{{PYTHON_CMD}} scripts/run_campaign.py --supervise`) — the default for unattended
+  runs.** A deterministic driver pops one unit at a time from `results/queue.json` and spawns a **fresh
+  agent context per unit** — you, the worker, execute steps 1–11 for ONE unit and exit. The doctrine
+  spine + this charter auto-load in every fresh context, so re-reading is structural, not remembered.
+  Rules of the road:
+  - **Execute-or-decline, never silently substitute.** Run your assigned unit, or decline it with a
+    recorded reason (append to its `declined` list in `queue.json`) — a declination routes to the
+    planner. Proposing new units (with rationales) is always free; twice-declined units are shelved,
+    revivable by the planner.
+  - **The ledger is the loop's only memory.** Persist the iteration contract
+    (`protocols/checkpoint.md` §0) before you finish — the driver retries an incomplete unit once, then
+    halts the loop loudly.
+  - **Mid-unit anomalies: probe through the pattern, not around it.** Document the problem + hypothesis
+    in the journal and propose a standard probe unit; a claimed *major* problem needs a verify verdict
+    before the plan may steer on it. Trivial sanity checks are free — *if it could influence a
+    conclusion or consume real time, it's a unit.*
+  - **A PLANNER agent** (fresh context, read-mostly, strategy-only) refills/reorders the queue on
+    triggers (queue low, every k units, a declination, a plateau, a REFUTED verdict, after a promotion)
+    — direction judgment lives there and in your proposals, never in the driver.
+  - **Long solver runs execute in your shell or under the driver — never inside a background subagent**
+    (a platform stall-timeout abort masquerades as a failed solve).
+  - A genuine fork only the user can weigh: write `results/ESCALATE.md`; the driver halts and notifies.
+  - **Your per-unit end-of-turn is EARNED** once the iteration contract validates — the Stop hook
+    (§Ending the loop) stands down for driver-spawned workers (`AUTORESEARCH_SUPERVISED=1`); campaign-level
+    stopping is the driver's job (ESCALATE / `results/STOP` / empty queue after a planner pass).
+  Loop knobs (cadence, plateau, timeouts, models) live in `configs/loop.json` — set at scaffold from this
+  campaign's unit cost, user-owned thereafter.
+- **Interactive mode** (a human-attended session working `--config` by hand): the same per-unit
+  procedure and the same gates apply — the runner and the DISCOVERIES hook enforce them either way.
+
+## Ending the loop — the only three ways
+The loop is continuous; step 12 returns to step 1. A turn that simply ends is not a decision, so a Stop hook
+(`scripts/loop_heartbeat.py`) refuses an unearned end-of-turn and hands back your `JOURNAL` **NEXT** pointer.
+The loop ends only by:
+
+1. **`results/STOP`** (or `STOP.txt`) — the human's graceful stop: finish and log the experiment in flight,
+   then stop. Deleting the file resumes. (`Ctrl-C` still stops immediately, mid-experiment.)
+2. **`results/stop_request.json`** — your earned stop. Write it, then stop:
+   ```json
+   {"utc": "<now, ISO-8601>", "reason_code": "user-fork", "evidence": "<what shows this is true>"}
+   ```
+   Reason codes: **`user-fork`** (an ambiguous goal, or a trade-off only the user can weigh) ·
+   **`irreversible-action-confirm`** (awaiting confirmation for a hard-to-reverse act) · **`hard-blocked`**
+   (a real external blocker — missing data, dead hardware) · **`exhausted`** (the direction is finished).
+   `exhausted` also requires `"untried_levers": []` — **you may not declare the campaign done while holding a
+   lever you have yourself named as untried** — and a `"campaign_status_utc"` from a `campaign-status` run in
+   the last 2 h, because a ceiling claim gets the same scrutiny as a positive result. A request older than
+   30 min is ignored, so a stale one cannot end a later run.
+3. **The stall release** — after ~25 continuations with no new scoreboard row the hook releases itself. That
+   is a *failure signature, not an exit*: a loop that is alive and producing nothing is a dead run. Diagnose
+   the stall when the warning appears (`debug`); don't wait for the release.
+
+Honored stops are recorded in `results/loop_stops.log`, requests archived to `results/stop_requests/`.
+Stopping is a decision that leaves a record, never a turn that happened to end.
+
+*(Supervisor mode: these three ways bind the campaign level — the driver honours `results/STOP` and
+halts on ESCALATE or an empty queue; a worker ending its turn after a validated unit is not a loop stop.)*
 
 ## Bound expectations BEFORE you run (a-priori prediction)
 Predicting the answer first turns each run into a real test instead of a fishing trip, and it is the
@@ -245,12 +309,25 @@ On promotion to current-best, update `configs/RECOMMENDED.json` to point at the 
 the full artifact set (protocols/artifacts.md). Keep the artifacts for each successive best so the
 progression is inspectable.
 
-**Promotion is enforced, not just described.** Record the verify verdict in the scoreboard `verified`
-column the **same turn** you promote — a row acting as current-best (or backing a DISCOVERY) with a blank
-`verified` is a hygiene failure that `campaign-status` flags. The PreToolUse hook enforces verification for
-*DISCOVERIES writes*; it does **not** see scoreboard edits, so **current-best promotion is enforced by this
-rule + the `campaign-status` check** — don't let a number become "best" on the scoreboard without the
-verdict beside it. Promotion compares only **within one `(metric_version, data_version)`** — never rank a
+**Promotion is enforced, not just described.** The verify skill writes a **verdict artifact**
+`results/verdicts/<id>.json` (verdict, kill tier, named refuter); record the verdict in the scoreboard
+`verified` column the **same turn** you promote — a row acting as current-best (or backing a DISCOVERY)
+with a blank `verified` is a hygiene failure that `campaign-status` flags. The PreToolUse hook enforces
+*DISCOVERIES writes*: every entry must **cite its verdict artifact by name**, the artifact must be
+CONFIRMED with a named refuter, and an INCONCLUSIVE kill is denied (fail-closed — an error in the gate
+denies the promotion rather than allowing it). The hook does **not** see scoreboard edits, so
+**current-best promotion is enforced by this rule + the `campaign-status` check** — don't let a number
+become "best" on the scoreboard without the verdict beside it.
+
+**Steering-negatives are promotions too.** A negative result the campaign will *act* on — killing a
+lever/topology branch, declaring a ceiling, shelving a direction, or contradicting its a-priori
+prediction — goes to DISCOVERIES under the same gate, graded on the kill tiers: **REFUTED** (mechanism
+understood → prunes) / **EVIDENCE AGAINST** (clean single negative → shelved, revivable, accumulates) /
+**INCONCLUSIVE** (cause unattributed → never graduates; queue a fix-and-rerun unit). The failed-experiment
+population is *more* bug-contaminated than the winning one — most implementation errors degrade
+performance — so an unexamined negative is how a campaign silently kills a live branch. A claimed
+**invalidation** ("prior results are tainted") gets a verify verdict **before** the plan reprioritizes,
+shelves, or forks on it. Promotion compares only **within one `(metric_version, data_version)`** — never rank a
 row against one scored under a different metric or dataset version (re-score first; see Logging Protocol).
 **A non-CONFIRMED verdict does not promote a clean "best":** a PROVISIONAL / QUESTIONABLE ASSUMPTION row may
 act as working current-best only with its caveat recorded beside it — and **no claim-splitting**: a promoted
@@ -364,7 +441,8 @@ the biggest unexploited structural lever ({{STRUCTURAL_LEVERS}}).
   *resists* escalation, an audit signal: see "At a hard plateau, audit the inheritance" below), not a
   finish line. "I've stopped finding gains" is not the same as "no gains exist." If you truly believe
   you're at a limit, state it as a claim *with the falsification you attempted* — and keep exploring
-  orthogonal directions rather than idling.
+  orthogonal directions rather than idling. Acting on that belief means filing an `exhausted` stop_request
+  ("Ending the loop"), whose `untried_levers: []` is exactly this claim in checkable form.
 - **Diagnose before you pivot.** Name the failure type (idea-wrong / implementation-capped /
   fixed-choice-fought / near-miss — or the non-pivot **inherited-value-wrong**, handled in the next
   bullet) and take the **smallest jump** the diagnosis justifies along the
@@ -427,9 +505,10 @@ detail.
 
 ### `results/DISCOVERIES.md`
 Write only after multiple consistent experiments confirm a finding on `{{PRIMARY_METRIC}}` (guardrail
-noted) AND an independent verification returns CONFIRMED. **A PreToolUse hook blocks this write unless an
-independent verify ran recently** — run `{{VERIFY_SKILL}}` (it spawns a refuter sub-agent), get CONFIRMED,
-and quote the verdict; this is hard gate #1 in `CLAUDE.md`. Don't fight the hook — satisfy it. When a discovery changes the physical
+noted) AND an independent verification returns CONFIRMED. **A PreToolUse hook denies this write unless the
+entry cites a promotable verdict artifact** — run `{{VERIFY_SKILL}}` (it spawns a refuter sub-agent and
+writes `results/verdicts/<id>.json`), get CONFIRMED, and cite the verdict file in the entry; this is hard
+gate #1 in `CLAUDE.md`. Don't fight the hook — satisfy it. When a discovery changes the physical
 understanding, also update `{{PHYSICS_DOC}}` (equations, the effect, references consulted).
 
 ### `results/INDEX.md`

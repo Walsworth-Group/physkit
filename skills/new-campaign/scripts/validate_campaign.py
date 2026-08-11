@@ -5,19 +5,22 @@ The target is auto-detected:
   * a PROJECT root (has PROJECT.md + LINEAGE.md + campaigns/)  -> project-tree validation, or
   * a campaign tree                                            -> campaign validation.
 
+EVERY campaign lives inside a project (<project>/campaigns/<name>/ with ../../PROJECT.md + ../../LINEAGE.md);
+there is no standalone/bare-campaign mode. The physics + conventions + instrument docs therefore live in the
+project's shared/ and are REFERENCED, never copied.
+
 Campaign validation fails (exit 1) on anything new-campaign left unresolved:
   * a literal {{PLACEHOLDER}} token, a dangling [[OPTIONAL … block, a stray [PROPOSED] tag,
   * an un-stripped .tmpl file,
-  * a missing required file (charter, scoreboard, journal, discoveries, config template, the two code
-    stubs, and the physics + conventions docs).
-The physics + conventions docs live in the campaign's own docs/ for a STANDALONE campaign, or in the
-project's shared/ (referenced, never copied) when the campaign lives inside a new-project tree
-(<project>/campaigns/<name>/ with ../../PROJECT.md + ../../LINEAGE.md). The check adapts to the mode.
-Multi-campaign trees (charter_<NAME>.md / configs_<NAME>/ / results_<NAME>/) are handled by globbing.
+  * a missing required file (charter, scoreboard, journal, discoveries, config template, the two code stubs),
+  * no project home above the campaign, or a missing shared/{PHYSICS,CONVENTIONS,INSTRUMENT}.md in it,
+  * a LOCAL copy of any shared doc in the campaign's docs/ (design §4.1).
+Legacy trees using the retired multi-stage suffix (charter_<NAME>.md / configs_<NAME>/ / results_<NAME>/) still
+validate — the required-file checks glob — but new stages are scaffolded as sibling campaigns, not suffixes.
 
 Project-tree validation fails (exit 1) if the project home is malformed:
   * a missing required file/dir (PROJECT.md, LINEAGE.md, CLAUDE.md, DISCOVERIES.md, ENGINEERING_NOTES.md,
-    shared/{PHYSICS,CONVENTIONS,INSTRUMENT}.md, data/, campaigns/, reports/),
+    shared/{PHYSICS,CONVENTIONS,INSTRUMENT}.md, data/, campaigns/, sessions/, reports/),
   * a leftover {{PLACEHOLDER}}/[[OPTIONAL/[PROPOSED] in a project-root or shared/ doc,
   * a campaign in campaigns/ (or campaigns/_archive/) NOT indexed in LINEAGE.md,
   * a campaign carrying a LOCAL copy of a shared doc (docs/PHYSICS.md|CONVENTIONS.md|INSTRUMENT.md) —
@@ -54,17 +57,25 @@ CAMPAIGN_REQUIRED_GLOBS = [
     ("config template", "configs*/_template.json"),
     ("metric scorer", "scripts/metric.py"),
     ("runner", "scripts/run_campaign.py"),
+    ("frozen-core manifest", "scripts/frozen_core.py"),
     ("correctness suite", "tests/correctness_checks.py"),
     ("always-on doctrine", "CLAUDE.md"),
     ("discoveries guard hook", "scripts/guard_discoveries.py"),
+    ("loop heartbeat hook", "scripts/loop_heartbeat.py"),
     ("hook settings", ".claude/settings.json"),
+    ("loop knobs", "configs*/loop.json"),
+    ("unit queue", "results*/queue.json"),
+    ("predictions dir", "predictions"),
+    ("verdicts dir", "results*/verdicts"),
 ]
 
 PROJECT_REQUIRED_FILES = [
     "PROJECT.md", "LINEAGE.md", "CLAUDE.md", "DISCOVERIES.md", "ENGINEERING_NOTES.md",
     "shared/PHYSICS.md", "shared/CONVENTIONS.md", "shared/INSTRUMENT.md",
 ]
-PROJECT_REQUIRED_DIRS = ["data", "shared", "campaigns", "reports"]
+PROJECT_REQUIRED_DIRS = ["data", "shared", "campaigns", "sessions", "reports"]
+# Shared docs live once at <project>/shared/ and are referenced; a campaign-local copy is a fork (design §4.1).
+SHARED_DOCS = ("PHYSICS.md", "CONVENTIONS.md", "INSTRUMENT.md")
 
 
 def _read_text(path: Path) -> str | None:
@@ -103,30 +114,52 @@ def scan_leftovers(paths, base: Path, errors: list[str]) -> None:
                     errors.append(f"unresolved {lit} {rel}:{i}: {line.strip()[:100]}")
 
 
+def project_root_of(campaign: Path) -> Path | None:
+    """The project home above a campaign, or None if the campaign has no home.
+
+    A campaign sits at <project>/campaigns/<slug>/, or <project>/campaigns/_archive/<slug>/ once forked.
+    Matching on the parent directory NAME (not just depth) keeps a sessions/<date>_<slug>/ folder — which is
+    also two levels under the project root — from being mistaken for a campaign.
+    """
+    if campaign.parent.name == "campaigns":
+        cand = campaign.parent.parent
+    elif campaign.parent.name == "_archive" and campaign.parent.parent.name == "campaigns":
+        cand = campaign.parent.parent.parent
+    else:
+        return None
+    return cand if (cand / "PROJECT.md").is_file() and (cand / "LINEAGE.md").is_file() else None
+
+
 def validate_campaign(root: Path) -> list[str]:
     errors: list[str] = []
 
-    # A campaign inside a project (new-project home) is at <project>/campaigns/<name>/, so ../../PROJECT.md
-    # + ../../LINEAGE.md exist and physics/conventions/instrument are SHARED at ../../shared/ (referenced,
-    # never copied). A standalone campaign keeps them in its own docs/. Detect the mode to check the right home.
-    proj_root = root.parent.parent
-    in_project = (proj_root / "PROJECT.md").is_file() and (proj_root / "LINEAGE.md").is_file()
+    # Every campaign lives inside a project, so the physics/conventions/instrument docs are SHARED at
+    # ../../shared/ — referenced, never copied (design §4.1). There is no standalone mode to detect.
+    proj_root = project_root_of(root)
 
-    # 1. Required files present (glob-based for multi-campaign suffixes).
+    # 1. Required files present (glob-based; tolerates the retired _<NAME> suffix in legacy trees).
     for label, pattern in CAMPAIGN_REQUIRED_GLOBS:
         if not list(root.glob(pattern)):
             errors.append(f"missing {label}: no file matches '{pattern}'")
 
-    # 1b. Physics + conventions live locally (standalone) OR in the project's shared/ (in-project).
-    for role, local, shared in (
-        ("conventions reference", "docs/CONVENTIONS.md", "shared/CONVENTIONS.md"),
-        ("physics reference", "docs/PHYSICS.md", "shared/PHYSICS.md"),
-    ):
-        if in_project:
-            if not (proj_root / shared).is_file():
-                errors.append(f"missing {role}: in-project campaign but no '../../{shared}'")
-        elif not list(root.glob(local)):
-            errors.append(f"missing {role}: no file matches '{local}'")
+    # 1b. The project home + its shared docs. A campaign with no home is a legacy bare tree — lift it into a
+    #     project (new-campaign Step 0.1) rather than authoring campaign-local physics/conventions.
+    if proj_root is None:
+        errors.append(
+            "no project home: expected <project>/campaigns/<slug>/ with ../../PROJECT.md + ../../LINEAGE.md — "
+            "every campaign lives in a project; lift this tree in via new-campaign Step 0.1"
+        )
+    else:
+        for doc in SHARED_DOCS:
+            if not (proj_root / "shared" / doc).is_file():
+                errors.append(f"missing shared reference: no '../../shared/{doc}'")
+
+    # 1c. No campaign-local copy of a shared doc (validate_project runs the same check tree-wide).
+    for doc in SHARED_DOCS:
+        if (root / "docs" / doc).is_file():
+            errors.append(
+                f"campaign carries a LOCAL copy of a shared doc (must reference ../../shared/): docs/{doc}"
+            )
 
     # 2. No leftover tokens / un-stripped templates anywhere in the tree.
     scan_leftovers(sorted(root.rglob("*")), root, errors)
@@ -162,7 +195,7 @@ def validate_project(root: Path) -> list[str]:
             slug_noidx = re.sub(r"^\d+[_-]", "", slug)   # 01_cnn-inverse -> cnn-inverse
             if slug not in lineage and slug_noidx not in lineage:
                 errors.append(f"campaign not indexed in LINEAGE.md: campaigns/{('_archive/' if d.parent.name=='_archive' else '')}{slug}")
-            for shared_doc in ("PHYSICS.md", "CONVENTIONS.md", "INSTRUMENT.md"):
+            for shared_doc in SHARED_DOCS:
                 if (d / "docs" / shared_doc).is_file():
                     errors.append(
                         f"campaign carries a LOCAL copy of a shared doc (must reference ../../shared/): "

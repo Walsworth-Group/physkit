@@ -1,0 +1,366 @@
+#!/usr/bin/env python3
+"""loop_heartbeat.py — Stop hook: refuse an unearned end-of-turn so the loop actually runs unattended.
+
+Enforces the campaign's loop-persistence gate: an autonomous campaign ends because a human stopped it or
+because the agent RECORDED a reason to stop — never because a turn happened to end after an experiment.
+Reads the Stop hook JSON on stdin; blocks with `{"decision":"block","reason": ...}` where the reason is
+the campaign's OWN next action (the JOURNAL NEXT pointer + open threads + the next exp id).
+
+Why a hook and not an instruction: the charter already says `12. REPEAT` and CLAUDE.md already says don't
+stop prematurely, yet campaigns stopped after each completed experiment anyway. A turn ends when the model
+emits no tool call, and no prose survives that moment — this is the doctrine's own "enforce, don't exhort"
+(PRINCIPLES §9). Prose sets the intent; this hook is what makes it hold.
+
+THE THREE WAYS A LOOP MAY END (checked in this order; anything else is blocked):
+  1. `results/STOP` (or `STOP.txt`) exists          — the human's graceful stop. The agent finishes and logs
+     the current experiment first, unlike Ctrl-C. Delete the file to resume.
+  2. `results/stop_request.json` is FRESH and VALID — the agent's earned stop. Reason code must be one of
+     REASON_CODES; `exhausted` additionally requires an empty `untried_levers` list and a recent
+     campaign-status. Honored requests are archived to results/stop_requests/ so a stale one cannot re-fire.
+  3. MAX_BLOCKS consecutive blocks with NO new scoreboard row — the anti-runaway release. A loop that is
+     alive and producing nothing is a dead run (CORE "monitor progress, not liveness"); blocking it harder
+     just burns tokens. Released and recorded, never silent.
+
+ARMING: the hook is inert until the campaign is live — >=1 data row in results/scoreboard.tsv (exp 000 has
+run), or `results/.loop_armed` exists. Without this the setup/validation session that legitimately finishes
+and stops would be trapped in the loop it is still building.
+
+FAIL-OPEN by design: any parsing/IO error -> allow the stop, BUT append to results/gate_failures.log so the
+bypass is never silent (campaign-status hard-fails on that log). A hook bug must never make a campaign
+unstoppable. Kill switch: AUTORESEARCH_LOOP_HEARTBEAT=off.
+
+SCOPE (gaps this hook does NOT close — campaign-status backstops them):
+  * It cannot judge whether the continued work is GOOD, only that a new scoreboard row appeared. An agent
+    that pads the ledger to satisfy the gate would pass; the stall counter bounds the damage, and
+    campaign-status' plateau/verified-column checks are the real backstop. The block reason therefore always
+    points at the ledger's own NEXT pointer — never "do something".
+  * Only fires if THIS tree wired it (.claude/settings.json registers it under "Stop"). campaign-status
+    asserts that, exactly as it does for guard_discoveries.
+  * Main-session stops only. A Stop hook becomes SubagentStop inside a subagent, and blocking THAT would
+    trap the independent refuter that hard gate #1 depends on — so a non-"Stop" event is allowed immediately.
+"""
+from __future__ import annotations
+import json, os, sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+FAIL_OPEN = True
+ENABLED = os.environ.get("AUTORESEARCH_LOOP_HEARTBEAT", "on").strip().lower() != "off"
+MAX_BLOCKS = int(os.environ.get("AUTORESEARCH_LOOP_MAX_BLOCKS", "25"))
+REQUEST_WINDOW_MIN = int(os.environ.get("AUTORESEARCH_STOP_REQUEST_WINDOW_MIN", "30"))
+STATUS_WINDOW_MIN = int(os.environ.get("AUTORESEARCH_STATUS_WINDOW_MIN", "120"))
+
+RESULTS = Path(__file__).resolve().parent.parent / "results"
+SCOREBOARD = RESULTS / "scoreboard.tsv"
+JOURNAL = RESULTS / "JOURNAL.md"
+STOP_SENTINELS = (RESULTS / "STOP", RESULTS / "STOP.txt")
+STOP_REQUEST = RESULTS / "stop_request.json"
+STOP_ARCHIVE = RESULTS / "stop_requests"
+LOOP_STATE = RESULTS / "loop_state.json"        # hook bookkeeping: consecutive blocks + last row count
+LOOP_STOPS_LOG = RESULTS / "loop_stops.log"     # every honored stop + every stall release
+GATE_FAILURE_LOG = RESULTS / "gate_failures.log"
+ARMED_FLAG = RESULTS / ".loop_armed"
+
+# A stop must name WHY in a closed vocabulary — "the agent decided to" is not a reason. These map onto
+# PRINCIPLES §9: escalate only a genuine fork, confirm before an irreversible act, don't stop prematurely.
+REASON_CODES = {
+    "user-fork": "an ambiguous goal or a trade-off only the user can weigh",
+    "irreversible-action-confirm": "waiting on the user to confirm a hard-to-reverse action",
+    "hard-blocked": "a genuine external blocker (missing data, dead hardware, expired credential)",
+    "exhausted": "every named lever has been tried; the direction is genuinely finished",
+}
+
+
+def _ts(s):
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
+def _allow():
+    sys.exit(0)
+
+
+def _block(reason):
+    print(json.dumps({"decision": "block", "reason": reason}))
+    sys.exit(0)
+
+
+def _log(path, *fields):
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write("\t".join([_now().isoformat(), *[str(x) for x in fields]]) + "\n")
+    except Exception:
+        pass
+
+
+def _note_bypass(reason):
+    """Fail-open must never be silent: campaign-status hard-fails on a non-empty gate_failures.log."""
+    _log(GATE_FAILURE_LOG, "FAIL-OPEN", f"loop_heartbeat: {reason}")
+
+
+def scoreboard_rows():
+    """Number of experiment rows recorded. Comments (#), the header, and blanks are not results."""
+    if not SCOREBOARD.is_file():
+        return 0
+    n = 0
+    for line in SCOREBOARD.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+        s = line.strip()
+        if not s or s.startswith("#") or s.startswith("exp_id\t"):
+            continue
+        n += 1
+    return n
+
+
+def _open_confounded():
+    """Levers named as entangled by some verdict and never disentangled since.
+
+    Opened by a verdict's `confounded_levers` (set whenever >1 lever moved), closed by a later verdict's
+    `resolves_confounded` (written when the disentangler runs). See verify/SKILL.md, *Confounded
+    attribution*. Unreadable verdicts are skipped rather than blocking: this guard exists to stop a
+    premature `exhausted`, not to police the verdict directory.
+    """
+    vdir = RESULTS / "verdicts"
+    if not vdir.is_dir():
+        return []
+    opened, closed = set(), set()
+    for p in sorted(vdir.glob("*.json")):
+        try:
+            v = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(v, dict):
+            continue
+        for k in v.get("confounded_levers") or []:
+            opened.add(str(k))
+        for k in v.get("resolves_confounded") or []:
+            closed.add(str(k))
+    return sorted(opened - closed)
+
+
+def next_exp_id(rows):
+    """The next experiment number, from the highest numeric exp_id on the ledger. Falls back to the count."""
+    hi = -1
+    if SCOREBOARD.is_file():
+        for line in SCOREBOARD.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+            s = line.strip()
+            if not s or s.startswith("#") or s.startswith("exp_id\t"):
+                continue
+            head = s.split("\t")[0].strip().lstrip("#")
+            digits = "".join(c for c in head if c.isdigit())
+            if digits:
+                hi = max(hi, int(digits))
+    return f"{(hi + 1) if hi >= 0 else rows:03d}"
+
+
+def journal_pointer():
+    """The campaign's own next action: the NEXT pointer and the first few open threads."""
+    if not JOURNAL.is_file():
+        return "", []
+    nxt, threads, in_threads = "", [], False
+    for line in JOURNAL.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+        s = line.strip()
+        if s.startswith("**NEXT:**") and not nxt:
+            nxt = s[len("**NEXT:**"):].strip()
+        elif s.lower().startswith("## open threads"):
+            in_threads = True
+        elif in_threads:
+            if s.startswith("##"):
+                in_threads = False
+            elif s.startswith("- ") and not s.startswith("- ("):
+                threads.append(s[2:].strip())
+    return nxt, threads[:3]
+
+
+def read_state():
+    try:
+        return json.loads(LOOP_STATE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def write_state(blocks, rows):
+    try:
+        LOOP_STATE.parent.mkdir(parents=True, exist_ok=True)
+        LOOP_STATE.write_text(json.dumps(
+            {"consecutive_blocks": blocks, "rows_at_last_block": rows, "utc": _now().isoformat()},
+            indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def sentinel_present():
+    return next((p for p in STOP_SENTINELS if p.exists()), None)
+
+
+def stop_request_verdict(now):
+    """(honored, detail) for results/stop_request.json.
+
+    honored=None  -> no request on disk (say nothing).
+    honored=False -> a request exists but does not qualify; `detail` is what is missing, and it is fed back
+                     to the agent verbatim so an almost-right request can be fixed rather than guessed at.
+    """
+    if not STOP_REQUEST.is_file():
+        return None, ""
+    try:
+        req = json.loads(STOP_REQUEST.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return False, f"results/stop_request.json is not valid JSON ({exc})."
+
+    code = str(req.get("reason_code", "")).strip()
+    if code not in REASON_CODES:
+        return False, (f"reason_code '{code}' is not one of {sorted(REASON_CODES)}. "
+                       "A stop must name WHY in that vocabulary.")
+    if not str(req.get("evidence", "")).strip():
+        return False, f"reason_code '{code}' needs a non-empty `evidence` field (what shows this is true)."
+
+    ts = _ts(req.get("utc"))
+    age = (now.timestamp() - (ts.timestamp() if ts else STOP_REQUEST.stat().st_mtime)) / 60.0
+    if age > REQUEST_WINDOW_MIN:
+        return False, (f"the stop_request is {age:.0f} min old (window {REQUEST_WINDOW_MIN} min) — a stale "
+                       "request must not silently end a later run. Re-write it with a current `utc` if it "
+                       "still holds.")
+
+    if code == "exhausted":
+        # A lever tried ONLY inside a multi-lever experiment has not been tried: the combination was
+        # tested, not the lever. Without this, one confounded negative retires several levers at once,
+        # empties `untried_levers`, and lets a single bad experiment end the campaign. Debt is opened by
+        # a verdict's `confounded_levers` and closed by a later verdict's `resolves_confounded`.
+        open_conf = _open_confounded()
+        if open_conf:
+            return False, ("`exhausted` is refused while levers sit in confounded limbo — "
+                           f"{open_conf} were only ever moved inside a multi-lever experiment, so the "
+                           "combination was tested, not the lever. Run each recorded `disentangler` (and "
+                           "name the lever in that verdict's `resolves_confounded`) before declaring the "
+                           "direction finished.")
+        # The B10 clause: a campaign may not declare itself finished while holding a lever it has itself
+        # named as untried. Making that an explicit, falsifiable field is the whole point of the code.
+        levers = req.get("untried_levers")
+        if not isinstance(levers, list):
+            return False, ("`exhausted` requires an `untried_levers` list (use [] to assert none remain). "
+                           "Naming the field is what makes the claim checkable later.")
+        if levers:
+            return False, ("`exhausted` is refused while `untried_levers` is non-empty — you named "
+                           f"{levers}. Try them (or move one to `evidence` with the reasoned argument for "
+                           "why it cannot work) before declaring the direction finished.")
+        sts = _ts(req.get("campaign_status_utc"))
+        if sts is None or (now.timestamp() - sts.timestamp()) / 60.0 > STATUS_WINDOW_MIN:
+            return False, (f"`exhausted` requires `campaign_status_utc` from a campaign-status run in the "
+                           f"last {STATUS_WINDOW_MIN} min — a ceiling claim is a load-bearing claim and gets "
+                           "the same scrutiny as a positive result. Run campaign-status, then re-write it.")
+    return True, code
+
+
+def archive_request(code):
+    """Keep the stop as a permanent record and clear it, so it cannot re-fire on the next run."""
+    try:
+        STOP_ARCHIVE.mkdir(parents=True, exist_ok=True)
+        stamp = _now().strftime("%Y%m%dT%H%M%SZ")
+        STOP_REQUEST.replace(STOP_ARCHIVE / f"{stamp}_{code}.json")
+    except Exception:
+        pass  # the stop is already honored and logged; failing to archive must not block the exit
+
+
+def continuation_reason(exp_id, nxt, threads, blocks, rows_since):
+    """The block message. It carries the campaign's OWN next action — a hook that cannot name one shouldn't
+    block, and a generic 'keep going' is how a Stop hook turns into an infinite loop."""
+    lines = []
+    if blocks >= MAX_BLOCKS // 3 and rows_since == 0:
+        lines.append(
+            f"STALL: {blocks} consecutive continuations with NO new scoreboard row. Producing nothing is a "
+            "dead run, not progress. Diagnose it now — is a run hanging, is a script erroring, are you "
+            "re-planning instead of executing? Use /physkit:debug, or record a stop_request (below). This "
+            f"loop releases itself after {MAX_BLOCKS} blocks without a result."
+        )
+    else:
+        lines.append(
+            f"The campaign is not finished — an experiment completing is not a stopping cue. Resume at step 1 "
+            f"of the Experiment Loop in docs/charter.md for exp {exp_id}: HYPOTHESIZE & PREDICT (write the "
+            "expected value and range BEFORE running), one lever by default, then run/evaluate/log/verify."
+        )
+    if nxt:
+        lines.append(f"results/JOURNAL.md NEXT: {nxt}")
+    if threads:
+        lines.append("Open threads: " + " | ".join(threads))
+    lines.append(
+        "If you genuinely must stop, write results/stop_request.json — "
+        '{"utc": "<now ISO-8601>", "reason_code": "<' + "|".join(sorted(REASON_CODES)) + '>", '
+        '"evidence": "<what shows this>"} — plus "untried_levers": [] and "campaign_status_utc" for '
+        "`exhausted`. A human stop is results/STOP. Stopping is a recorded decision, not a silent turn-end."
+    )
+    return "\n".join(lines)
+
+
+def main():
+    # Supervisor-mode stand-down: a driver-spawned worker's per-unit end-of-turn is EARNED (its unit's
+    # iteration contract validates); campaign-level stopping is the driver's job (ESCALATE / STOP / empty
+    # queue). Without this, the Stop hook would refuse every worker's legitimate exit.
+    if os.environ.get("AUTORESEARCH_SUPERVISED") == "1":
+        sys.exit(0)
+
+    if not ENABLED:
+        _allow()
+    try:
+        data = json.load(sys.stdin)
+    except Exception:
+        _note_bypass("could not parse hook stdin")
+        if FAIL_OPEN:
+            _allow()
+        _block("Loop gate: unreadable hook input (strict mode). Continue the loop.")
+    try:
+        # SubagentStop must never be blocked — hard gate #1's independent refuter has to be able to finish.
+        if data.get("hook_event_name") not in (None, "Stop"):
+            _allow()
+
+        rows = scoreboard_rows()
+        if rows == 0 and not ARMED_FLAG.exists():
+            _allow()  # campaign not live yet — don't trap the session that is still building it
+
+        sentinel = sentinel_present()
+        if sentinel is not None:
+            _log(LOOP_STOPS_LOG, "SENTINEL", sentinel.name, f"rows={rows}")
+            write_state(0, rows)
+            _allow()
+
+        now = _now()
+        honored, detail = stop_request_verdict(now)
+        if honored:
+            _log(LOOP_STOPS_LOG, "STOP_REQUEST", detail, f"rows={rows}")
+            archive_request(detail)
+            write_state(0, rows)
+            _allow()
+
+        state = read_state()
+        prior_rows = int(state.get("rows_at_last_block", -1))
+        blocks = int(state.get("consecutive_blocks", 0)) + 1 if rows == prior_rows else 1
+        rows_since = rows - prior_rows if prior_rows >= 0 else rows
+
+        if blocks > MAX_BLOCKS and rows == prior_rows:
+            # Anti-runaway release: blocking harder cannot produce science, and an unstoppable loop is worse
+            # than a stopped one. Recorded so campaign-status can surface it as a stall, never silent.
+            _log(LOOP_STOPS_LOG, "STALL_RELEASE", f"blocks={blocks}", f"rows={rows}")
+            write_state(0, rows)
+            _allow()
+
+        write_state(blocks, rows)
+        exp_id = next_exp_id(rows)
+        nxt, threads = journal_pointer()
+        reason = continuation_reason(exp_id, nxt, threads, blocks, max(rows_since, 0))
+        if honored is False:
+            reason = ("Your stop_request was REFUSED: " + detail + "\n\n" + reason)
+        _block(reason)
+    except Exception as exc:  # never make a campaign unstoppable on a hook bug — but log the bypass
+        _note_bypass(f"heartbeat error: {exc}")
+        if FAIL_OPEN:
+            _allow()
+        _block("Loop gate: heartbeat error (strict mode). Continue the loop, and fix the hook.")
+
+
+if __name__ == "__main__":
+    main()

@@ -30,6 +30,11 @@ changes the physics** (the loop UPDATE step).
 | {{EFFECT_4}} | deferred | <added when…> |
 | {{EFFECT_5}} | unknown | <flagged risk — how we'll find out> |
 
+- **Dimensionless groups (the problem's *real* parameters)** *(optional — fill if the problem has meaningful
+  ones; delete this line if not)*: the Buckingham-π groups that govern the behavior and the regime each sits
+  in (≫1 / ≪1 / O(1)), so you know which terms dominate or drop. The `dimensional-analysis` skill derives
+  them; recording them here names the *actual* knobs (e.g. a drive-to-coupling ratio Ω/A that collapses a
+  two-parameter picture onto one axis). Skip for problems with no informative groups.
 - **A-priori bound on the key result (ceiling / floor / order):** {{APRIORI_BOUND}}
 - **Domain of validity / key assumptions:** {{DOMAIN_ASSUMPTIONS}}
 

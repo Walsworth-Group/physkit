@@ -4,16 +4,25 @@ The simulator's standing checks (built and maintained with the `correctness-suit
 `docs/VERIFICATION_PLAN.md`). `verify` asks "is this *result* right?"; this suite asks "is the *machinery*
 still right?" — and makes the answer a button you can press.
 
-**Run:** `python tests/correctness_checks.py` — exit `0` = green · `1` = a check FAILED.
+**Run:** `python tests/correctness_checks.py` — exit `0` = green · `1` = a check FAILED · `2` = EMPTY (zero
+active checks; the freshly-scaffolded all-skip state).
 
 **Starter check kinds** (in `correctness_checks.py`, shipped as skip-stubs — implement the ones that apply):
 analytic-limit · conservation/symmetry invariants · independent-method parity · convergence ·
 known-physics replication + regression gates.
 
-**Green-gate policy (LIGHT):**
-- `scripts/run_campaign.py` warns if the suite is **absent**, and under `--selftest` runs it and warns on
-  **RED** — a warning, never a hard stop.
-- `verify` treats a **red suite as a blocker** for promoting a finding.
-- **Re-run after ANY change to core/FROZEN code** (`docs/protocols/checkpoint.md`).
+**Green-gate policy:**
+- `scripts/run_campaign.py` runs the suite on **every experiment** and records its status to
+  `results/correctness_state.json`. The run itself never hard-stops (so you can iterate mid-fix) — but only
+  an **affirmative GREEN** (≥1 active check, none failing) green-lights a **promotion**.
+- **Promotion is BLOCKED (EH-9) unless the suite is GREEN.** RED (a check failed), **EMPTY** (zero active
+  checks — the all-skip scaffold), **ERROR**, and **ABSENT** all block, enforced by `guard_discoveries` on
+  both promotion surfaces (DISCOVERIES + current-best). Deleting or never-finishing the suite is therefore
+  not a way past the gate.
+- **No simulator to check?** Record an explicit N/A in **`tests/CORRECTNESS_NA.md`** (a short rationale).
+  That — and only that — excuses an ABSENT/EMPTY suite; it is a recorded, reviewable decision, never a
+  silent gap. It does not excuse a RED/broken suite.
+- A green is also rejected if **stale** — recorded against a different FROZEN/core hash than the code on disk
+  now (EH-8). **Re-run after ANY change to core/FROZEN code** (`docs/protocols/checkpoint.md`).
 - Per `debug`, **every fixed bug earns a new regression check here** — "a check that encodes a lesson you
   already paid for once."

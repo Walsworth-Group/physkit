@@ -1,10 +1,11 @@
 """Correctness suite - the simulator's standing checks.
 
-Run:  python tests/correctness_checks.py       (exit 0 = green | 1 = a check FAILED)
+Run:  python tests/correctness_checks.py       (exit 0 = green | 1 = a check FAILED | 2 = no active checks)
 
 `verify` asks "is this *result* right?"; this suite asks "is the *machinery* still right?". Build it with
-the `correctness-suite` skill from docs/VERIFICATION_PLAN.md. A FRESH scaffold is all-skip (green, with a
-reminder to add checks). No finding built on a RED suite is trustworthy.
+the `correctness-suite` skill from docs/VERIFICATION_PLAN.md. A FRESH scaffold is all-skip: it reports
+EMPTY (exit 2), which does NOT green-light a promotion (EH-9) - fill in >=1 real check. No finding built on
+a RED or EMPTY suite is trustworthy; a genuinely-no-simulator campaign records tests/CORRECTNESS_NA.md.
 
 Each check is a zero-arg function returning one of:
     "pass"                  the check held
@@ -77,7 +78,10 @@ def main() -> int:
         print("RED - a correctness check FAILED. Do not trust results built on this code until it is green.")
         return 1
     if n_pass == 0:
-        print("WARNING - 0 active checks. The simulator is unguarded; add checks (correctness-suite skill).")
+        print("EMPTY - 0 active checks. The simulator is UNGUARDED, so this suite cannot green-light a "
+              "promotion (EH-9). Add >=1 real check (correctness-suite skill), or record an explicit N/A in "
+              "tests/CORRECTNESS_NA.md if this campaign genuinely has no simulator to check.")
+        return 2
     return 0
 
 

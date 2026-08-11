@@ -17,7 +17,7 @@ experiment for full reproducibility.
 ## How this campaign runs
 
 This is an autonomous research loop. The agent re-reads [`docs/charter.md`](docs/charter.md) every
-iteration and: hypothesizes a change to one lever, predicts the metric, runs it, evaluates the frozen
+iteration and: hypothesizes a change (one lever by default), predicts the metric, runs it, evaluates the frozen
 metric + guardrail, logs a scoreboard row, and graduates confirmed findings to `DISCOVERIES.md` only
 after independent verification. Experiments are numbered `exp000` (the baseline gate), `exp001` (first
 method), then `exp002`, `exp003`, … — zero-padded to three digits so they sort correctly.

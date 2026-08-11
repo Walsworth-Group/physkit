@@ -21,7 +21,7 @@ name:
 | start any physics problem (before modeling, simulating, or deriving) | `/physkit:frame-problem` |
 | need a result, number, or derivation checked before relying on it | `/physkit:verify` |
 | write up work — every number provenance-labeled, every citation verified | `/physkit:report` |
-| stand up an autonomous research campaign | `/physkit:new-campaign` |
+| stand up an autonomous research campaign (it creates the project home if you don't have one) | `/physkit:new-campaign` |
 | want a running campaign health-checked / checkpointed | `/physkit:campaign-status` |
 
 ## Principles
@@ -41,7 +41,7 @@ They group into nine pillars, led by the one that improves all the others. The t
 | **Integrity & honest reporting** | the frozen honesty core in `docs/CORE.md`, applied through the campaign's promotion discipline | `report` / `final-report` label every number by provenance + give the honest band; `cite-check` blocks fabricated references |
 | **Verification & correctness** | `correctness-suite` stands up analytic-limit, convergence, and regression checks, re-run after every core change | `verify` checks independently and recomputes with graded verdicts; `dimensional-analysis`; `debug` |
 | **Physics-aware reasoning** | `frame-problem` requires a physics-effect inventory + verification plan; `docs/SIMULATION_VALIDATION.md` codifies V&V&UQ | `dimensional-analysis`, `derive`, `simulation-design`, `correctness-suite` (manufactured solutions, order-of-accuracy) |
-| **Rigor** | the campaign loop runs hypothesize → run → evaluate → verify, one change at a time | `frame-problem` bounds the answer first; `experiment-design` picks the next run; `model-selection` discriminates hypotheses |
+| **Rigor** | the campaign loop runs hypothesize → run → evaluate → verify, one change at a time by default | `frame-problem` bounds the answer first; `experiment-design` picks the next run; `model-selection` discriminates hypotheses |
 | **Traceability** | per-experiment snapshots + append-only results ledger in the scaffold; a provenance-tag convention | tag every fact (PINNED / REPORTED / INFERRED …); `cite-check` verifies each reference against its source |
 | **Autonomy & supervision** | `new-campaign` front-loads clarification; `campaign-status` runs periodic health checks | clarify first; don't stop at the first plateau; escalate genuine forks; confirm before irreversible actions |
 | **Communication & specification** | each skill is written *why*-first; the campaign charter (`docs/charter.md`) streams goal + context to the agent | `record-decision`, `handoff`, `report` carry the reasoning, not just the result |
@@ -53,24 +53,36 @@ The full per-pillar doctrine, with rationale and provenance, is in [`docs/PRINCI
 
 ## Install
 
-**Quick test (no install, picks up edits live):**
+PhysKit's skills follow the open **Agent Skills** standard (`SKILL.md`), so the same skills run on
+Claude Code, Codex, and OpenCode. Per-harness detail (plus Gemini CLI) lives in
+**[docs/INSTALL_MULTI_HARNESS.md](docs/INSTALL_MULTI_HARNESS.md)**.
+
+### Claude Code
+
+**Quick test** (no install, picks up edits live):
 ```
 claude --plugin-dir "<path-to-this-folder>"
 ```
 
-**Persistent install from this repo (GitHub):**
+**Persistent install** (from GitHub, or a local/shared-drive copy):
 ```
-/plugin marketplace add <OWNER>/<REPO>
+/plugin marketplace add <OWNER>/<REPO>          # or  "<path-to-this-folder>"
 /plugin install physkit@physkit
 ```
 
-**Persistent install from a local/shared-drive copy:**
+Then run `/reload-plugins` and confirm with `/plugin list`. Skills appear as `/physkit:<name>`.
+
+### Codex, OpenCode, and Gemini CLI
+
+These read skills from `~/.agents/skills`. Project this kit's skills there with the bundled installer:
 ```
-/plugin marketplace add "<path-to-this-folder>"
-/plugin install physkit@physkit
+scripts/install-skills.sh                                            # macOS / Linux
+powershell -ExecutionPolicy Bypass -File scripts\install-skills.ps1  # Windows
 ```
 
-Then run `/reload-plugins` and confirm with `/plugin list`.
+Restart the harness; it auto-discovers them (verify with `/skills` in Codex, or `opencode debug skill`
+in OpenCode). Codex users who prefer a marketplace flow can instead
+`codex plugin marketplace add "<path-to-this-folder>"`.
 
 See **[GETTING_STARTED.md](GETTING_STARTED.md)** for the full walkthrough, including how to stand up and
 launch an autonomous campaign.
@@ -78,9 +90,11 @@ launch an autonomous campaign.
 ## Layout
 
 ```
-.claude-plugin/   plugin.json + marketplace.json (the manifests)
+.claude-plugin/   Claude Code plugin.json + marketplace.json (the manifests)
+.codex-plugin/    Codex plugin.json (points at the same skills/)
+.agents/          vendor-neutral Codex marketplace entry
 skills/           the 23 skills (general + campaign), each a SKILL.md
+scripts/          install-skills.{sh,ps1} — project skills into ~/.agents/skills (Codex/OpenCode/Gemini)
 docs/             always-on spine (CORE, PRINCIPLES) + on-demand reference docs
-templates/        campaign scaffold materialized by /physkit:new-campaign
-examples/         illustrative filled program charters
+templates/        project + campaign scaffolds materialized by /physkit:new-project + new-campaign
 ```
