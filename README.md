@@ -43,7 +43,7 @@ They group into nine pillars, led by the one that improves all the others. The t
 | **Physics-aware reasoning** | `frame-problem` requires a physics-effect inventory + verification plan; `docs/SIMULATION_VALIDATION.md` codifies V&V&UQ | `dimensional-analysis`, `derive`, `simulation-design`, `correctness-suite` (manufactured solutions, order-of-accuracy) |
 | **Rigor** | the campaign loop runs hypothesize → run → evaluate → verify, one change at a time by default | `frame-problem` bounds the answer first; `experiment-design` picks the next run; `model-selection` discriminates hypotheses |
 | **Traceability** | per-experiment snapshots + append-only results ledger in the scaffold; a provenance-tag convention | tag every fact (PINNED / REPORTED / INFERRED …); `cite-check` verifies each reference against its source |
-| **Autonomy & supervision** | `new-campaign` front-loads clarification; `campaign-status` runs periodic health checks | clarify first; don't stop at the first plateau; escalate genuine forks; confirm before irreversible actions |
+| **Autonomy & supervision** | `new-campaign` front-loads clarification; `run-campaign` launches, watches, and steers the supervised loop; `campaign-status` runs periodic health checks | clarify first; don't stop at the first plateau; escalate genuine forks; confirm before irreversible actions |
 | **Communication & specification** | each skill is written *why*-first; the campaign charter (`docs/charter.md`) streams goal + context to the agent | `record-decision`, `handoff`, `report` carry the reasoning, not just the result |
 | **Focus** (context economy) | tiered doctrine — `docs/CORE.md` always loaded, the rest on demand via `docs/DOCTRINE_INDEX.md` | delegate bounded subtasks to sub-agents on the lightest capable model; keep context small |
 
@@ -65,11 +65,18 @@ claude --plugin-dir "<path-to-this-folder>"
 ```
 
 **Persistent install** (from GitHub, or a local/shared-drive copy):
+
+**macOS/Linux** — inside the Claude Code REPL:
 ```
 /plugin marketplace add <OWNER>/<REPO>          # or  "<path-to-this-folder>"
 /plugin install physkit@physkit
 ```
 
+**Windows** — the `/plugin` slash command isn't recognized inside the REPL. Run the CLI form from your regular shell instead:
+```
+claude plugin marketplace add "<path>\physkit-internal\kit"
+claude plugin install physkit@physkit
+```
 Then run `/reload-plugins` and confirm with `/plugin list`. Skills appear as `/physkit:<name>`.
 
 ### Codex, OpenCode, and Gemini CLI
@@ -93,7 +100,7 @@ launch an autonomous campaign.
 .claude-plugin/   Claude Code plugin.json + marketplace.json (the manifests)
 .codex-plugin/    Codex plugin.json (points at the same skills/)
 .agents/          vendor-neutral Codex marketplace entry
-skills/           the 23 skills (general + campaign), each a SKILL.md
+skills/           the 24 skills (general + campaign), each a SKILL.md
 scripts/          install-skills.{sh,ps1} — project skills into ~/.agents/skills (Codex/OpenCode/Gemini)
 docs/             always-on spine (CORE, PRINCIPLES) + on-demand reference docs
 templates/        project + campaign scaffolds materialized by /physkit:new-project + new-campaign

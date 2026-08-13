@@ -34,6 +34,7 @@ Usage:
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -130,6 +131,36 @@ def project_root_of(campaign: Path) -> Path | None:
     return cand if (cand / "PROJECT.md").is_file() and (cand / "LINEAGE.md").is_file() else None
 
 
+def check_loop_files(root: Path, errors: list[str]) -> None:
+    """The driver's config/ledger must PARSE, not merely exist: a loop.json missing a hard-dereferenced
+    key passes an existence glob and then crashes supervise() at launch (or worse, mid-night). Mirrors
+    the runner's own preflight so the gap is caught at scaffold time too."""
+    loop_files = list(root.glob("configs*/loop.json"))
+    if loop_files:
+        text = _read_text(loop_files[0])
+        try:
+            cfg = json.loads(text or "")
+            for name, keys in (("worker.iteration_timeout_hours", ("worker", "iteration_timeout_hours")),
+                               ("planner.cadence_units", ("planner", "cadence_units")),
+                               ("plateau.wall_clock_hours", ("plateau", "wall_clock_hours"))):
+                node = cfg
+                try:
+                    for k in keys:
+                        node = node[k]
+                    float(node)
+                except Exception:
+                    errors.append(f"loop.json is missing the numeric key the driver requires: {name}")
+        except Exception as exc:
+            errors.append(f"loop.json does not parse as JSON ({exc})")
+    queue_files = list(root.glob("results*/queue.json"))
+    if queue_files:
+        try:
+            q = json.loads(_read_text(queue_files[0]) or "")
+            assert isinstance(q.get("next"), list) and isinstance(q.get("shelved"), list)
+        except Exception as exc:
+            errors.append(f"queue.json does not parse as a queue ledger ({exc})")
+
+
 def validate_campaign(root: Path) -> list[str]:
     errors: list[str] = []
 
@@ -160,6 +191,9 @@ def validate_campaign(root: Path) -> list[str]:
             errors.append(
                 f"campaign carries a LOCAL copy of a shared doc (must reference ../../shared/): docs/{doc}"
             )
+
+    # 1d. The loop driver's config + queue ledger parse and carry the keys the driver dereferences.
+    check_loop_files(root, errors)
 
     # 2. No leftover tokens / un-stripped templates anywhere in the tree.
     scan_leftovers(sorted(root.rglob("*")), root, errors)

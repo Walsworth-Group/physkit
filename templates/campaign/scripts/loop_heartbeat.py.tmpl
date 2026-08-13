@@ -25,6 +25,13 @@ ARMING: the hook is inert until the campaign is live — >=1 data row in results
 run), or `results/.loop_armed` exists. Without this the setup/validation session that legitimately finishes
 and stops would be trapped in the loop it is still building.
 
+STAND-DOWNS (who owns loop persistence right now):
+  * AUTORESEARCH_SUPERVISED=1 — a driver-spawned worker/planner: its per-unit end-of-turn is EARNED.
+  * results/.driver_alive fresh (mtime within DRIVER_ALIVE_WINDOW_MIN) — a supervisor driver IS running,
+    so campaign-level persistence is the DRIVER's job: an attended session (the run-campaign concierge, a
+    user checking in) may end its turns freely. A crashed driver stops refreshing the sentinel and the
+    hook re-arms within the window. Same rationale as the worker stand-down, extended to attended sessions.
+
 FAIL-OPEN by design: any parsing/IO error -> allow the stop, BUT append to results/gate_failures.log so the
 bypass is never silent (campaign-status hard-fails on that log). A hook bug must never make a campaign
 unstoppable. Kill switch: AUTORESEARCH_LOOP_HEARTBEAT=off.
@@ -60,6 +67,8 @@ LOOP_STATE = RESULTS / "loop_state.json"        # hook bookkeeping: consecutive 
 LOOP_STOPS_LOG = RESULTS / "loop_stops.log"     # every honored stop + every stall release
 GATE_FAILURE_LOG = RESULTS / "gate_failures.log"
 ARMED_FLAG = RESULTS / ".loop_armed"
+DRIVER_ALIVE = RESULTS / ".driver_alive"        # the supervisor driver's sentinel (mtime-refreshed while it runs)
+DRIVER_ALIVE_WINDOW_MIN = float(os.environ.get("AUTORESEARCH_DRIVER_ALIVE_WINDOW_MIN", "10"))
 
 # A stop must name WHY in a closed vocabulary — "the agent decided to" is not a reason. These map onto
 # PRINCIPLES §9: escalate only a genuine fork, confirm before an irreversible act, don't stop prematurely.
@@ -199,6 +208,19 @@ def sentinel_present():
     return next((p for p in STOP_SENTINELS if p.exists()), None)
 
 
+def driver_alive_fresh(now):
+    """True while a supervisor driver owns the loop (results/.driver_alive mtime within the window).
+    While it does, THIS session's turn-ends are not the loop's liveness — blocking the concierge or a
+    checking-in user would only grind them to the stall release. Compared by mtime age, generously
+    windowed: a crashed driver re-arms the hook within DRIVER_ALIVE_WINDOW_MIN minutes."""
+    try:
+        if not DRIVER_ALIVE.is_file():
+            return False
+        return (now.timestamp() - DRIVER_ALIVE.stat().st_mtime) / 60.0 <= DRIVER_ALIVE_WINDOW_MIN
+    except Exception:
+        return False
+
+
 def stop_request_verdict(now):
     """(honored, detail) for results/stop_request.json.
 
@@ -280,9 +302,12 @@ def continuation_reason(exp_id, nxt, threads, blocks, rows_since):
         )
     else:
         lines.append(
-            f"The campaign is not finished — an experiment completing is not a stopping cue. Resume at step 1 "
-            f"of the Experiment Loop in docs/charter.md for exp {exp_id}: HYPOTHESIZE & PREDICT (write the "
-            "expected value and range BEFORE running), one lever by default, then run/evaluate/log/verify."
+            f"The campaign is not finished — an experiment completing is not a stopping cue, and no "
+            "supervisor driver is currently running. PREFERRED: hand the loop to the driver — launch it "
+            "(/physkit:run-campaign, or `python scripts/run_campaign.py --supervise`) and let it spawn "
+            f"fresh-context workers. Otherwise resume at step 1 of the Experiment Loop in docs/charter.md "
+            f"for exp {exp_id}: HYPOTHESIZE & PREDICT (write the expected value and range BEFORE running), "
+            "one lever by default, then run/evaluate/log/verify."
         )
     if nxt:
         lines.append(f"results/JOURNAL.md NEXT: {nxt}")
@@ -329,6 +354,11 @@ def main():
             _allow()
 
         now = _now()
+        if driver_alive_fresh(now):
+            # A supervisor driver owns the loop right now - attended sessions may end turns freely.
+            _log(LOOP_STOPS_LOG, "DRIVER_ALIVE_STANDDOWN", f"rows={rows}")
+            write_state(0, rows)
+            _allow()
         honored, detail = stop_request_verdict(now)
         if honored:
             _log(LOOP_STOPS_LOG, "STOP_REQUEST", detail, f"rows={rows}")

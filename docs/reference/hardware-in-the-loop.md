@@ -54,8 +54,8 @@ you score), not the step count.
    possible abort is the one that costs no instrument time.
 3. **DISPATCH** the work order with its provenance block (§2); the instrument
    side acknowledges by sibling marker.
-4. **WHILE WAITING** (§3, §4, §7): off-instrument work only; poll at a calm
-   fixed cadence; keep the staleness-gated calibration current with the
+4. **WHILE WAITING** (§3, §4, §7): idle cheaply — poll at a calm fixed cadence
+   and no more; keep the staleness-gated calibration current with the
    starvation guard armed; re-assess the running acquisition and write the
    abort sentinel on a deterministic fatal verdict below the completion
    ceiling.
@@ -120,12 +120,19 @@ The rig belongs to humans first. Two mechanisms:
   handing it back is `rm`. No re-toggle, no state loss, no negotiation.
 - **Graceful busy behavior.** When the instrument is taken without warning
   (auto-load off, manual session), the loop must keep its autonomy budget
-  intact: fill the wait with off-instrument work (analysis, critique,
-  literature), poll the acknowledgment channel at a calm fixed cadence, and
-  resume cleanly — re-running any staleness-sensitive calibration — when the
-  rig frees up. The failure modes this prevents (busy-spinning through the
-  proposal budget; abandoning an in-flight acquisition) both occurred before
-  the guards existed.
+  intact: **idle cheaply** — poll the acknowledgment channel at a calm fixed
+  cadence — and resume cleanly, re-running any staleness-sensitive
+  calibration, when the rig frees up. The failure modes this prevents
+  (busy-spinning through the proposal budget; abandoning an in-flight
+  acquisition) both occurred before the guards existed.
+- **Don't fill the wait with manufactured work.** An earlier version of this
+  pattern had the loop spend the gap on off-instrument work — analysis,
+  critique, literature. The deployed loop **removed it: it burned more agent
+  budget than it returned.** The instinct is sound (waiting is otherwise dead
+  time) and the work itself is often worth doing, but the pattern exists to
+  protect the autonomy budget, and substituting a more expensive kind of spin
+  defeats it. Do queued off-instrument work because it was queued and is
+  worth its cost — never to fill a gap.
 
 ## 4. Drift and the calibration–science scheduling trap
 

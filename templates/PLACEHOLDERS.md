@@ -104,6 +104,8 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 | `{{CHECKPOINT_EVERY}}` | Checkpoint cadence N. |
 | `{{COST_UNIT}}` | Unit of run cost (epochs, iterations, seconds, solves). |
 | `{{COST_NOTE}}` | (optional) Note on why experiments are cheap/fast. |
+| `{{DISK_PER_EXP}}` | Human-readable disk footprint of ONE experiment (e.g. "1.2 MB" / "~4 GB (checkpoints dominate)"). Derived in the interview from the artifact plan; the machine-readable twin is `{{UNIT_COST_DISK_MB}}`. |
+| `{{RETENTION_PLAN}}` | The keep-vs-regenerate plan for BULK artifacts when they are large (which are kept, which are regenerated on demand + the command, any pruning cadence). When experiments are small, state that no plan is needed and why — never leave it blank. The permanent record (save-set, snapshot, narrative, verdicts) is never in scope. |
 
 ### Caps
 | Placeholder | Meaning |
@@ -298,6 +300,7 @@ trips first). Rationale: `STRUCTURED_LOOP_PROPOSAL.md` §4.1 rule 4 / ADR-0008.
 |---|---|
 | `{{UNIT_COST_CLASS}}` | One word for a unit's cost scale: `seconds` / `minutes` / `hours` / `days`. |
 | `{{UNIT_COST_S}}` | Typical wall-clock seconds for one unit (number, order-of-magnitude is fine). |
+| `{{UNIT_COST_DISK_MB}}` | Megabytes one unit ADDS to `results/` (number; save-set + snapshot + bulk artifacts). Derived from the artifact plan, not asked. Arms the driver's disk floor (refuses to launch / halts below ~3 units of headroom); `0` disables it. Human-readable twin: `{{DISK_PER_EXP}}`. |
 | `{{PLANNER_CADENCE_K}}` | Spawn the planner every k accepted units (also the default outstanding-units cap). |
 | `{{PLANNER_MODEL}}` | Model for the planner agent (judgment role — heavier tier; user-owned thereafter). |
 | `{{PLATEAU_M_UNITS}}` | Plateau trigger: no accepted result in m units. |

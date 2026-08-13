@@ -1,6 +1,6 @@
 ---
 name: campaign-status
-description: Periodic health-check, journal consolidation, and N-experiment checkpoint for a running autoresearch campaign — and, at a project root, a cross-campaign checkpoint. Use when the user asks for campaign status, a health check, a checkpoint, "where do we stand", project status / "how's the whole investigation", or to consolidate/trim a long journal — or automatically every N experiments per the loop. In a campaign it reads the scoreboard, journal, discoveries, and charter.md to summarize progress against the baseline and trivial references, flag plateaus and unverified current-bests, run hygiene checks (every result saved, disputes preserved, the metric self-test passing), consolidate the journal when it grows long, and queue the next orthogonal directions as the NEXT pointer. At a PROJECT root it reads LINEAGE.md to report across campaigns and checks cross-campaign FROZEN/MUTABLE (sibling-coupling) consistency. Read-mostly — it never edits the scoreboard, results, or the frozen scorer/physics. NOT for scaffolding a campaign (new-campaign) or project (new-project), forking an invalidated campaign (fork-campaign), verifying a single finding (verify), or writing the end-of-campaign report (final-report).
+description: Periodic health-check, journal consolidation, and N-experiment checkpoint for a running autoresearch campaign — and, at a project root, a cross-campaign checkpoint. Use when the user asks for campaign status, a health check, a checkpoint, "where do we stand", project status / "how's the whole investigation", or to consolidate/trim a long journal — or automatically every N experiments per the loop. In a campaign it reads the scoreboard, journal, discoveries, and charter.md to summarize progress against the baseline and trivial references, flag plateaus and unverified current-bests, run hygiene checks (every result saved, disputes preserved, the metric self-test passing), consolidate the journal when it grows long, and queue the next orthogonal directions as the NEXT pointer. At a PROJECT root it reads LINEAGE.md to report across campaigns and checks cross-campaign FROZEN/MUTABLE (sibling-coupling) consistency. Read-mostly — it never edits the scoreboard, results, or the frozen scorer/physics. NOT for scaffolding a campaign (new-campaign) or project (new-project), process-level loop questions — launching, "is the loop still running", "why did it halt", steering (run-campaign), forking an invalidated campaign (fork-campaign), verifying a single finding (verify), or writing the end-of-campaign report (final-report).
 ---
 
 # campaign-status — the operator's checkpoint
@@ -115,14 +115,19 @@ Flag (don't silently fix) anything wrong:
     gate or bypassed the runner);
   - `results/verdicts/` exists and **every DISCOVERIES entry cites a verdict artifact that resolves**
     (exists, CONFIRMED, named refuter; kill entries carry a graduating tier);
-  - `configs/loop.json` parses, when the campaign runs supervisor mode.
+  - `configs/loop.json` parses, when the campaign runs supervisor mode;
+  - supervised runs left their decision trace: each `--supervise` launch has a
+    `results/diagnostics/supervise_*.log` (a run with no driver log was launched from a pre-SV kit or
+    outside the driver), and `results/inbox/` holds no un-archived note older than the newest launch
+    (an unarchived note means the driver never picked it up — the user's steering silently went nowhere).
   Any miss: flag loudly and re-run the `new-campaign` `.claude`/wiring step.
   **Also check `results/gate_failures.log`:** any line there is a recorded fail-open/allowed-on-error
   bypass — treat a non-empty log as a hard hygiene failure and re-verify every finding written since its
   earliest timestamp.
 - **The loop gate is wired, and the loop is actually producing** — `.claude/settings.json` also registers
-  the `loop_heartbeat` **Stop** hook (single-session mode; under `--supervise` the DRIVER is the liveness
-  monitor and workers legitimately end per-unit — the heartbeat stands down for driver-spawned workers).
+  the `loop_heartbeat` **Stop** hook (it guards attended sessions; under `--supervise` the DRIVER is the
+  liveness monitor and workers legitimately end per-unit — the hook stands down for driver-spawned
+  workers, and for attended sessions while `results/.driver_alive` is fresh).
   Then read `results/loop_stops.log`: a `STALL_RELEASE` line is the loud one — the loop was continued to its
   cap without producing a single new scoreboard row, so the wall-clock since the preceding entry bought
   nothing. Diagnose *why* (a hung run, an erroring script, re-planning instead of executing) rather than
@@ -138,7 +143,17 @@ Flag (don't silently fix) anything wrong:
   EVIDENCE-AGAINST kill sit in `results/queue.json` with their reasons; confirm each still deserves its
   shelf (a promotion or frame change since it was shelved is a revival trigger for the planner), and that
   accumulating EVIDENCE-AGAINST entries against one branch have been consolidated into a prune decision
-  rather than left dangling.
+  rather than left dangling. **`kind: "operational"` entries are a different species** — the driver
+  shelved them because a worker failed (their `failures` records say how), not because their science was
+  judged; confirm the planner revived or the user pruned them, and treat a *pattern* in their failure
+  statuses (all timeouts, all spawn errors) as an environment finding, not a science one.
+- **The disk runway is still real** — compare free space on the campaign's volume against
+  `configs/loop.json` `unit_cost.typical_disk_mb` and the size `results/` has actually reached
+  (the estimate was made before any experiment ran; measure it now: bytes-so-far ÷ experiments-so-far is
+  the honest per-unit figure). Report the remaining runway in experiments. If it is short, that is a
+  finding *now* — apply the `protocols/artifacts.md` retention plan or move the tree, rather than
+  discovering it when the driver halts on its floor mid-night. If the measured footprint is far off the
+  scaffold-time estimate, correct `unit_cost.typical_disk_mb` so the floor guards the real number.
 - **Comparability tags present** — every scoreboard row carries `metric_version` + `data_version`, and no
   "current best" ranks rows scored under *different* versions; a cross-version comparison is a silent error
   (re-score contenders under the current version first). If a version change **invalidates** prior findings

@@ -217,6 +217,37 @@ env = dict(os.environ, PYTHONIOENCODING="cp1252")
 rc, out, err = run(env=env)
 check("cp1252 stdout still emits a valid block", out.get("decision") == "block", f"rc={rc} err={err[:200]}")
 
+# 19 — supervisor stand-down: a driver-spawned worker's per-unit end-of-turn is EARNED
+reset(rows=3)
+env = dict(os.environ, AUTORESEARCH_SUPERVISED="1")
+rc, out, _ = run(env=env)
+check("AUTORESEARCH_SUPERVISED=1 stands the hook down", rc == 0 and out == {}, f"out={out}")
+
+# 20 — driver-alive stand-down: while a supervisor driver's sentinel is FRESH, attended sessions
+#      (the concierge, a user checking in) may end turns freely - the driver owns loop persistence.
+reset(rows=3)
+(R / ".driver_alive").write_text('{"pid": 1234}', encoding="utf-8")
+rc, out, _ = run()
+check("fresh .driver_alive stands the hook down", rc == 0 and out == {}, f"out={out}")
+check("driver-alive stand-down is logged",
+      "DRIVER_ALIVE_STANDDOWN" in (R / "loop_stops.log").read_text(encoding="utf-8"))
+
+# 21 — a STALE sentinel re-arms the hook (a crashed driver must not leave the loop gate open)
+reset(rows=3)
+(R / ".driver_alive").write_text('{"pid": 1234}', encoding="utf-8")
+old = (datetime.now(timezone.utc) - timedelta(hours=1)).timestamp()
+os.utime(R / ".driver_alive", (old, old))
+rc, out, _ = run()
+check("stale .driver_alive re-arms the hook (blocks)", out.get("decision") == "block", f"out={out}")
+check("block reason points at supervisor mode first",
+      "--supervise" in out.get("reason", "") or "run-campaign" in out.get("reason", ""),
+      out.get("reason", "")[:240])
+
+# 22 — sentinel removed entirely -> normal enforcement again
+reset(rows=3)
+rc, out, _ = run()
+check("no sentinel -> normal block", out.get("decision") == "block", f"out={out}")
+
 shutil.rmtree(SANDBOX, ignore_errors=True)
 
 print()

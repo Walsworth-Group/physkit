@@ -8,6 +8,181 @@ Dates are UTC. Each entry cites the run/finding that motivated it (the kit's own
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-13
+
+### Added — size the DISK cost per experiment, not just the time (SV-7, 2026-08-12)
+
+User request from the same supervised-run thread (2026-08-12): the setup interview budgets wall-clock but
+never bytes, so a long loop can fill its volume overnight — and the failure mode is the worst available
+(a unit writing half a save-set, surfacing at 3 a.m. as an unrelated-looking gate error). The kit's own
+record already carried the motivating class: the project layer exists partly because prior multi-version
+investigations bloated to **~422 GB across 8 sibling dirs** (0.5.0 notes).
+
+- **`new-campaign` topic 8 is now "Compute resources, time budget, and disk budget."** Free disk is
+  *detected*, not asked (Step 0.5 rule); the per-experiment footprint is **derived** from the artifact
+  plan — save-set + snapshot (a few hundred KB) plus the bulk terms that actually dominate (checkpoints,
+  generated datasets, computed operators, raw arrays), computed from real shapes rather than a feeling.
+  The interview states three numbers back: MB/experiment · projected total for the planned count · free
+  space. Above ~25% of free space, the **retention plan is designed with the user before scaffolding**.
+- **The estimate is machine-readable and enforced**: `configs/loop.json` `unit_cost.typical_disk_mb`
+  (new `{{UNIT_COST_DISK_MB}}`) arms a floor in the driver — `--preflight` refuses a launch below
+  ~3 experiments of headroom (naming the retention plan as the fix), notes a short runway below ~20, and
+  the loop top halts on the same floor **before** a unit can write a partial save-set. `0`/absent
+  disables the check, so older campaigns are unaffected.
+- **Retention plan section in `protocols/artifacts.md`** (new `{{RETENTION_PLAN}}`, `{{DISK_PER_EXP}}`),
+  scoped so it can never erode reproducibility: the permanent record (scoreboard row, result JSON,
+  figure, snapshot, narrative, verdicts — hard gate 4) is **never** in the trade and is small by
+  construction; only *bulk* artifacts are negotiable, and only when regeneration is deterministic and
+  recorded (snapshot pins config+code, manifest pins seed+command). Current-best bulk artifacts are kept;
+  anything not deterministically regenerable (hardware, external services, unrecorded seeds) is never
+  droppable; dropping is deletion — it needs confirmation and is logged in `INDEX.md`.
+- **`campaign-status`** now measures the *actual* footprint (bytes-so-far ÷ experiments-so-far), reports
+  the remaining runway in experiments, and corrects `typical_disk_mb` when the scaffold-time estimate was
+  off — the estimate was made before any experiment ran. **`run-campaign`** gained the disk-floor halt to
+  its triage list. Tests: tier-0 knob/lint checks + tier-2 scenarios G2 (floor refuses a launch) and G3
+  (no estimate ⇒ check disables itself, back-compat). Suite 72/72.
+
+### Added — `run-campaign`: the loop's cockpit (SV-6, 2026-08-12; skill count 23 → 24)
+
+Same motivating run as SV-1..SV-5 below, second finding: launching meant hand-typed commands (false
+starts included) and the running loop had no conversational surface — and the first user-observed
+`new-campaign` handoff funneled toward the retired interactive-executor mode (the handoff's first
+command opened an interactive session, setup happened there, the Stop hook armed after exp 000, and
+`--supervise` trailed as a code block).
+
+- **New skill `skills/run-campaign/`** — launcher / monitor / intermediary around the deterministic
+  driver: runs the driver's `--preflight` and translates every failure into its fix, launches
+  `--supervise` as a background shell process, narrates from `results/diagnostics/supervise_*.log` +
+  `queue.json`, relays user steering into `results/inbox/`, triages halts by ADR-0009 kind, performs the
+  graceful stop. **Concierge fence:** never executes loop units; only writes are inbox notes and
+  launch/stop controls — disposable context by design (everything travels through artifacts). Division
+  of labor stated on both sides: run-campaign answers *process* questions, `campaign-status` answers
+  *science* questions (its NOT-for list now routes process questions here).
+- **`new-campaign` Step 5 restructured** — names the destination up front (supervisor mode via
+  run-campaign), frames metric/selftest/exp-000 explicitly as *pre-loop setup, not the loop*, hands off
+  to `/physkit:run-campaign` (raw commands kept as a fallback line), and retires the "interactive
+  session working `--config` by hand remains fine" framing: by-hand runs are single-experiment
+  debugging, not a loop mode. Same reframe in `charter.md.tmpl` ("Attended = the cockpit, not by-hand
+  execution") and `GETTING_STARTED.md` §4 (rewritten around the cockpit; the executor mode's failure
+  record — context growth, doc drift, premature stops, verification decay — stated once so nobody
+  regresses to it).
+- Registration: `DOCTRINE_INDEX.md` (skill row + coverage rows; also added the previously-unindexed
+  CS-3 enforcement layer — runner, loop.json, queue.json, predictions/, verdicts/), `CORE.md` routing
+  row, README pillar row + counts 23 → 24 (README, INSTALL_MULTI_HARNESS), GETTING_STARTED catalog,
+  `campaign-status` supervisor assertions (driver log present; no stale un-relayed inbox note;
+  operational shelvings reviewed as environment findings).
+- **Found by the cockpit walkthrough + a fresh-agent audit of the new doctrine (mechanism-diverse
+  check), fixed here:**
+  - **`results/STOP` was never implemented in the driver** — four docs promised the graceful stop, no
+    driver version checked the sentinel (a CS-3-era doctrine/enforcement fork; the only working stop
+    was Ctrl-C, exactly the gap the cockpit claims to close). The driver now honours it at the loop top
+    (unit in flight completes and records; exit 0; recorded in `results/loop_stops.log`), preflight
+    flags a leftover sentinel, and tier-2 scenario D3 pins it.
+  - **Driver JSON readers are now BOM-tolerant** (`utf-8-sig` for queue.json/loop.json/inbox) — the
+    walkthrough's preflight caught that a PowerShell-written (`Set-Content -Encoding utf8`) queue.json
+    carries a BOM and failed plain-utf-8 parsing; any Windows hand-edit would hit it.
+  - The concierge fence rewritten with an explicit write surface + named exceptions (ledger repairs are
+    propose-then-user-go-ahead, never own-judgment); the "idle cheaply" stance no longer cites
+    `hardware-in-the-loop.md` for a claim its current text doesn't make; the cockpit now owns the
+    progress alarm (CORE: monitor progress, not liveness); guidance added for the Stop hook re-arming
+    when the driver is down (relaunch or `results/STOP`, never start executing units).
+  - Charter loop step 12 carries the supervisor caveat inline (worker = steps 1–11 for ONE unit;
+    REPEAT is the driver's); stale "single-session mode" vocabulary retired in `campaign-status` +
+    `new-campaign`; the driver creates `results/inbox/` at launch; `{{PYTHON_CMD}}` no longer appears
+    as a literal in any skill body.
+
+### Changed — supervisor-mode hardening: degrade-loud driver, liveness in code, preflight, live feed, inbox (SV-1..SV-5 + ADR-0009, 2026-08-12)
+
+Motivated by the first REAL supervised campaign run (2026-08-11, user report): one worker went into
+background mode, never validated, and the halt-everything driver killed the whole overnight loop; separate
+launch false starts; no live view of headless workers and no inbound steering channel. All driver-behavior
+changes are in `templates/campaign/scripts/run_campaign.py.tmpl` unless noted; the halt-taxonomy decision
+is **ADR-0009** (amends `STRUCTURED_LOOP_PROPOSAL.md` §4.1's "eager halting — annoying, safe", which the
+overnight death falsified).
+
+- **SV-1 — the halt taxonomy splits by failure kind.** INTEGRITY conditions keep the hard halt (ESCALATE ·
+  queue empty after a planner pass · corrupt `queue.json` — NEW, it previously silently defaulted to an
+  empty queue · preflight/metric-selftest failure · planner failure after one retry). An OPERATIONAL
+  failure (worker spawn error / timeout / unit unvalidated after retries) now records onto the unit
+  (`failures` list), shelves it (`kind: "operational"`, planner-revivable) and the loop CONTINUES;
+  N consecutive operational failures (`driver.max_consecutive_failures`, default 3) is SYSTEMIC and halts.
+  Halt reasons now go through the driver log, not only stderr.
+- **SV-2 — dead-worker detection is structural.** The runner maintains `results/.run_heartbeat` (stage
+  transitions + a 60 s ticker through the solve); the driver's watch loop counts a worker alive on stdout
+  lines OR heartbeat mtime-change, kills on `worker.inactivity_timeout_min` of neither (absolute cap
+  retained), and — the 2026-08-11 signature — a worker that EXITS with a fresh heartbeat gets a bounded
+  detached-runner grace (`driver.detached_grace_min`) for the save-set to land before the unit is judged.
+  Kept doctrine-clean: mtime-change only, dead-vs-alive only — progress stays the ledger's job (CORE
+  "monitor progress, not liveness").
+- **SV-3 — preflight.** `--preflight` (also automatic at `--supervise` start, before any spend): agent CLI
+  resolves + answers, `loop.json` parses + carries every hard-dereferenced key, `queue.json` schema-sane,
+  required tree files, metric selftest (shared seam `metric_selftest_message()`), ESCALATE surfaced; ALL
+  failures reported together, each naming its fix; opt-in `--smoke` does one real spawn.
+  `validate_campaign.py` gained the matching scaffold-time parse checks.
+- **SV-4 — the driver keeps a log and renders the worker feed.** Every launch writes
+  `results/diagnostics/supervise_<ts>.log` (append-only decision trace — the driver previously logged
+  NOWHERE, contradicting `hardware-in-the-loop.md` §5's own rule); workers spawn with
+  `--output-format stream-json --verbose` per `driver.stream` = `auto` (default: only the default claude
+  CLI) / `on` / `off`, rendered one compact line per event (tool calls, text snippets, result).
+- **SV-5 — `results/inbox/`.** User notes (`*.md`/`*.txt`) are relayed VERBATIM into the next
+  worker/planner prompt (concatenation, never `.format` — brace-safe), then archived to
+  `inbox/archive/<stamp>_<name>`; whole-note deferral at the size cap, explicit truncation marker for a
+  single oversize note; both prompts instruct acknowledgment in the journal. Steering without killing the
+  loop; ESCALATE stays the loud outbound channel.
+- **Driver-alive stand-down (`templates/campaign/scripts/loop_heartbeat.py.tmpl`).** The driver maintains
+  `results/.driver_alive` (refreshed ≤30 s, removed on exit); while it is fresh the Stop hook stands down
+  for ATTENDED sessions — without this, any session opened in a live campaign root (the run-campaign
+  concierge, a user checking in) is blocked toward the 25-block stall release. Same rationale as the
+  existing worker stand-down, extended; a crashed driver re-arms the hook within
+  `AUTORESEARCH_DRIVER_ALIVE_WINDOW_MIN` (10 min). The hook's block message now points at supervisor mode
+  (`--supervise` / run-campaign) before the by-hand loop steps.
+- **Fixed in passing: `AUTORESEARCH_AGENT_CMD` with a space in the interpreter path never worked** — the
+  CS-3 driver split it with `str.split()`, so `C:\Program Files\...\python.exe` became `C:\Program`.
+  Now quote-aware (`_parse_agent_cmd`); caught by the new preflight on this lab machine's own `py -3`.
+- **The CS-3-V regression harness is now IN-REPO** at `tests/structured_loop/` — promoted from the
+  session scratchpad it was still living in (the exact at-risk arrangement whose 2026-08-08 predecessor
+  the 0.7.0 notes record dying), de-hardcoded to repo-root-relative paths, and extended from 5 to 17
+  driver scenarios incl. the detached-runner regression test for the 2026-08-11 failure;
+  `test_loop_heartbeat.py` gained the SUPERVISED + driver-alive stand-down cases (38 checks).
+  Suites at ship: tier 0 27/27 · tier 1 29/29 · tier 2 62/62 · heartbeat 38/38. (The separate
+  out-of-repo tetracoil fixture at `kit-tests/loop-e2e-tetracoil/` still asserts the OLD
+  retry-once-then-halt driver behavior and needs a matching update — flagged, not done here.)
+- Threaded: `configs/loop.json.tmpl` (new `driver` section, all literals — no new placeholders, no new
+  interview burden; stale `ADR-0006` ref → `ADR-0008`), `charter.md.tmpl` "How the loop runs",
+  `checkpoint.md.tmpl` §0, `new-campaign/SKILL.md` Step 5's driver description,
+  `STRUCTURED_LOOP_PROPOSAL.md` (stale "PROPOSED — nothing applied" banner fixed + §4.1 amendment note).
+
+### Changed — a hardware loop idles cheaply while it waits; it does not manufacture work (HL-1, 2026-08-11)
+
+`docs/reference/hardware-in-the-loop.md` told the loop to fill an instrument wait with off-instrument
+work (analysis, critique, literature). The **deployed loop removed it: it burned more agent budget than
+it returned.** The instinct is sound — waiting is otherwise dead time, and the work is often worth doing
+— but the while-waiting pattern exists to protect the autonomy budget, and substituting a more expensive
+kind of spin defeats the guard.
+
+- **§0 step 4** (the assembled loop) and **§3** (graceful busy behavior) now say **idle cheaply**: poll
+  the acknowledgment channel at a calm fixed cadence and no more, then resume cleanly — re-running any
+  staleness-sensitive calibration — when the rig frees up.
+- A new §3 bullet states the rule positively so the instinct doesn't quietly return: do queued
+  off-instrument work **because it was queued and is worth its cost — never to fill a gap.**
+
+### Changed — a generated campaign's `CLAUDE.md` carries only what the loop acts on (CO-1/CO-2, 2026-08-11)
+
+The campaign template's header comment is gone. It explained kit-design decisions to the campaign agent —
+why the doctrine spine is inlined rather than `@`-imported, how freeze-and-stamp follows from the kit-dev
+single-source rule, and a scaffolding-time "start a fresh session" note. `CLAUDE.md` is re-injected every
+turn of every session, so non-actionable text there is a permanent context tax. Motivated by a user
+finding on a campaign scaffolded that day.
+
+- **Removed** the 11-line comment from `templates/campaign/CLAUDE.md.tmpl`; nothing operational was lost —
+  the don't-hand-edit / re-scaffold-or-fork fact is stated once in the spine's provenance banner, and the
+  fresh-session launch is `new-campaign` Step 5's handoff message to the *user*.
+- **`new-campaign` Step 3** now states the rule that prevents its return: the generated `CLAUDE.md` carries
+  only what the running loop acts on — no kit-design rationale, no scaffolding-time instructions, no
+  header comment.
+- **Spine tailoring (Step 3.2)** now drops `CORE.md`'s YAML frontmatter, which is kit-internal routing
+  metadata rather than doctrine and would otherwise be rendered into the campaign spine verbatim.
+
 ## [0.7.0] - 2026-08-11
 
 The structured-campaign-loop release: the loop's procedural skeleton moves from prose into code (gates in
@@ -72,6 +247,7 @@ light form — weigh the cost, record which levers moved. The discipline lives i
   confounded negative empties `untried_levers` and one bad combined experiment can end a campaign.
 - **`assumption-audit`** now rules out the cheaper rival diagnosis first: a cross-family floor may be an
   interaction-dominated space rather than a wrong inherited value.
+
 
 ### Removed — the example charters; archetype guidance replaces them (EX-1/EX-2, 2026-08-10)
 

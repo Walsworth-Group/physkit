@@ -6,8 +6,10 @@ feature-chasing and reorient: confirm the campaign is still healthy and still po
 ## 0. The iteration contract (supervisor mode) — what iteration N must persist for N+1
 Under `--supervise`, **each iteration runs in a fresh agent context: the ledger is the loop's ONLY
 memory.** Work you did but did not record does not exist for the next iteration — and the driver
-enforces the hard core of this contract structurally (a unit that leaves it incomplete is retried once,
-then halts the loop). Before an iteration ends, it must have persisted:
+enforces the hard core of this contract structurally (a unit that leaves it incomplete is retried, then
+**shelved with its failure recorded** — `kind: "operational"` in `queue.json` — while the loop
+continues; only several such failures in a row, or an integrity condition, halts the loop). Before an
+iteration ends, it must have persisted:
 
 | What | Where | Checked by |
 |---|---|---|

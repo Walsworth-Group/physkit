@@ -168,6 +168,7 @@ quietly-dropped good result and a quietly-kept bad one are the same integrity fa
 | recording a non-obvious decision | `record-decision` skill |
 | writing any report or document | `report` skill (+ `cite-check`) |
 | standing up an autoresearch campaign | `new-campaign` skill (campaign layer) — creates its project home (`new-project`) if none exists |
+| launching / watching / steering the campaign loop | `run-campaign` skill (campaign layer) — the cockpit around `--supervise`; never executes units itself |
 | a hardware-in-the-loop (archetype E) campaign | `docs/reference/hardware-in-the-loop.md` (campaign layer) |
 | resuming / checking a campaign | `handoff`, `campaign-status` (campaign layer) |
 | a principle's full statement / rationale | `docs/PRINCIPLES.md` — the relevant section, not the whole file |

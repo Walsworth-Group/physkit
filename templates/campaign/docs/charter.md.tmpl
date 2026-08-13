@@ -118,11 +118,14 @@ WHILE not interrupted:
                     finding changes the physics.
  10. CONSOLIDATE  — if JOURNAL > ~150 lines, trim to recent + open threads (protocols/journal_consolidation.md).
  11. CHECKPOINT   — if exp_id % {{CHECKPOINT_EVERY}} == 0, run protocols/checkpoint.md.
- 12. REPEAT      — go to step 1 for the next experiment. Do NOT end the turn: a completed experiment is
-                    not a stopping cue (see "Ending the loop" below).
+ 12. REPEAT      — the next experiment begins at step 1. Supervisor mode (the default): the DRIVER
+                    repeats — you, a fresh-context worker, execute steps 1–11 for YOUR ONE unit and exit
+                    once the checkpoint contract validates (that end-of-turn is earned). Only in an
+                    attended by-hand session does REPEAT fall to you — and there a completed experiment
+                    is still not a stopping cue (see "Ending the loop" below).
 ```
 
-### How the loop runs — supervisor mode (default) vs interactive
+### How the loop runs — supervisor mode (the loop) + the cockpit (attended)
 The loop above is the **per-unit procedure**; *who repeats it* is the mode:
 
 - **Supervisor mode (`{{PYTHON_CMD}} scripts/run_campaign.py --supervise`) — the default for unattended
@@ -135,8 +138,11 @@ The loop above is the **per-unit procedure**; *who repeats it* is the mode:
     planner. Proposing new units (with rationales) is always free; twice-declined units are shelved,
     revivable by the planner.
   - **The ledger is the loop's only memory.** Persist the iteration contract
-    (`protocols/checkpoint.md` §0) before you finish — the driver retries an incomplete unit once, then
-    halts the loop loudly.
+    (`protocols/checkpoint.md` §0) before you finish — the driver retries an incomplete unit, then
+    **shelves it with the failure recorded and moves on** (`kind: "operational"` in `queue.json`,
+    revivable by the planner). The driver hard-halts only on **integrity** conditions (ESCALATE, a
+    corrupt queue, an empty queue after a planner pass) or **systemic** failure (several units failing
+    in a row — the environment, not the units).
   - **Mid-unit anomalies: probe through the pattern, not around it.** Document the problem + hypothesis
     in the journal and propose a standard probe unit; a claimed *major* problem needs a verify verdict
     before the plan may steer on it. Trivial sanity checks are free — *if it could influence a
@@ -144,16 +150,23 @@ The loop above is the **per-unit procedure**; *who repeats it* is the mode:
   - **A PLANNER agent** (fresh context, read-mostly, strategy-only) refills/reorders the queue on
     triggers (queue low, every k units, a declination, a plateau, a REFUTED verdict, after a promotion)
     — direction judgment lives there and in your proposals, never in the driver.
-  - **Long solver runs execute in your shell or under the driver — never inside a background subagent**
-    (a platform stall-timeout abort masquerades as a failed solve).
+  - **Long solver runs execute in your shell or under the driver — never inside a background subagent.**
+    The runner maintains `results/.run_heartbeat` in your shell — that heartbeat is how the driver tells
+    a live solve from a dead worker; a backgrounded solve loses it (and risks the platform stall-timeout
+    abort masquerading as a failed solve).
   - A genuine fork only the user can weigh: write `results/ESCALATE.md`; the driver halts and notifies.
+  - **The user can steer without stopping you:** notes dropped in `results/inbox/` are relayed verbatim
+    into the next worker/planner prompt (then archived). If your prompt carries a USER NOTES section,
+    acknowledge each note in the journal — what it changed, or why nothing.
   - **Your per-unit end-of-turn is EARNED** once the iteration contract validates — the Stop hook
     (§Ending the loop) stands down for driver-spawned workers (`AUTORESEARCH_SUPERVISED=1`); campaign-level
     stopping is the driver's job (ESCALATE / `results/STOP` / empty queue after a planner pass).
   Loop knobs (cadence, plateau, timeouts, models) live in `configs/loop.json` — set at scaffold from this
   campaign's unit cost, user-owned thereafter.
-- **Interactive mode** (a human-attended session working `--config` by hand): the same per-unit
-  procedure and the same gates apply — the runner and the DISCOVERIES hook enforce them either way.
+- **Attended = the cockpit, not by-hand execution.** A human-attended session in this folder is the
+  loop's *concierge* (`run-campaign` skill): it launches `--supervise`, watches the driver log, and
+  relays steering through `results/inbox/` — it never executes units itself. A by-hand `--config` run is
+  for debugging a single experiment (same gates apply either way); it is not a mode for running the loop.
 
 ## Ending the loop — the only three ways
 The loop is continuous; step 12 returns to step 1. A turn that simply ends is not a decision, so a Stop hook
@@ -212,7 +225,9 @@ fastest way to catch bugs, leakage, and good-news-too-good results.
 | **Confirmation** | {{CONF_TARGET}} | {{CONF_MAX}} | Promising scouts, every {{CONF_CADENCE}} exps |
 | **Extended** | {{EXT_TARGET}} | {{EXT_MAX}} | Primary still improving at confirmation length |
 
-Cost unit = {{COST_UNIT}}.
+Cost unit = {{COST_UNIT}}. Disk cost ≈ **{{DISK_PER_EXP}}** per experiment — the loop's floor is enforced
+from `configs/loop.json` (`unit_cost.typical_disk_mb`); what to keep vs regenerate is the retention plan
+in `protocols/artifacts.md`.
 [[OPTIONAL — experiments are cheap/fast (seconds–minutes, e.g. a closed-form solve or short fit):
 Experiments here are CHEAP ({{COST_NOTE}}) — **never judge an idea from a single run.** Exploit the
 speed: replicate with seeds/perturbed params and report the spread (see Rigor).

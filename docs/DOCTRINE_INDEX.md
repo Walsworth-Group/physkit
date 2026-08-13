@@ -151,6 +151,7 @@ Items not yet built are listed so the index is a complete map of the intended ki
 | id | path | addresses | status |
 |---|---|---|---|
 | new-campaign | `skills/new-campaign/SKILL.md` | 4,8 | ported+extended (project-aware: reference shared, LINEAGE row, §5 relationship) |
+| run-campaign | `skills/run-campaign/SKILL.md` | 9,7 | new (SV-6: the concierge/cockpit around `--supervise` — preflight-translate, background launch, monitor via driver log, relay via `results/inbox/`, halt triage; never an executor) |
 | campaign-status | `skills/campaign-status/SKILL.md` | 3,4 | ported+extended (+ project mode: cross-campaign, FROZEN/MUTABLE) |
 | final-report | `skills/final-report/SKILL.md` | 1 | ported+extended (composes `report`) |
 | handoff | `skills/handoff/SKILL.md` | 7 | new (project-aware: resume from LINEAGE, whole-tree portability) |
@@ -188,8 +189,13 @@ Items not yet built are listed so the index is a complete map of the intended ki
 | artifacts-protocol | `templates/campaign/docs/protocols/artifacts.md.tmpl` | protocol | 7 | ported+refined |
 | campaign-claude | `templates/campaign/CLAUDE.md.tmpl` | scaffold-template | 1,2,7 | always-on per-campaign doctrine: a FROZEN, provenance-stamped snapshot of `CORE.md` rendered by `new-campaign` (Step 3) into `{{PHYSKIT_SPINE}}` + the campaign hard gates. Freeze-and-stamp, NOT `@`-imported or hash-checked (kit-dev `CLAUDE.md` §single-source) |
 | discoveries-guard | `templates/campaign/scripts/guard_discoveries.py.tmpl` | scaffold-template | 2 | new (PreToolUse hook: blocks unverified DISCOVERIES write) |
-| loop-heartbeat | `templates/campaign/scripts/loop_heartbeat.py.tmpl` | scaffold-template | 9 | new (Stop hook: refuses an unearned end-of-turn; stop via `results/STOP` or a recorded `stop_request.json`) |
+| loop-heartbeat | `templates/campaign/scripts/loop_heartbeat.py.tmpl` | scaffold-template | 9 | new (Stop hook: refuses an unearned end-of-turn; stop via `results/STOP` or a recorded `stop_request.json`; stands down for driver-spawned workers and, while `results/.driver_alive` is fresh, for attended sessions) |
 | hook-settings | `templates/campaign/.claude/settings.json.tmpl` | scaffold-template | 2,9 | new (wires the guard + heartbeat hooks; uses `{{PYTHON_CMD}}`) |
+| campaign-runner | `templates/campaign/scripts/run_campaign.py.tmpl` | scaffold-template | 9,2,4 | CS-3 + SV-1..5: per-experiment gates (prediction/save-set/selftest/correctness) + the `--supervise` driver (degrade-loud halt taxonomy per ADR-0009, liveness heartbeat + detached-runner grace, `--preflight`, driver log + rendered worker feed, `results/inbox/` relay) |
+| loop-knobs | `templates/campaign/configs/loop.json.tmpl` | scaffold-template | 9,4 | CS-3 + SV: per-campaign loop knobs (planner cadence, plateau, worker timeouts, `driver.*` — all `driver` keys code-defaulted); user-owned, hot-reloaded by the driver |
+| unit-queue | `templates/campaign/results/` `queue.json` (seeded by `new-campaign` Step 3) | ledger | 9,7 | CS-3 + SV-1: the driver's unit ledger — `next`/`shelved` (`kind: declined|operational`, `failures` records), accept counters; workers append/decline, only the planner reorders |
+| prediction-gate-dir | `predictions/` (campaign tree; enforced by the runner's spend gate) | ledger | 2,4 | CS-3: a falsifiable a-priori range per experiment, written BEFORE the solve |
+| verdicts-dir | `results/verdicts/` (campaign tree; read by `guard_discoveries`) | ledger | 2 | CS-3/F-2: verify-skill verdict artifacts — the promotion gate's evidence |
 | claude-general | ~~`templates/CLAUDE.general.md`~~ | scaffold-template | 1,2,7 | **retired 2026-07-03** — was a duplicate of the spine and drifted; `docs/CORE.md` is the single source. Users import it from their project `CLAUDE.md` (`@<kit>/docs/CORE.md`) or copy its body (see `GETTING_STARTED.md` §1) |
 
 ### Report assets
@@ -224,9 +230,9 @@ Every principle context should have at least one `frozen` or always-loaded home 
 | 4 Experimental design | PRINCIPLES; charter.md, `new-campaign`, archetypes, `hardware-in-the-loop`, `systematic-errors`, `noise-and-sensitivity`, `calibration-and-drift`, `assumption-audit` |
 | 5 Physics & simulation | PRINCIPLES; `frame-problem`, `simulation-design`, SIMULATION_VALIDATION, PHYSICS, `attribute-mechanism`, `uncertainty-and-error-budgets`, `noise-and-sensitivity`, `calibration-and-drift` |
 | 6 Discovery-loop | PRINCIPLES; `discovery-loop`, archetype G (cheatsheet), expensive-evaluation |
-| 7 Records & reproducibility | CORE (context economy — doctrine, unfrozen per dec #10 2026-07-03); this index, `handoff`, `record-decision`, scaffold |
+| 7 Records & reproducibility | CORE (context economy — doctrine, unfrozen per dec #10 2026-07-03); this index, `handoff`, `record-decision`, scaffold, `run-campaign` (the driver log + queue ledger as the run's process record) |
 | 8 Autonomy & collaboration | CORE (frozen-adjacent: clarify-the-goal); `new-campaign`, frame-problem |
-| 9 Operating unattended | CORE (Running unattended) + PRINCIPLES §9; `charter.md` (Getting Unstuck + Ending the loop + promotion), `campaign-status`, `expensive-evaluation`, `hardware-in-the-loop` (archetype E), ENGINEERING_NOTES (landmines), the CLAUDE.md gates + the DISCOVERIES and loop-heartbeat hooks, `prompt-surface-audit` |
+| 9 Operating unattended | CORE (Running unattended) + PRINCIPLES §9; `charter.md` (Getting Unstuck + Ending the loop + promotion), `run-campaign` (the cockpit around `--supervise`), `campaign-status`, `expensive-evaluation`, `hardware-in-the-loop` (archetype E), ENGINEERING_NOTES (landmines), the CLAUDE.md gates + the DISCOVERIES and loop-heartbeat hooks, `prompt-surface-audit` |
 
 **Open gaps:** none of the backlog tiers remain — Tiers 0–5 and the deferred discovery-loop/archetype G are
 all built. Remaining work is testing/iteration, not net-new artifacts. *(Context 9 overlaps 7–8 by design;

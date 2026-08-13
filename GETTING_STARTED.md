@@ -155,7 +155,7 @@ your-project/
     scripts/
       metric.py           the FROZEN scorer (+ --selftest)   ·   run_campaign.py  the experiment runner
       guard_discoveries.py  the hook that blocks a DISCOVERIES write with no recent verification
-      loop_heartbeat.py     the hook that keeps the loop running until you stop it (§4)
+      loop_heartbeat.py     the Stop hook guarding attended sessions (stands down while the driver runs)
     tests/                correctness_checks.py — the standing checks, green before a result is trusted
     CLAUDE.md   .claude/settings.json     the campaign's always-on doctrine + the hook wiring
     INTAKE.md   README.md   LITERATURE.md   (LITERATURE.md only if you enabled literature search or provided sources)
@@ -173,9 +173,12 @@ The generated campaign tells you the first action, which is always:
 
 ## 4. Launch the loop
 
-The campaign is designed to **run continuously** — hypothesize → run → evaluate → log → verify →
-repeat — until you stop it. Because it issues many tool calls, the smoothest way to run it is from the
-Claude CLI with permission prompts disabled, **from inside the campaign folder**:
+The campaign **runs in supervisor mode**: a deterministic driver pops one experiment unit at a time from
+`results/queue.json` and spawns a **fresh agent per unit**, so every worker re-reads the doctrine and the
+charter by construction, context never balloons across experiments, and the gates are enforced in code.
+Your session is the **cockpit**, not the executor — you talk to it; the driver runs the science.
+
+Open a fresh Claude session **from inside the campaign folder**:
 
 ```
 cd "E:\path\to\your\campaign"
@@ -185,48 +188,65 @@ claude --dangerously-skip-permissions
 `--plugin-dir "<KIT_DIR>"` to this command too.)*
 
 **This fresh session is required, not optional.** Starting Claude *inside the campaign folder* is what
-auto-loads the campaign's `CLAUDE.md` (the always-on doctrine + hard gates) and activates the two
-enforcement hooks — the DISCOVERIES verify gate and the loop heartbeat that keeps the run going.
-**Do not run the loop in the same session that scaffolded the campaign** — it has neither. Confirm with
-`/context` that `CLAUDE.md` is loaded before you start.
+auto-loads the campaign's `CLAUDE.md` (the always-on doctrine + hard gates) and activates the enforcement
+hooks. **Do not run the loop in the same session that scaffolded the campaign** — it has neither.
+Confirm with `/context` that `CLAUDE.md` is loaded.
 
-Then kick it off with a prompt like:
+Then say:
 
-> Read `docs/charter.md` and the `results/` ledger, then run the autonomous research loop continuously
-> until I stop you.
+> /physkit:run-campaign
+
+That's the whole interface. The skill checks the campaign is launch-ready (the driver's `--preflight` —
+every failure comes back translated, with its fix), starts `scripts/run_campaign.py --supervise` in the
+background, and stays with you as the loop's concierge:
+
+- **Watch:** "what's the loop doing?" — it narrates from the driver's live log
+  (`results/diagnostics/supervise_*.log`): current unit, worker activity, accepted-unit count, planner
+  passes.
+- **Steer without stopping:** "tell the loop to stop exploring lever X" — your request is dropped in
+  `results/inbox/`, the driver hands it verbatim to the next worker/planner, and the worker must
+  acknowledge in the journal what it changed.
+- **Triage:** if the driver halts (it only hard-halts on integrity conditions or several failures in a
+  row — a single misbehaving worker gets its unit shelved, with reasons recorded, while the loop keeps
+  going), the concierge reads the log and the queue, explains why in plain language, and proposes the fix.
 
 **Why `--dangerously-skip-permissions`:** the loop runs unattended and makes many edits, runs, and
 file writes; without it you'd have to approve each one and the loop would stall. **Use it deliberately:**
 run it from the campaign's own folder, in a project you trust, so the agent's actions stay scoped to the
 work.
 
+**Why not just chat the loop into running in this session?** That was the kit's original mode, and its
+failure record is why the driver exists: one ever-growing context eventually pushes the charter out of
+the window, agents stop re-reading the docs they promised to re-read, runs stop prematurely, and
+verification decays from a gate into a suggestion. Fresh context per unit + gates in code fixed all four.
+A by-hand `python scripts/run_campaign.py --config …` run is still fine for *debugging one experiment* —
+the same gates apply — but it is not a way to run the loop.
+
 ### Stopping the loop
 
-The campaign keeps going on its own: a `Stop` hook (`scripts/loop_heartbeat.py`) refuses an end-of-turn
-that isn't a real stop and hands the agent back its own `NEXT` pointer, because "the experiment finished"
-is not a reason to stop. So there are two ways to end a run:
+Ask the concierge to stop the loop, or do it directly from any terminal:
 
-- **`Ctrl-C`** — immediate, mid-experiment. Nothing in flight gets logged.
-- **Create `results/STOP`** — the graceful stop. The agent finishes and logs the experiment it is running,
-  then exits cleanly. Do this from any other terminal while the loop runs; delete the file to resume.
+- **Create `results/STOP`** — the graceful stop. The driver lets the unit in flight finish and log,
+  then exits cleanly (recorded in `results/loop_stops.log`). Delete the file before the next launch.
 
-  ```bash
+  ```powershell
   New-Item -ItemType File "results/STOP"
   ```
+- **`Ctrl-C` the driver** (or ask the concierge to kill it) — immediate; the current unit is killed and
+  stays at the head of the queue, so a relaunch resumes exactly there.
 
-The agent can also end the run itself, but only by *recording why* in `results/stop_request.json` — an
-ambiguous goal that needs your call, a hard-to-reverse action awaiting your confirmation, a real external
-blocker, or a direction that is genuinely exhausted (which it may not claim while any lever it has named
-remains untried). Every stop is logged to `results/loop_stops.log`, so "why did this campaign end?" is
-always answerable from the ledger. If the loop is continued repeatedly without producing a new scoreboard
-row it releases itself and records a `STALL_RELEASE` — that means the run was alive but doing no science,
-and is worth diagnosing before you restart.
+The loop can also conclude on its own that it needs you — a worker that hits a genuine fork writes
+`results/ESCALATE.md` and the driver halts loudly; a campaign that runs out of proposed directions halts
+as an explicit stopping decision. Every stop leaves a record (`results/loop_stops.log`, the driver log),
+so "why did this campaign end?" is always answerable from the ledger.
 
 **What to expect while it runs:** every experiment is logged to `results/scoreboard.tsv` (the numbers)
 and indexed in `results/INDEX.md` (a map to each experiment's config, snapshot, result, and figures),
 with a narrative in `results/JOURNAL.md`; a basic figure is saved for every experiment (more for notable
 ones); promising findings are independently verified before being promoted; and settled conclusions
-graduate to `results/DISCOVERIES.md`. Check in whenever you like — the ledger and index are the full record.
+graduate to `results/DISCOVERIES.md`. Check in whenever you like — the ledger and index are the full
+record, and `/physkit:campaign-status` answers "where do we stand?" (the concierge answers "what is the
+loop doing?" — different questions, different skills).
 
 ## Troubleshooting
 
@@ -236,12 +256,15 @@ graduate to `results/DISCOVERIES.md`. Check in whenever you like — the ledger 
   bug. Fix it before experiment 000 — the self-test exists precisely to catch this early.
 - **The loop keeps pausing for permission** → it wasn't launched with `--dangerously-skip-permissions`
   (or not from the campaign folder). Restart it as in §4.
-- **The loop stops after every experiment and needs nudging** → the heartbeat hook isn't firing. Check that
-  `.claude/settings.json` has a `Stop` entry for `scripts/loop_heartbeat.py`, that the python command in it
-  actually runs on this machine, and that the session was started *inside* the campaign folder (§4). An
-  imported or hand-assembled tree is the usual culprit — `/physkit:campaign-status` flags a missing hook.
-- **The loop won't stop** → create `results/STOP` (graceful) or press `Ctrl-C` (immediate). To disable the
-  heartbeat entirely for a debugging session, set `AUTORESEARCH_LOOP_HEARTBEAT=off` before launching.
+- **The launch fails or nothing happens** → run `python scripts/run_campaign.py --preflight` (the
+  concierge does this automatically): every problem it finds is printed with its fix — a missing agent
+  CLI, an unfilled loop knob, a corrupt queue, an unimplemented metric.
+- **The driver halted overnight** → read the tail of the newest `results/diagnostics/supervise_*.log`
+  (or ask the concierge "why did the loop stop?"). Single-unit failures don't halt the loop — they're
+  shelved in `results/queue.json` with reasons; a halt means an integrity condition (ESCALATE, corrupt
+  queue, out of directions) or several failures in a row (environment problem: CLI, credentials, disk).
+- **The loop won't stop** → create `results/STOP` (graceful) or `Ctrl-C` the driver (immediate). To
+  disable the Stop-hook heartbeat for a debugging session, set `AUTORESEARCH_LOOP_HEARTBEAT=off`.
 - **You want to change something the agent froze** (the metric, the core physics) → those need your
   explicit sign-off; just tell the agent — it won't change them on its own.
 - **A generated file still shows `{{PLACEHOLDER}}`** → generation didn't finish cleanly; ask the agent to
@@ -252,5 +275,6 @@ graduate to `results/DISCOVERIES.md`. Check in whenever you like — the ledger 
 *The kit ships two layers of skills, all namespaced `/physkit:<name>`. **General science toolkit**
 (usable in any session): `assess-idea`, `literature-review`, `frame-problem`, `verify`, `simulation-design`,
 `correctness-suite`, `debug`, `dimensional-analysis`, `derive`, `attribute-mechanism`, `record-decision`, `cite-check`, `report`. **Campaign layer**:
-`new-campaign` (scaffold + interview), `campaign-status` (periodic checkpoint), `handoff` (cold-resume),
+`new-campaign` (scaffold + interview), `run-campaign` (launch/monitor/steer the supervised loop),
+`campaign-status` (periodic checkpoint), `handoff` (cold-resume),
 `discovery-loop`, `experiment-design`, `model-selection`, and `final-report` (end-of-campaign report).*

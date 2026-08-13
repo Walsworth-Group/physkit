@@ -7,6 +7,8 @@ scoring math (that lives in scripts/metric.py).
 Usage:
     python scripts/run_campaign.py --baseline                       # experiment 000 (the floor gate)
     python scripts/run_campaign.py --config configs/exp007_foo.json # one experiment
+    python scripts/run_campaign.py --preflight [--smoke]            # launch checks only (no spend)
+    python scripts/run_campaign.py --supervise                      # the loop driver (preflight runs first)
 
 Every run MUST leave behind, for reproducibility:
     configs/exp<NN>_<slug>.json  ·  a results/scoreboard.tsv row  ·  results/result_<NN>.json
@@ -35,10 +37,14 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import os
 import shutil
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
+from queue import Empty as _QEmpty, Queue as _LineQueue  # renamed: QUEUE below is the queue.json *path*
 
 import numpy as np
 
@@ -74,8 +80,90 @@ class _Tee:
         self._log.flush()
 
 
+class DriverLog:
+    """Append-mode tee for the DRIVER process (supervisor mode) - one file per --supervise launch:
+    results/diagnostics/supervise_<UTCstamp>.log. Every driver decision and rendered worker-feed line
+    lands in both the console and the log. Doctrine: log every scheduling decision to an append-only run
+    log as it is made - post-hoc diagnosis of an unattended system is impossible without the decision
+    trace (docs/reference/hardware-in-the-loop.md, "Monitor the science"). Distinct from _Tee above,
+    which is the per-EXPERIMENT runner log (mode "w", one per run).
+    """
+
+    def __init__(self, log_path: Path):
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._log = open(log_path, "a", encoding="utf-8")
+        self._stdout = sys.stdout
+
+    def write(self, s):
+        self._stdout.write(s)
+        try:
+            self._log.write(s)
+        except Exception:
+            pass  # the console wins; a full disk must not kill the loop
+
+    def flush(self):
+        self._stdout.flush()
+        try:
+            self._log.flush()
+        except Exception:
+            pass
+
+    def close(self):
+        try:
+            self._log.close()
+        except Exception:
+            pass
+        return self._stdout
+
+
 def _utc_stamp() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+# ---- runner liveness heartbeat (dead-worker detection ONLY) --------------------------------------------
+# The runner touches results/.run_heartbeat at stage transitions (and every HB_TICK_S during the solve).
+# The supervisor driver reads ONLY the file's mtime-change - never the stage - to tell a live solve from a
+# dead worker; PROGRESS is judged by the ledger, never by this file (CORE: monitor progress, not liveness).
+# Written unconditionally (supervised or not): an interactive run leaves the same trace, at no cost.
+
+HEARTBEAT = RESULTS / ".run_heartbeat"
+HB_TICK_S = 60
+
+
+def _beat(stage: str) -> None:
+    """Touch the heartbeat file. Never raises - a liveness bug must never fail a run."""
+    try:
+        HEARTBEAT.parent.mkdir(parents=True, exist_ok=True)
+        HEARTBEAT.write_text(json.dumps({"stage": stage, "utc": _utc_stamp(), "pid": os.getpid()}),
+                             encoding="utf-8")
+    except Exception:
+        pass
+
+
+class _HeartbeatTicker:
+    """Daemon thread beating every HB_TICK_S while a solve is in flight, so a 2 h run_experiment()
+    doesn't look dead between stage transitions."""
+
+    def __init__(self):
+        self._stop = threading.Event()
+        self._thread = None
+
+    def start(self, stage: str = "solve") -> None:
+        def _tick():
+            while not self._stop.wait(HB_TICK_S):
+                _beat(stage)
+        try:
+            self._stop.clear()
+            self._thread = threading.Thread(target=_tick, daemon=True)
+            self._thread.start()
+        except Exception:
+            pass
+
+    def stop(self) -> None:
+        try:
+            self._stop.set()
+        except Exception:
+            pass
 
 
 def load_config(path: Path) -> dict:
@@ -271,6 +359,7 @@ def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = No
     result. The a-priori range is echoed into the result JSON so an out-of-envelope score is visible in
     the record, not only in the analysis narrative.
     """
+    _beat("scoring")
     score = metric.compute_metric(prediction, target)
     assert np.isfinite(score), "primary metric is non-finite - refuse to record a noise result"
     diags = guardrail(prediction, cfg)
@@ -311,8 +400,25 @@ def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = No
         "notes": "",
     })
     append_logbook(cfg, exp_id, label, score, diags, apriori)
+    _beat("record")
     print(f"[{label}] {{PRIMARY_METRIC}} = {score:.4f}  (figure: {fig.name}; logged to logbook.md)")
     return result
+
+
+def metric_selftest_message() -> str | None:
+    """The metric self-test as a message: None = pass, else the human-readable failure. Shared seam for
+    the per-experiment gate (require_metric_selftest) and the supervisor preflight - one authority."""
+    try:
+        metric.selftest()
+    except NotImplementedError as exc:
+        return (f"metric selftest NOT RUNNABLE: {exc}\n"
+                "  -> implement compute_metric() and _no_skill_floor() in scripts/metric.py, then re-run. "
+                "The self-test (perfect case + scrambled-input null control) gates every experiment.")
+    except AssertionError as exc:
+        return (f"metric selftest FAILED: {exc}\n"
+                "  -> the FROZEN scorer has a sign/convention/leakage bug. Fix it before running any "
+                "experiment; a ranking from a scorer that fails its self-test is noise.")
+    return None
 
 
 def require_metric_selftest() -> None:
@@ -321,16 +427,9 @@ def require_metric_selftest() -> None:
     experiment 000. A campaign that hasn't implemented compute_metric()/_no_skill_floor() yet fails here with
     a pointer to fix, not a raw traceback; a scorer that fails its null control fails here too.
     """
-    try:
-        metric.selftest()
-    except NotImplementedError as exc:
-        sys.exit(f"metric selftest NOT RUNNABLE: {exc}\n"
-                 "  -> implement compute_metric() and _no_skill_floor() in scripts/metric.py, then re-run. "
-                 "The self-test (perfect case + scrambled-input null control) gates every experiment.")
-    except AssertionError as exc:
-        sys.exit(f"metric selftest FAILED: {exc}\n"
-                 "  -> the FROZEN scorer has a sign/convention/leakage bug. Fix it before running any "
-                 "experiment; a ranking from a scorer that fails its self-test is noise.")
+    msg = metric_selftest_message()
+    if msg:
+        sys.exit(msg)
 
 
 def check_correctness_suite() -> str:
@@ -393,16 +492,38 @@ def check_correctness_suite() -> str:
 #
 # `--supervise` runs the campaign as an orchestrated loop: a dumb, deterministic driver pops units from
 # results/queue.json, enforces the artifact gates, spawns a FRESH-context worker agent per unit (cwd =
-# campaign root, so the frozen CLAUDE.md spine + charter auto-load), validates what the worker left
-# behind, and halts loudly on anything it cannot validate. Judgment lives at the edges: workers steer by
-# proposing queue units; a bounded PLANNER agent replans on triggers. The driver never improvises -
-# retry once, then stop and notify. Halt-loud beats drift-silent.
+# campaign root, so the frozen CLAUDE.md spine + charter auto-load), and validates what the worker left
+# behind. Judgment lives at the edges: workers steer by proposing queue units; a bounded PLANNER agent
+# replans on triggers. The driver never improvises. Failures split by KIND (ADR-0009):
+#   * INTEGRITY (ESCALATE present · queue empty after a planner pass · corrupt queue.json · preflight /
+#     metric-selftest failure · planner failure after retry) -> HALT LOUD. These the driver must never
+#     route around.
+#   * OPERATIONAL (worker spawn error / timeout / unit unvalidated after retries) -> record the failure
+#     on the unit, SHELVE it (kind="operational"), and CONTINUE - degrade-loud. A whole overnight loop
+#     must not die for one casualty; the shelf entry is the loud part, and the planner can revive it.
+#   * SYSTEMIC (N consecutive operational failures, driver.max_consecutive_failures) -> HALT LOUD:
+#     N different units failing the same way is the environment, not the units.
+#   * RESOURCE (free disk below this campaign's floor, from unit_cost.typical_disk_mb) -> HALT LOUD at
+#     the loop top: stopping cleanly beats letting a unit write half a save-set onto a full disk.
+#
+# Liveness (dead-worker detection ONLY - progress is judged by the ledger): the watch loop counts a
+# worker alive while its stdout stream produces lines OR results/.run_heartbeat's mtime keeps changing;
+# a worker with neither for worker.inactivity_timeout_min is killed. After a worker EXITS with a fresh
+# heartbeat (a detached/backgrounded runner still solving - the 2026-08-11 failure signature), the
+# driver waits up to driver.detached_grace_min for the save-set or heartbeat staleness before judging.
+#
+# Channels: results/inbox/*.md = INBOUND user notes, relayed verbatim into the next worker/planner
+# prompt, then archived (the driver never parses them). results/ESCALATE.md stays the loud OUTBOUND
+# halt. results/diagnostics/supervise_<ts>.log = the append-only decision trace for this launch.
+# results/.driver_alive = the running driver's sentinel (the Stop hook stands down while it is fresh).
 #
 # results/queue.json:
 #   {"next":    [{"config": "configs/exp<NN>_<slug>.json", "rationale": "...", "proposed_by": "...",
-#                 "declined": []}, ...],
-#    "shelved": [{"config": "...", "reasons": [...], "utc": "..."}, ...],
-#    "accepted_units": 0, "last_accept_utc": null, "units_since_planner": 0}
+#                 "declined": [], "failures": [{"utc","attempt","status","detail"}, ...]}, ...],
+#    "shelved": [{"config": "...", "kind": "declined"|"operational", "reasons": [...], "utc": "...",
+#                 "failures": [...]}, ...],
+#    "accepted_units": 0, "last_accept_utc": null, "units_since_planner": 0,
+#    "consecutive_operational_failures": 0}
 # Workers may APPEND proposals and DECLINE the head (reasons recorded); only the planner reorders.
 # Two declinations shelve a unit (revivable by the planner) - the loop keeps moving, no human halt.
 # ======================================================================================================
@@ -410,8 +531,19 @@ def check_correctness_suite() -> str:
 QUEUE = RESULTS / "queue.json"
 ESCALATE = RESULTS / "ESCALATE.md"
 LOOPCFG = ROOT / "configs" / "loop.json"
+INBOX = RESULTS / "inbox"                    # user notes -> injected into the next spawn, then archived
+INBOX_ARCHIVE = INBOX / "archive"
+DRIVER_ALIVE = RESULTS / ".driver_alive"     # fresh mtime = a driver owns the loop (Stop hook stands down)
 # Override with e.g. AUTORESEARCH_AGENT_CMD="claude -p" if the CLI lives elsewhere on this machine.
-AGENT_CMD = (__import__("os").environ.get("AUTORESEARCH_AGENT_CMD") or "claude -p").split()
+# Quote-aware split (NOT str.split): a Windows interpreter path like "C:\Program Files\...\python.exe"
+# must stay ONE token when quoted - the naive split shipped in CS-3 broke every such setup at spawn time.
+def _parse_agent_cmd(s: str) -> list[str]:
+    import shlex
+    return [t.strip('"') for t in shlex.split(s, posix=False)]
+
+
+AGENT_CMD = _parse_agent_cmd(os.environ.get("AUTORESEARCH_AGENT_CMD") or "claude -p")
+STREAM_FLAGS = ["--output-format", "stream-json", "--verbose"]   # only added per driver.stream policy
 
 WORKER_PROMPT = """You are the iteration worker for the autoresearch campaign in this directory.
 Your assignment is ONE unit: {config}. Re-read docs/charter.md ('The Experiment Loop' - you execute the
@@ -423,10 +555,14 @@ superseded by the latest results, DECLINE it: append your reason to its "decline
 results/queue.json and say why in the journal. Never silently substitute a different experiment.
 You MAY append new proposed units to results/queue.json "next" (with rationales). Mid-unit anomalies:
 document + propose a probe unit - do not chase them ad hoc (charter: probe through the pattern).
-Long solver runs execute in YOUR shell, never inside a background subagent. If you hit a genuine fork
+Long solver runs execute in YOUR shell, never inside a background subagent - the runner maintains
+results/.run_heartbeat there, which is how the driver tells a live solve from a dead worker (a
+backgrounded solver loses that heartbeat AND risks the platform stall abort). If you hit a genuine fork
 only the user can weigh, write results/ESCALATE.md (what, why, the options) and finish your unit if
-possible. Before you exit: complete the logbook narrative slots for your unit and leave the JOURNAL
-working window + NEXT consistent with queue.json."""
+possible. If a USER NOTES section follows this prompt, treat it as input from the user: acknowledge each
+note in results/JOURNAL.md and record what it changed (or why nothing). Before you exit: complete the
+logbook narrative slots for your unit and leave the JOURNAL working window + NEXT consistent with
+queue.json."""
 
 PLANNER_PROMPT = """You are the strategy planner for the autoresearch campaign in this directory,
 spawned because: {reasons}. Read docs/charter.md, docs/PROJECT_ORIENTATION.md, results/JOURNAL.md,
@@ -438,27 +574,688 @@ accumulated EVIDENCE-AGAINST kills into a prune recommendation, recorded), and a
 to results/JOURNAL.md. A reprioritization that rests on a claimed invalidation requires its verdict
 artifact in results/verdicts/ - do not steer on an unverified major-problem claim. You never launch
 solves, never edit the scoreboard, results, DISCOVERIES, or anything FROZEN. If the campaign faces a
-genuine fork only the user can weigh, write results/ESCALATE.md."""
+genuine fork only the user can weigh, write results/ESCALATE.md. Review any shelved units with
+"kind": "operational" (shelved by the driver after repeated worker failures, reasons in "failures") -
+revive, reorder, or prune them with a recorded rationale. If a USER NOTES section follows this prompt,
+weigh it as user input when reordering the queue and acknowledge it in your strategy note."""
 
 
 def _read_json(path: Path, default):
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8-sig"))   # BOM-tolerant: Windows editors add one
     except Exception:
         return default
 
 
-def _spawn_agent(prompt: str, model: str, timeout_s: float, label: str) -> bool:
-    """Run one fresh-context agent headlessly from the campaign root. True = exited cleanly."""
-    cmd = AGENT_CMD + ["--dangerously-skip-permissions"] + (["--model", model] if model else []) + [prompt]
-    print(f"[supervise] spawning {label} (model={model or 'default'}, timeout={timeout_s/3600:.1f}h)")
-    env = dict(__import__("os").environ, AUTORESEARCH_SUPERVISED="1")   # Stop hook stands down for workers
+def _halt(msg: str):
+    """Hard halt, LOUDLY and ON THE RECORD: the reason goes through stdout (tee'd to the driver log by
+    DriverLog), not only stderr - a halt whose reason lives nowhere is a silent halt by morning."""
+    print(msg)
+    sys.exit(1)
+
+
+# ---- disk budget (SV-7) -------------------------------------------------------------------------------
+# A campaign that runs out of disk overnight fails in the worst way available: half-written artifacts, a
+# save-set gate tripping on I/O errors, and a ledger that disagrees with what is on disk. The per-unit
+# footprint is estimated at scaffold time (new-campaign, from the artifact plan) into
+# configs/loop.json unit_cost.typical_disk_mb; here it becomes a launch refusal and a loop-top stop.
+DISK_FLOOR_UNITS = 3        # refuse to launch / keep running below this many units of headroom
+DISK_WARN_UNITS = 20        # short-runway note (not a failure)
+DISK_FLOOR_MB = 512         # absolute floor - below this, writes start failing whatever the estimate says
+
+
+def _free_disk_mb() -> float | None:
     try:
-        proc = subprocess.run(cmd, cwd=ROOT, timeout=timeout_s, env=env)
-        return proc.returncode == 0
-    except subprocess.TimeoutExpired:
-        print(f"[supervise] {label} TIMED OUT after {timeout_s/3600:.1f}h")
+        return shutil.disk_usage(ROOT).free / (1024 * 1024)
+    except OSError:
+        return None
+
+
+def _unit_disk_mb(loop_cfg: dict) -> float:
+    """Estimated MB one unit adds to results/. 0 or absent = not estimated, which DISABLES the check
+    rather than guessing a floor that could refuse a healthy launch (older campaigns lack the field)."""
+    try:
+        return float((loop_cfg.get("unit_cost") or {}).get("typical_disk_mb", 0) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _disk_floor_mb(per_unit: float) -> float:
+    return max(DISK_FLOOR_MB, DISK_FLOOR_UNITS * per_unit)
+
+
+def _mb(x: float) -> str:
+    """MB, readable at both ends of the range a campaign can span (0.5 MB analytic -> 40 GB checkpoints)."""
+    return f"{x:,.1f}" if x < 10 else f"{x:,.0f}"
+
+
+def _driver_knobs(loop_cfg: dict) -> dict:
+    """Driver-section knobs with code-side defaults: an older loop.json without a "driver" section keeps
+    working unchanged (SV-1..SV-5 are additive). The template ships these as literals - no placeholders,
+    no setup interview; hand-edit configs/loop.json to change them (the driver hot-reloads it)."""
+    d = loop_cfg.get("driver") or {}
+    w = loop_cfg.get("worker") or {}
+    return {
+        "max_consecutive_failures": int(d.get("max_consecutive_failures", 3)),
+        "planner_retries": int(d.get("planner_retries", 1)),
+        "stream": str(d.get("stream", "auto")).strip().lower(),
+        "inbox_max_chars": int(d.get("inbox_max_chars", 20000)),
+        "feed_chars": int(d.get("feed_line_chars", 160)),
+        "hb_stale_s": float(d.get("heartbeat_stale_min", 5)) * 60,
+        "grace_s": float(d.get("detached_grace_min", 60)) * 60,
+        "inactivity_s": float(w.get("inactivity_timeout_min", 30)) * 60,
+    }
+
+
+def _stream_on(k: dict) -> bool:
+    """Whether spawns get the stream-json flags. "auto" (default) = only for the default claude CLI -
+    a custom AUTORESEARCH_AGENT_CMD (e.g. the test stub) must not be handed flags it doesn't understand.
+    "on"/"off" override in either direction."""
+    if k["stream"] == "on":
+        return True
+    if k["stream"] == "off":
         return False
+    return "AUTORESEARCH_AGENT_CMD" not in os.environ
+
+
+def _render_stream_event(raw_line: str, label: str, max_chars: int) -> str | None:
+    """One agent-stdout line -> one compact feed line for the terminal + driver log, or None to drop.
+    stream-json events are summarized (tool name + clipped input, text snippets, the final result);
+    anything that isn't JSON (a stub, a plain-output CLI) is echoed verbatim, truncated. Never formats
+    or interprets agent/user text - render-only."""
+    s = raw_line.rstrip("\r\n")
+    if not s.strip():
+        return None
+    try:
+        ev = json.loads(s)
+        assert isinstance(ev, dict)
+    except Exception:
+        return f"[{label}] {s}"[:max_chars]
+    etype = ev.get("type")
+    if etype == "system":
+        return f"[{label}] session start (model={ev.get('model', '?')})"[:max_chars]
+    if etype == "assistant":
+        bits = []
+        for blk in (ev.get("message") or {}).get("content") or []:
+            if not isinstance(blk, dict):
+                continue
+            if blk.get("type") == "text" and str(blk.get("text", "")).strip():
+                bits.append("text: " + " ".join(str(blk["text"]).split()))
+            elif blk.get("type") == "tool_use":
+                try:
+                    arg = json.dumps(blk.get("input", {}))
+                except Exception:
+                    arg = "?"
+                bits.append(f"tool: {blk.get('name', '?')} {arg[:80]}")
+        return "\n".join(f"[{label}] {b}"[:max_chars] for b in bits) if bits else None
+    if etype == "result":
+        return (f"[{label}] RESULT ok={not ev.get('is_error', False)} "
+                f"turns={ev.get('num_turns', '?')} dur={float(ev.get('duration_ms', 0)) / 1000:.0f}s")[:max_chars]
+    return None
+
+
+def _kill_tree(proc: subprocess.Popen) -> None:
+    """Kill an agent and its whole process tree (Windows-first: taskkill /T; no POSIX signals)."""
+    try:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                           capture_output=True, timeout=30)
+        else:
+            proc.terminate()
+        proc.wait(timeout=15)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
+def _touch_driver_alive() -> None:
+    """Refresh results/.driver_alive. While its mtime is fresh the campaign's Stop hook stands down for
+    ATTENDED sessions (the concierge, a user checking in): campaign-level loop persistence is THIS
+    process's job while it runs. Removed on driver exit - a crashed driver re-arms the hook within the
+    hook's freshness window. Never raises."""
+    try:
+        DRIVER_ALIVE.write_text(json.dumps({"pid": os.getpid(), "utc": _utc_stamp()}), encoding="utf-8")
+    except Exception:
+        pass
+
+
+_LIVE_PROC: dict = {"proc": None}   # the currently-running agent, for Ctrl-C cleanup
+
+
+def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None) -> str:
+    """Launch one fresh-context agent from the campaign root and WATCH it to completion.
+
+    Returns "ok" | "exit_nonzero" | "timeout_inactivity" | "timeout_absolute" | "spawn_error".
+    Liveness (dead-worker detection ONLY - progress is the ledger's job): the agent counts alive while
+    its stdout produces lines OR results/.run_heartbeat's mtime keeps changing; neither for
+    k["inactivity_s"] -> kill. An agent with NO liveness source at all (a silent stub) falls back to the
+    absolute wall-clock cap alone, by construction. All timing on time.monotonic() (clock-skew-proof;
+    the heartbeat is only ever compared to its own previous value).
+    POST-EXIT GRACE: if the process exits while the heartbeat is still fresh - a detached/backgrounded
+    runner still solving, the observed 2026-08-11 failure signature - wait up to k["grace_s"] for
+    `saved_probe` to come true or the heartbeat to go stale, instead of instantly failing validation.
+    """
+    stream = _stream_on(k)
+    cmd = (AGENT_CMD + ["--dangerously-skip-permissions"]
+           + (["--model", model] if model else []) + (STREAM_FLAGS if stream else []) + [prompt])
+    print(f"[supervise] spawning {label} (model={model or 'default'}, cap={k['absolute_s'] / 3600:.1f}h, "
+          f"inactivity window={k['inactivity_s'] / 60:.0f}min, stream={'on' if stream else 'off'})")
+    HEARTBEAT.unlink(missing_ok=True)   # a stale heartbeat from an earlier run must not fake liveness
+    env = dict(os.environ, AUTORESEARCH_SUPERVISED="1")   # Stop hook stands down for spawned agents
+    try:
+        proc = subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                                errors="replace", bufsize=1)
+    except OSError as exc:
+        print(f"[supervise] SPAWN ERROR for {label}: {exc}")
+        return "spawn_error"
+    _LIVE_PROC["proc"] = proc
+    lines: _LineQueue = _LineQueue()
+
+    def _reader():
+        try:
+            for raw in proc.stdout:
+                lines.put(raw)
+        except Exception:
+            pass
+
+    threading.Thread(target=_reader, daemon=True).start()
+
+    start = time.monotonic()
+    last_activity = None          # None until ANY liveness source appears
+    last_hb_mtime = None
+    last_hb_change = None
+    next_alive = 0.0
+    status = None
+    while status is None:
+        if time.monotonic() >= next_alive:                      # keep the Stop-hook stand-down fresh
+            _touch_driver_alive()
+            next_alive = time.monotonic() + 30
+        try:
+            raw = lines.get(timeout=1.0)
+        except _QEmpty:
+            raw = None
+        if raw is not None:
+            rendered = _render_stream_event(raw, label, k["feed_chars"])
+            if rendered:
+                print(rendered)
+            last_activity = time.monotonic()
+        try:
+            hb = HEARTBEAT.stat().st_mtime
+        except OSError:
+            hb = None
+        if hb is not None and hb != last_hb_mtime:              # mtime CHANGE = liveness, never age
+            last_hb_mtime = hb
+            last_hb_change = time.monotonic()
+            last_activity = last_hb_change
+        if proc.poll() is not None:
+            if raw is None and lines.empty():
+                status = "exited"                               # fully drained - judge below
+            continue
+        now = time.monotonic()
+        if now - start > k["absolute_s"]:
+            print(f"[supervise] {label} TIMED OUT (absolute cap {k['absolute_s'] / 3600:.1f}h) - "
+                  "killing the process tree")
+            _kill_tree(proc)
+            status = "timeout_absolute"
+        elif last_activity is not None and now - last_activity > k["inactivity_s"]:
+            print(f"[supervise] {label} INACTIVE for {k['inactivity_s'] / 60:.0f} min (no output, no "
+                  "heartbeat) - a dead worker, killing the process tree")
+            _kill_tree(proc)
+            status = "timeout_inactivity"
+    _LIVE_PROC["proc"] = None
+    if status != "exited":
+        return status
+    # ---- POST-EXIT detached-runner grace (SV-2) ----
+    if (saved_probe is not None and last_hb_change is not None
+            and time.monotonic() - last_hb_change <= k["hb_stale_s"] and not saved_probe()):
+        poll_s = max(1.0, min(10.0, k["grace_s"] / 10))
+        t0 = time.monotonic()
+        deadline = t0 + k["grace_s"]
+        print(f"[supervise] {label} exited but the heartbeat is FRESH - a detached runner may still be "
+              f"solving; waiting up to {k['grace_s'] / 60:.0f} min for the save-set (grace)")
+        while time.monotonic() < deadline:
+            if saved_probe():
+                break
+            try:
+                hb = HEARTBEAT.stat().st_mtime
+            except OSError:
+                hb = None
+            if hb is not None and hb != last_hb_mtime:
+                last_hb_mtime = hb
+                last_hb_change = time.monotonic()
+            if time.monotonic() - last_hb_change > k["hb_stale_s"]:
+                break
+            _touch_driver_alive()
+            time.sleep(poll_s)
+        print(f"[supervise] detached-runner grace ended after {time.monotonic() - t0:.0f}s "
+              f"(resolved={bool(saved_probe())})")
+    return "ok" if proc.returncode == 0 else "exit_nonzero"
+
+
+def _read_queue() -> dict:
+    """results/queue.json, strictly: ABSENT -> a fresh empty ledger (first launch); EXISTS-BUT-UNPARSEABLE
+    -> HARD HALT (integrity). The ledger is the loop's only memory - a corrupt queue must never be
+    mistaken for an empty one (that would silently erase every queued direction and the accept counters).
+    """
+    default = {"next": [], "shelved": [], "accepted_units": 0,
+               "last_accept_utc": None, "units_since_planner": 0}
+    if not QUEUE.is_file():
+        return default
+    try:
+        q = json.loads(QUEUE.read_text(encoding="utf-8-sig"))   # BOM-tolerant (hand-edits on Windows)
+        assert isinstance(q, dict) and isinstance(q.get("next"), list), "not an object with a 'next' list"
+        for key, val in default.items():
+            q.setdefault(key, val)
+        return q
+    except Exception as exc:
+        _halt(f"supervise: HALT - results/queue.json exists but cannot be parsed ({exc}). INTEGRITY: "
+              "repair the JSON by hand before relaunching; do NOT delete it - it is the queue ledger.")
+
+
+def _record_failure(q: dict, config: str, attempt: int, status: str, detail: str) -> None:
+    """Append one failure record to the unit's additive "failures" list (queue.json) - the planner and
+    the humans read these; the driver itself never interprets them."""
+    for u in q.get("next", []):
+        if u.get("config") == config:
+            u.setdefault("failures", []).append(
+                {"utc": _utc_stamp(), "attempt": attempt, "status": status, "detail": detail})
+            return
+
+
+def _shelve_unit(q: dict, config: str, kind: str, reasons: list) -> None:
+    """Move a unit out of "next" onto the shelf. kind="declined" is worker judgment working as designed;
+    kind="operational" is the driver failing to get the unit executed (degrade-loud, ADR-0009). Both are
+    revivable by the planner; neither is a silent drop."""
+    unit = next((u for u in q.get("next", []) if u.get("config") == config), None)
+    q["next"] = [u for u in q.get("next", []) if u.get("config") != config]
+    q.setdefault("shelved", []).append({
+        "config": config, "kind": kind, "reasons": list(reasons), "utc": _utc_stamp(),
+        "failures": (unit or {}).get("failures", []),
+    })
+
+
+def _drain_inbox(max_chars: int) -> str:
+    """Collect unarchived user notes (results/inbox/*.md|*.txt) for VERBATIM relay into the next spawn's
+    prompt, then archive them to results/inbox/archive/<stamp>_<name>. The driver never parses or acts
+    on note content - notes are data relayed to a judgment agent (worker/planner), which must
+    acknowledge them in the journal. Oldest first; whole notes only up to the cap (a note that doesn't
+    fit is DEFERRED to the next spawn, never truncated across the boundary; a single note larger than
+    the cap is injected truncated with an explicit marker - its full text is safe in the archive).
+    Injected by string CONCATENATION after .format(), so braces in note text cannot crash the driver."""
+    try:
+        files = sorted((f for f in list(INBOX.glob("*.md")) + list(INBOX.glob("*.txt")) if f.is_file()),
+                       key=lambda f: f.stat().st_mtime)
+    except OSError:
+        return ""
+    blocks, total = [], 0
+    for f in files:
+        try:
+            text = f.read_text(encoding="utf-8-sig", errors="replace")
+            received = _dt.datetime.fromtimestamp(f.stat().st_mtime, _dt.timezone.utc).strftime("%Y-%m-%d %H:%MZ")
+        except OSError:
+            continue
+        if blocks and total + len(text) > max_chars:
+            break                       # defer the rest to the NEXT spawn - never drop a note
+        clipped = text if len(text) <= max_chars else (
+            text[:max_chars] + f"\n[driver: truncated at {max_chars} chars - full text in results/inbox/archive/]")
+        try:
+            INBOX_ARCHIVE.mkdir(parents=True, exist_ok=True)
+            f.replace(INBOX_ARCHIVE / f"{_utc_stamp()}_{f.name}")
+        except OSError:
+            continue                    # cannot archive -> do not inject (it would re-fire every spawn)
+        blocks.append(f"--- note: {f.name} (received {received}) ---\n{clipped}")
+        total += len(clipped)
+        print(f"[supervise] inbox: relaying {f.name} ({len(text)} chars) into the next spawn")
+    if not blocks:
+        return ""
+    return ("\n\n==== USER NOTES relayed by the driver (verbatim; weigh as user input) ====\n"
+            + "\n\n".join(blocks)
+            + "\n==== end USER NOTES ====")
+
+
+def preflight(smoke: bool = False) -> list[str]:
+    """Launch checks for supervisor mode - run automatically at --supervise start and standalone via
+    --preflight. Collects and reports ALL failures (never first-fail); every failure names its fix in
+    plain language. Refusing a launch is cheaper than a night of unit-by-unit discovery (SV-3).
+    `smoke` additionally does ONE real agent spawn (costs one model call; opt-in)."""
+    fails: list[str] = []
+
+    def ok(msg):
+        print(f"preflight OK: {msg}")
+
+    def bad(msg):
+        fails.append(msg)
+        print(f"preflight FAIL: {msg}")
+
+    # 1. agent CLI resolves and answers
+    exe = shutil.which(AGENT_CMD[0])
+    if exe is None:
+        bad(f"agent CLI '{AGENT_CMD[0]}' not found on PATH. Fix: install the claude CLI (or set "
+            "AUTORESEARCH_AGENT_CMD to the command to use).")
+    else:
+        try:
+            proc = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=30)
+            if proc.returncode == 0:
+                out = (proc.stdout or "").strip().splitlines()
+                ok(f"agent CLI: {exe} ({out[0] if out else 'responds'})")
+            else:
+                print(f"preflight note: '{AGENT_CMD[0]} --version' exited {proc.returncode} - a custom "
+                      "AUTORESEARCH_AGENT_CMD may not implement it; continuing.")
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            bad(f"agent CLI '{exe}' did not answer --version ({exc}). Fix: check the install "
+                "('claude --version' in a fresh terminal), or set AUTORESEARCH_AGENT_CMD.")
+
+    # 2. loop.json parses and carries every key the driver dereferences without a default
+    try:
+        raw = LOOPCFG.read_text(encoding="utf-8-sig")
+    except OSError as exc:
+        raw = None
+        bad(f"configs/loop.json unreadable ({exc}). Fix: new-campaign generates it; restore it from a "
+            "results/snapshots/ copy or the kit template.")
+    if raw is not None:
+        if "{{" in raw:
+            bad("configs/loop.json still contains {{...}} template placeholders. Fix: fill the loop "
+                "knobs for this campaign (docs/charter.md, 'How the loop runs').")
+        try:
+            lc = json.loads(raw)
+            missing = []
+            for name, keys in (("worker.iteration_timeout_hours", ("worker", "iteration_timeout_hours")),
+                               ("planner.cadence_units", ("planner", "cadence_units")),
+                               ("plateau.wall_clock_hours", ("plateau", "wall_clock_hours"))):
+                node = lc
+                try:
+                    for kk in keys:
+                        node = node[kk]
+                    float(node)
+                except Exception:
+                    missing.append(name)
+            if missing:
+                bad("configs/loop.json is missing numeric key(s) the driver requires: "
+                    + ", ".join(missing) + ". Fix: add them (the kit template shows the schema).")
+            else:
+                ok("loop.json: effective driver knobs " + json.dumps(_driver_knobs(lc)))
+        except json.JSONDecodeError as exc:
+            bad(f"configs/loop.json is not valid JSON ({exc}). Fix: repair it (check trailing commas).")
+
+    # 3. queue.json parses and is schema-sane (absent is fine - the planner seeds it)
+    if QUEUE.is_file():
+        try:
+            qq = json.loads(QUEUE.read_text(encoding="utf-8-sig"))
+            assert isinstance(qq.get("next"), list) and isinstance(qq.get("shelved"), list), \
+                "'next'/'shelved' must be lists"
+            for u in qq["next"]:
+                assert isinstance(u, dict) and isinstance(u.get("config"), str), \
+                    "every 'next' entry needs a string 'config'"
+            ok(f"queue.json: {len(qq['next'])} queued, {len(qq['shelved'])} shelved")
+        except Exception as exc:
+            bad(f"results/queue.json is corrupt ({exc}). Fix: repair the JSON by hand - it is the queue "
+                "ledger, do not delete it.")
+    else:
+        print("preflight note: results/queue.json absent - the planner will be spawned to seed it.")
+
+    # 4. the campaign tree this driver assumes
+    for rel, why in (("results", "the ledger root"),
+                     ("results/scoreboard.tsv", "the results ledger"),
+                     ("docs/charter.md", "the contract every worker re-reads"),
+                     ("scripts/metric.py", "the FROZEN scorer"),
+                     ("configs", "the experiment-config directory")):
+        if not (ROOT / rel).exists():
+            bad(f"{rel} is missing ({why}). Fix: launch from the campaign root of a scaffolded campaign "
+                "(new-campaign generates this tree).")
+
+    # 4b. disk budget: a launch that cannot hold a few units of artifacts will fail mid-night (SV-7)
+    free_mb = _free_disk_mb()
+    per_unit = _unit_disk_mb(_read_json(LOOPCFG, {}) or {})
+    if free_mb is None:
+        print("preflight note: could not read free disk space - the disk-budget check is inactive.")
+    elif per_unit <= 0:
+        print(f"preflight note: {free_mb / 1024:.1f} GB free; this campaign has no per-unit footprint "
+              "estimate (configs/loop.json unit_cost.typical_disk_mb), so the disk-budget check is "
+              "inactive. Set it from the artifact plan (docs/protocols/artifacts.md) to arm it.")
+    elif free_mb < _disk_floor_mb(per_unit):
+        bad(f"free disk is {free_mb / 1024:.2f} GB - below this campaign's floor of "
+            f"{_disk_floor_mb(per_unit) / 1024:.2f} GB ({DISK_FLOOR_UNITS} units x {_mb(per_unit)} MB/unit). "
+            "Fix: free space, move the campaign to a larger volume, or shrink the per-experiment artifact "
+            "set (docs/protocols/artifacts.md, 'Retention plan') before launching.")
+    else:
+        runway = free_mb / per_unit
+        line = (f"disk: {free_mb / 1024:.1f} GB free = "
+                f"{'999+' if runway > 999 else f'~{runway:.0f}'} more units at {_mb(per_unit)} MB/unit")
+        if runway < DISK_WARN_UNITS:
+            print(f"preflight note: {line} - a short runway. Decide the retention plan now "
+                  "(docs/protocols/artifacts.md), not at 3 a.m. when the disk fills.")
+        else:
+            ok(line)
+
+    # 5. the FROZEN scorer's self-test (same authority as the per-experiment gate)
+    msg = metric_selftest_message()
+    if msg:
+        bad(msg.replace("\n", " "))
+    else:
+        ok("metric selftest passes")
+
+    # 6. correctness suite - informational only (EH-9 blocks promotion, not the run)
+    if (not (ROOT / "tests" / "correctness_checks.py").is_file()
+            and not (ROOT / "tests" / "CORRECTNESS_NA.md").is_file()):
+        print("preflight note: no correctness suite and no tests/CORRECTNESS_NA.md - runs proceed, but "
+              "promotion stays blocked until one exists (EH-9).")
+
+    # 7. an unresolved ESCALATE halts the driver immediately - surface it now
+    if ESCALATE.is_file():
+        bad("results/ESCALATE.md present - the driver halts on it at launch. Fix: resolve the fork it "
+            "records, then delete the file.")
+    # 7b. a leftover STOP sentinel makes the launch a silent no-op - surface it now
+    stop = next((p for p in (RESULTS / "STOP", RESULTS / "STOP.txt") if p.exists()), None)
+    if stop is not None:
+        bad(f"results/{stop.name} present (the graceful-stop sentinel) - the driver would stop "
+            "immediately. Fix: delete the file to run the loop.")
+
+    # 8. opt-in smoke spawn (one real model call)
+    if smoke and not fails:
+        try:
+            cmd = AGENT_CMD + ["--dangerously-skip-permissions", "Reply with exactly OK and end the turn."]
+            proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=300,
+                                  env=dict(os.environ, AUTORESEARCH_SUPERVISED="1"))
+            if proc.returncode == 0:
+                ok("smoke spawn completed")
+            else:
+                bad(f"smoke spawn exited {proc.returncode}. Fix: run the agent CLI by hand from this "
+                    "directory and read its output.")
+        except Exception as exc:
+            bad(f"smoke spawn failed ({exc}). Fix: verify the agent CLI runs headless from this directory.")
+    return fails
+
+
+def supervise(smoke: bool = False):
+    """The loop driver. Deterministic; judgment lives in the worker/planner agents it spawns."""
+    log = DriverLog(DIAG / f"supervise_{_utc_stamp()}.log")
+    sys.stdout = log
+    print(f"[supervise] ==== launch {_utc_stamp()} ==== root={ROOT} agent_cmd={' '.join(AGENT_CMD)}")
+    try:
+        INBOX.mkdir(parents=True, exist_ok=True)   # the steering mailbox exists from launch, visibly
+    except OSError:
+        pass
+    loop_cfg = _read_json(LOOPCFG, None)
+    if not loop_cfg:
+        _halt("supervise: HALT - configs/loop.json missing or unreadable - new-campaign generates it; "
+              "the loop knobs are per-campaign (unit cost), not defaults.")
+    fails = preflight(smoke=smoke)
+    if fails:
+        _halt(f"supervise: HALT - preflight failed ({len(fails)} issue(s), each with its fix above). "
+              "Refusing the launch is cheaper than discovering these unit by unit overnight. "
+              "Standalone check: python scripts/run_campaign.py --preflight")
+    w, p, plat = loop_cfg["worker"], loop_cfg["planner"], loop_cfg["plateau"]
+    k = _driver_knobs(loop_cfg)
+    k["absolute_s"] = float(w["iteration_timeout_hours"]) * 3600
+    cfg_mtime = LOOPCFG.stat().st_mtime
+    consec_fail = 0
+
+    try:
+        while True:
+            _touch_driver_alive()
+            stop = next((p for p in (RESULTS / "STOP", RESULTS / "STOP.txt") if p.exists()), None)
+            if stop is not None:
+                # The human's graceful stop, honoured at the CAMPAIGN level (charter: Ending the loop).
+                # We are at the loop top, so the last unit is fully recorded - exit clean, not an error.
+                # Recorded in loop_stops.log too: every stop leaves a record (CORE, "Running unattended").
+                try:
+                    with open(RESULTS / "loop_stops.log", "a", encoding="utf-8") as f:
+                        f.write(f"{_dt.datetime.now(_dt.timezone.utc).isoformat()}\tDRIVER_STOP\t"
+                                f"{stop.name}\n")
+                except OSError:
+                    pass
+                print(f"[supervise] STOP - results/{stop.name} present: graceful stop honoured. The "
+                      "completed unit is recorded; delete the file and relaunch to resume.")
+                return
+            if ESCALATE.is_file():
+                _halt(f"supervise: HALT - {ESCALATE} present (a genuine fork awaits the user). "
+                      "Resolve it, delete the file, and relaunch.")
+            free_mb, per_unit = _free_disk_mb(), _unit_disk_mb(loop_cfg)
+            if free_mb is not None and per_unit > 0 and free_mb < _disk_floor_mb(per_unit):
+                # Stopping cleanly beats writing half an artifact set: a disk that fills mid-unit
+                # corrupts the save-set the whole ledger rests on. This is the resource analogue of an
+                # integrity halt - the last completed unit is fully recorded.
+                _halt(f"supervise: HALT - free disk is down to {free_mb / 1024:.2f} GB, below this "
+                      f"campaign's floor of {_disk_floor_mb(per_unit) / 1024:.2f} GB "
+                      f"({DISK_FLOOR_UNITS} units x {_mb(per_unit)} MB/unit). Stopping BEFORE a unit "
+                      "writes a partial save-set. Free space or apply the retention plan "
+                      "(docs/protocols/artifacts.md), then relaunch - the queue resumes where it is.")
+            if LOOPCFG.stat().st_mtime != cfg_mtime:
+                loop_cfg = _read_json(LOOPCFG, loop_cfg)
+                w, p, plat = loop_cfg["worker"], loop_cfg["planner"], loop_cfg["plateau"]
+                k = _driver_knobs(loop_cfg)
+                k["absolute_s"] = float(w["iteration_timeout_hours"]) * 3600
+                cfg_mtime = LOOPCFG.stat().st_mtime
+                print("[supervise] configs/loop.json changed - reloaded (logged): " + json.dumps(k))
+
+            q = _read_queue()
+
+            # ---- planner triggers (spawn BEFORE popping so the planner can reorder/refill) ----
+            reasons = []
+            if len(q["next"]) < int(p.get("next_min_units", 2)):
+                reasons.append("NEXT queue low/empty")
+            if q.get("units_since_planner", 0) >= int(p["cadence_units"]):
+                reasons.append(f"cadence: {q['units_since_planner']} units since last planner review")
+            if q["next"] and q["next"][0].get("declined"):
+                reasons.append("head-of-queue declined: " + "; ".join(q["next"][0]["declined"]))
+            last = q.get("last_accept_utc")
+            if last:
+                idle_h = (_dt.datetime.now(_dt.timezone.utc)
+                          - _dt.datetime.fromisoformat(last)).total_seconds() / 3600
+                if idle_h > float(plat["wall_clock_hours"]):
+                    reasons.append(f"plateau: {idle_h:.1f}h without an accepted result")
+            if reasons:
+                print("[supervise] planner triggered: " + "; ".join(reasons))   # the decision trace (LT-5)
+                notes = _drain_inbox(k["inbox_max_chars"])
+                st = "unknown"
+                for attempt in range(1 + k["planner_retries"]):
+                    st = _spawn_agent(PLANNER_PROMPT.format(reasons="; ".join(reasons)) + notes,
+                                      p.get("model", ""), "planner", k)
+                    if st == "ok":
+                        break
+                    print(f"[supervise] planner attempt {attempt + 1} failed (status={st})"
+                          + (" - retrying" if attempt < k["planner_retries"] else ""))
+                else:
+                    _halt(f"supervise: HALT - planner failed after retries (last status: {st}). The "
+                          "queue cannot be trusted unreviewed - the planner's output IS the queue, so "
+                          "its failure is systemic, not unit-scoped. See the driver log, then relaunch.")
+                q = _read_queue()
+                q["units_since_planner"] = 0
+
+            # ---- shelve twice-declined units; the loop keeps moving ----
+            for u in [u for u in q["next"] if len(u.get("declined", [])) >= 2]:
+                _shelve_unit(q, u["config"], "declined", u.get("declined", []))
+                print(f"[supervise] shelved after two declinations: {u['config']}")
+            if not q["next"]:
+                QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
+                _halt("supervise: HALT - queue empty even after a planner pass. The campaign has run "
+                      "out of proposed directions; this is a stopping decision for the user (an "
+                      "unfalsified 'done' is INCONCLUSIVE - see the charter).")
+
+            unit = q["next"][0]
+            QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
+
+            # ---- one fresh-context worker per unit; retry, then SHELVE and continue (degrade-loud) ----
+            cfg_path = Path(unit["config"])
+            notes = _drain_inbox(k["inbox_max_chars"])   # drained ONCE per unit; reused on the retry
+            prompt = WORKER_PROMPT.format(config=unit["config"]) + notes
+
+            def _unit_resolved(u=unit, cp=cfg_path) -> bool:
+                """Grace probe: the unit counts resolved once its save-set exists OR it was declined."""
+                qq = _read_json(QUEUE, {}) or {}
+                head = (qq.get("next") or [{}])[0]
+                return bool(head.get("config") == u["config"] and head.get("declined")) or _unit_saved(cp)
+
+            declined = done = False
+            st = "unknown"
+            retries = int(w.get("retries", 1))
+            for attempt in range(1 + retries):
+                st = _spawn_agent(prompt, w.get("model", ""), f"worker[{unit['config']}]", k,
+                                  saved_probe=_unit_resolved)
+                q = _read_queue()
+                head = q["next"][0] if q["next"] else None
+                declined = bool(head and head.get("config") == unit["config"] and head.get("declined"))
+                done = _unit_saved(cfg_path)
+                if declined or done:
+                    break
+                _record_failure(q, unit["config"], attempt + 1, st,
+                                "unit neither saved nor declined after this attempt")
+                QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
+                print(f"[supervise] unit not validated (attempt {attempt + 1}): status={st}, "
+                      f"saved={done} - " + ("retrying" if attempt < retries else "out of retries"))
+
+            # ---- accept / decline / shelve bookkeeping (liveness = accepted units per unit time) ----
+            # DONE IS TESTED FIRST, and it must stay that way. The save-set on disk is the ground truth for
+            # "this unit happened"; `declined` is a PERSISTED list that outlives the pass that wrote it and
+            # that nothing ever clears. Testing `declined` first classified a unit that was declined once and
+            # EXECUTED on a later pass as still-declined: it never left the head of the queue, never counted
+            # toward liveness, and was re-run on every subsequent iteration - an unbounded loop appending a
+            # real scoreboard row each time, with accepted_units pinned at 0 and last_accept_utc at None (so
+            # the plateau trigger fired forever too). That is the drift-silent failure this driver exists to
+            # replace - alive, logging, zero accepted science - and no agent has to misbehave to reach it:
+            # declining is sanctioned, one declination is below the shelve-at-two threshold, and a later
+            # worker may judge the unit runnable. Accepting drops the unit and its stale declinations with it.
+            if done:
+                q["next"] = [u for u in q["next"] if u.get("config") != unit["config"]]
+                q["accepted_units"] = int(q.get("accepted_units", 0)) + 1
+                q["last_accept_utc"] = _dt.datetime.now(_dt.timezone.utc).isoformat()
+                consec_fail = 0
+                print(f"[supervise] accepted unit #{q['accepted_units']}: {unit['config']}")
+            elif declined:
+                consec_fail = 0
+                print(f"[supervise] unit declined -> planner will review: {unit['config']}")
+            else:
+                # OPERATIONAL failure (SV-1, ADR-0009): record + shelve + CONTINUE - degrade-loud. The
+                # shelf entry (kind="operational", failure records attached) is the loud part; the
+                # planner can revive the unit. Only N-in-a-row escalates to a systemic hard halt.
+                consec_fail += 1
+                _shelve_unit(q, unit["config"], "operational",
+                             [f"driver: not validated after retries (last status: {st})"])
+                print(f"[supervise] OPERATIONAL failure #{consec_fail}/{k['max_consecutive_failures']}: "
+                      f"shelved {unit['config']} (last status: {st}) - the loop continues; the planner "
+                      "can revive it (degrade-loud, ADR-0009)")
+                if consec_fail >= k["max_consecutive_failures"]:
+                    q["consecutive_operational_failures"] = consec_fail
+                    QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
+                    _halt(f"supervise: HALT - {consec_fail} consecutive operational failures is SYSTEMIC "
+                          "(the environment, not the units): check the agent CLI, credentials, and disk; "
+                          "read the driver log, then relaunch.")
+            q["units_since_planner"] = int(q.get("units_since_planner", 0)) + 1
+            q["consecutive_operational_failures"] = consec_fail
+            QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
+    except KeyboardInterrupt:
+        proc = _LIVE_PROC.get("proc")
+        if proc is not None and proc.poll() is None:
+            _kill_tree(proc)
+        print("[supervise] interrupted (Ctrl-C) - live agent killed; the unit stays at the queue head "
+              "(relaunch resumes it). For a graceful end-of-unit stop, create results/STOP instead.")
+        sys.exit(130)
+    finally:
+        DRIVER_ALIVE.unlink(missing_ok=True)   # a crashed/exited driver must re-arm the Stop hook
+        sys.stdout = log.close()
 
 
 def _unit_saved(config_path: Path) -> bool:
@@ -475,112 +1272,6 @@ def _unit_saved(config_path: Path) -> bool:
             and stem in LOGBOOK.read_text(encoding="utf-8", errors="replace"))
 
 
-def supervise():
-    """The loop driver. Deterministic; judgment lives in the worker/planner agents it spawns."""
-    loop_cfg = _read_json(LOOPCFG, None)
-    if not loop_cfg:
-        sys.exit("supervise: configs/loop.json missing or unreadable - new-campaign generates it; "
-                 "the loop knobs are per-campaign (unit cost), not defaults.")
-    w, p, plat = loop_cfg["worker"], loop_cfg["planner"], loop_cfg["plateau"]
-    timeout_s = float(w["iteration_timeout_hours"]) * 3600
-    cfg_mtime = LOOPCFG.stat().st_mtime
-
-    while True:
-        if ESCALATE.is_file():
-            sys.exit(f"supervise: HALT - {ESCALATE} present (a genuine fork awaits the user). "
-                     "Resolve it, delete the file, and relaunch.")
-        if LOOPCFG.stat().st_mtime != cfg_mtime:
-            loop_cfg = _read_json(LOOPCFG, loop_cfg)
-            w, p, plat = loop_cfg["worker"], loop_cfg["planner"], loop_cfg["plateau"]
-            timeout_s = float(w["iteration_timeout_hours"]) * 3600
-            cfg_mtime = LOOPCFG.stat().st_mtime
-            print("[supervise] configs/loop.json changed - reloaded (logged).")
-
-        q = _read_json(QUEUE, {"next": [], "shelved": [], "accepted_units": 0,
-                               "last_accept_utc": None, "units_since_planner": 0})
-
-        # ---- planner triggers (spawn BEFORE popping so the planner can reorder/refill) ----
-        reasons = []
-        if len(q["next"]) < int(p.get("next_min_units", 2)):
-            reasons.append("NEXT queue low/empty")
-        if q.get("units_since_planner", 0) >= int(p["cadence_units"]):
-            reasons.append(f"cadence: {q['units_since_planner']} units since last planner review")
-        if q["next"] and q["next"][0].get("declined"):
-            reasons.append("head-of-queue declined: " + "; ".join(q["next"][0]["declined"]))
-        last = q.get("last_accept_utc")
-        if last:
-            idle_h = (_dt.datetime.now(_dt.timezone.utc)
-                      - _dt.datetime.fromisoformat(last)).total_seconds() / 3600
-            if idle_h > float(plat["wall_clock_hours"]):
-                reasons.append(f"plateau: {idle_h:.1f}h without an accepted result")
-        if reasons:
-            ok = _spawn_agent(PLANNER_PROMPT.format(reasons="; ".join(reasons)),
-                              p.get("model", ""), timeout_s, "planner")
-            if not ok:
-                sys.exit("supervise: HALT - planner failed/timed out. The queue cannot be trusted "
-                         "unreviewed; investigate, then relaunch.")
-            q = _read_json(QUEUE, q)
-            q["units_since_planner"] = 0
-
-        # ---- shelve twice-declined units; the loop keeps moving ----
-        keep = []
-        for u in q["next"]:
-            if len(u.get("declined", [])) >= 2:
-                q["shelved"].append({"config": u["config"], "reasons": u["declined"],
-                                     "utc": _utc_stamp()})
-                print(f"[supervise] shelved after two declinations: {u['config']}")
-            else:
-                keep.append(u)
-        q["next"] = keep
-        if not q["next"]:
-            QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
-            sys.exit("supervise: HALT - queue empty even after a planner pass. The campaign has run "
-                     "out of proposed directions; this is a stopping decision for the user (an "
-                     "unfalsified 'done' is INCONCLUSIVE - see the charter).")
-
-        unit = q["next"][0]
-        QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
-
-        # ---- one fresh-context worker per unit; retry once, then halt loud ----
-        cfg_path = Path(unit["config"])
-        for attempt in range(1 + int(w.get("retries", 1))):
-            ok = _spawn_agent(WORKER_PROMPT.format(config=unit["config"]),
-                              w.get("model", ""), timeout_s, f"worker[{unit['config']}]")
-            q = _read_json(QUEUE, q)
-            head = q["next"][0] if q["next"] else None
-            declined = bool(head and head.get("config") == unit["config"] and head.get("declined"))
-            done = _unit_saved(cfg_path)
-            if declined or done:
-                break
-            print(f"[supervise] unit not validated (attempt {attempt + 1}): "
-                  f"agent_ok={ok}, saved={done} - "
-                  + ("retrying once" if attempt == 0 else "out of retries"))
-        else:
-            sys.exit(f"supervise: HALT - {unit['config']} neither completed (save-set + logbook) nor "
-                     "declined after retries. Inspect results/diagnostics/ and the queue, then relaunch.")
-
-        # ---- accept / decline bookkeeping (liveness = accepted units per unit time) ----
-        # DONE IS TESTED FIRST, and it must stay that way. The save-set on disk is the ground truth for
-        # "this unit happened"; `declined` is a PERSISTED list that outlives the pass that wrote it and
-        # that nothing ever clears. Testing `declined` first classified a unit that was declined once and
-        # EXECUTED on a later pass as still-declined: it never left the head of the queue, never counted
-        # toward liveness, and was re-run on every subsequent iteration - an unbounded loop appending a
-        # real scoreboard row each time, with accepted_units pinned at 0 and last_accept_utc at None (so
-        # the plateau trigger fired forever too). That is the drift-silent failure this driver exists to
-        # replace - alive, logging, zero accepted science - and no agent has to misbehave to reach it:
-        # declining is sanctioned, one declination is below the shelve-at-two threshold, and a later
-        # worker may judge the unit runnable. Accepting drops the unit and its stale declinations with it.
-        if done:
-            q["next"] = [u for u in q["next"] if u.get("config") != unit["config"]]
-            q["accepted_units"] = int(q.get("accepted_units", 0)) + 1
-            q["last_accept_utc"] = _dt.datetime.now(_dt.timezone.utc).isoformat()
-            print(f"[supervise] accepted unit #{q['accepted_units']}: {unit['config']}")
-        else:
-            print(f"[supervise] unit declined -> planner will review: {unit['config']}")
-        q["units_since_planner"] = int(q.get("units_since_planner", 0)) + 1
-        QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
-
-
 def main():
     ap = argparse.ArgumentParser(description="Experiment runner for {{CAMPAIGN_TITLE}}")
     g = ap.add_mutually_exclusive_group(required=True)
@@ -588,17 +1279,30 @@ def main():
     g.add_argument("--baseline", action="store_true", help="run experiment 000 (the floor gate)")
     g.add_argument("--supervise", action="store_true",
                    help="run the orchestrated loop: fresh worker agent per queue unit + planner on triggers")
+    g.add_argument("--preflight", action="store_true",
+                   help="run the supervisor launch checks (agent CLI, loop.json, queue.json, metric "
+                        "selftest) and exit - no spend")
+    ap.add_argument("--smoke", action="store_true",
+                    help="with --preflight/--supervise: also do ONE real agent spawn (costs a model call)")
     ap.add_argument("--selftest", action="store_true",
                     help="(deprecated: the metric self-test + correctness suite now run automatically before every experiment)")
     args = ap.parse_args()
 
+    if args.preflight:
+        fails = preflight(smoke=args.smoke)
+        if fails:
+            sys.exit(f"preflight: {len(fails)} issue(s) found - each line above names its fix.")
+        print("preflight: all checks passed - ready for --supervise.")
+        return
+
     if args.supervise:
-        supervise()   # the driver only orchestrates; each worker's experiment run fires the gates below
+        supervise(smoke=args.smoke)   # the driver only orchestrates; each worker's run fires the gates below
         return
 
     # FROZEN-infrastructure gates, automatic before every experiment (no longer opt-in via --selftest):
     require_metric_selftest()      # EH-3: hard-fail unless the scorer passes its self-test
     check_correctness_suite()      # EH-4/EH-9: run + record; only an affirmative GREEN green-lights promotion
+    _beat("gates")                 # liveness trace begins (dead-worker detection; progress = the ledger)
 
     if args.baseline:
         # TODO(campaign): the simplest defensible baseline (see docs/protocols/baselines.md). It also
@@ -618,10 +1322,18 @@ def main():
     if pred_file.is_file():                # the prediction is part of the reproducible record
         shutil.copy2(pred_file, SNAPSHOTS / stem / "prediction.json")
     print(f"snapshot -> results/snapshots/{stem}/")
+    _beat("snapshot")
 
     validate_method(cfg)   # hard-fail before spending an evaluation on an unwired/unrecognized lever
     target = load_target(cfg)
-    prediction = run_experiment(cfg)
+    _beat("solve_start")
+    ticker = _HeartbeatTicker()   # beats every HB_TICK_S so a long solve doesn't look dead mid-run
+    ticker.start()
+    try:
+        prediction = run_experiment(cfg)
+    finally:
+        ticker.stop()
+    _beat("solve_done")
     evaluate_and_record(cfg, prediction, target, apriori)
 
 

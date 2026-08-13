@@ -41,7 +41,7 @@ kit/scripts/install-skills.sh
 kit\scripts\install-skills.ps1
 ```
 
-Both scripts copy the 23 skills into `~/.agents/skills/` and are idempotent. Options:
+Both scripts copy the 24 skills into `~/.agents/skills/` and are idempotent. Options:
 
 | Option | Effect |
 |---|---|
@@ -93,8 +93,9 @@ Verify discovery with **zero model cost**:
 opencode debug skill        # lists every discovered skill and its file location
 ```
 
-> ✅ **Verified**: on OpenCode v1.2.21 (Windows), `opencode debug skill` discovered all 23 PhysKit
-> skills after the install script placed them, alongside the harness's other skills.
+> ✅ **Verified**: on OpenCode v1.2.21 (Windows), `opencode debug skill` discovered all PhysKit
+> skills (23 at the time of that check; 24 since `run-campaign`) after the install script placed them,
+> alongside the harness's other skills.
 
 ---
 

@@ -105,7 +105,8 @@ Collect what already answers the interview, so you only ask about real gaps:
   <source>?" if its applicability is uncertain). For papers, prefer the **arXiv** version and convert
   any PDF with a scientific-PDF→markdown tool to save tokens (see `docs/PRINCIPLES.md` §2).
 - **Detect, don't ask, what you can check:** the compute (CPU cores, RAM, and GPU — e.g. run
-  `nvidia-smi`), the available Python/toolchain, and the data files present and their shapes.
+  `nvidia-smi`), **the free disk space on the volume the campaign will live on**, the available
+  Python/toolchain, and the data files present and their shapes.
 Carry these harvested facts into the interview.
 
 ## Step 0.6 — establish the source-authority ledger (when more than one source describes the system)
@@ -222,10 +223,11 @@ control, or training/fitting purely on real experimental data). If there is one,
    (scoring math, core physics, geometry, data) vs READ-ONLY vs MUTABLE code.
 7. **Experimental / hardware constraints.** Fairness rules; for a hardware-in-the-loop campaign, the
    **hardware safety limits** (hard constraints), irreversibility, and what actions need confirmation.
-8. **Compute resources & time budget.** **Detect** the available hardware rather than asking (CPU
-   cores, RAM, GPU via `nvidia-smi`). If it is relevant to the problem (e.g. a GPU for ML), **record it
-   explicitly in the scaffolding** (the README Environment section and a note in `charter.md`) so future
-   agents don't overlook available resources. Ask the user only for what you can't measure — chiefly the
+8. **Compute resources, time budget, and disk budget.** **Detect** the available hardware rather than
+   asking (CPU cores, RAM, GPU via `nvidia-smi`). If it is relevant to the problem (e.g. a GPU for ML),
+   **record it explicitly in the scaffolding** (the README Environment section and a note in
+   `charter.md`) so future agents don't overlook available resources. Ask the user only for what you
+   can't measure — chiefly the
    **time budget** (per-run and overall-loop). Use this to fill the run caps **archetype-specifically**
    (epochs for ML; replication depth for a cheap closed-form fit; expensive/irreversible runs for
    hardware). **Tiered scout/confirmation caps only make sense when** the problem supports a cheaper
@@ -234,6 +236,27 @@ control, or training/fitting purely on real experimental data). If there is one,
    **three tiers**: a very short *smoke* check (does the code run at all?), a short *scout* (is the idea
    promising?), and a longer *confirmation/validation* run. If you can't tell whether the eval suits
    partial runs, ask; otherwise just propose the scheme.
+   **Size the DISK cost per experiment too, not just the time.** A loop that fills its volume overnight
+   corrupts the save-set it was mid-write on, and the failure surfaces as an unrelated-looking gate error
+   at 3 a.m. **Derive** the estimate rather than asking: sum what one experiment leaves behind from the
+   artifact plan (topic 5 + `protocols/artifacts.md`) — the save-set (result JSON + figure + the
+   `scripts/` snapshot copy: usually a few hundred KB) **plus the bulk artifacts that dominate it**
+   (trained weights/checkpoints, generated datasets, computed operators, raw field/trace arrays). Compute
+   the bulk terms from real shapes where you can (`n_points × n_channels × 8 bytes`, a model's parameter
+   count, the size of an existing example file), not from a feeling. Then state the three numbers to the
+   user: **MB per experiment · projected total for the planned experiment count · free space detected**.
+   - Record the per-unit figure in `configs/loop.json` (`unit_cost.typical_disk_mb`) — the driver refuses
+     to launch, and halts at the loop top, below ~3 experiments of headroom.
+   - **If the projection is a material fraction of free space (say >25%), stop and design the retention
+     plan with the user** before scaffolding: which bulk artifacts are kept, and which are dropped and
+     *regenerated on demand* from the snapshot + seed. Fill it into `protocols/artifacts.md`
+     (`{{RETENTION_PLAN}}`). The permanent record — scoreboard row, result JSON, figure, snapshot,
+     narrative, verdicts — is **never** part of that trade; it is small by construction, and dropping any
+     of it un-saves the result. Anything not deterministically regenerable (hardware measurements,
+     external services, unrecorded seeds) is likewise never droppable.
+   - If experiments are small (a few MB), say so explicitly and note that no plan is needed — a stated
+     "not a constraint here" is what stops the next agent from re-litigating it.
+
    **From the same unit-cost assessment, derive the supervisor loop knobs** (`configs/loop.json` — the
    driver reads these; PLACEHOLDERS §Loop configuration): planner cadence *k*, plateau threshold *m*
    (**dual-denominated**: units AND wall-clock, whichever trips first), the outstanding-units cap
@@ -309,14 +332,19 @@ obeying `PLACEHOLDERS.md`:
   the doctrine in context and the verify gate un-skippable):** generate **`CLAUDE.md`** (from
   `CLAUDE.md.tmpl`) in the campaign root — Claude Code auto-loads it every session, and it is the ONLY
   reliable always-on context (a plugin's `docs/` are NOT auto-loaded, so the always-loaded spine lives here
-  per-campaign). Fill the **`{{PHYSKIT_SPINE}}`** block by rendering a campaign-tailored, **FROZEN** snapshot
+  per-campaign). **Every line of it is re-injected every turn, so it carries only what the running loop
+  acts on** — no kit-design rationale (why the spine is inlined and not `@`-imported), no scaffolding-time
+  instructions (the fresh-session launch is Step 5's handoff message to the *user*), no commentary on how
+  the file was produced. Do not add a header comment; the freeze/provenance fact is stated once, in the
+  spine banner below. Fill the **`{{PHYSKIT_SPINE}}`** block by rendering a campaign-tailored, **FROZEN** snapshot
   of `${CLAUDE_PLUGIN_ROOT}/docs/CORE.md`. **Do NOT `@`-import CORE.md, and do NOT vendor a separate
   `PHYSKIT_CORE.md` + hash-check it against live** — a generated campaign *freezes-and-stamps* its doctrine
   as part of its reproducible record; it does not track a moving CORE (kit-dev `CLAUDE.md` §single-source:
   *source* minimizes forks, *output* freezes-and-stamps). To render the spine:
   1. **Read** `${CLAUDE_PLUGIN_ROOT}/docs/CORE.md` in full.
   2. **Tailor for a running campaign** — keep the meaning; cut only what a mid-campaign loop never fires.
-     *Reframe* the opening line to "running an autonomous research campaign" and point the goal at
+     *Drop* the YAML frontmatter (`id`/`load`/`load_trigger`/… is kit-internal routing metadata about how
+     the kit ships, not doctrine the loop acts on). *Reframe* the opening line to "running an autonomous research campaign" and point the goal at
      `docs/charter.md`. *Replace* the "Stage 0 — clarify the goal" section (its `→ /physkit:new-campaign`
      routing is dead once the campaign exists) with a short "re-anchor each iteration — the goal is fixed in
      the charter" paragraph that KEEPS the state-assumptions / present-interpretations / push-back /
@@ -339,9 +367,11 @@ obeying `PLACEHOLDERS.md`:
      followed by the tailored body together ARE the `{{PHYSKIT_SPINE}}` fill — the template's old thin
      "Frozen core" 5-bullet summary is gone, subsumed by the Constitution the snapshot carries.
 - **The enforcement layer:** generate **`.claude/settings.json`** (from its `.tmpl`),
-  **`scripts/loop_heartbeat.py`** — the Stop hook that keeps a single-session loop running (it refuses an
-  end-of-turn that isn't the human's `results/STOP` or a recorded `results/stop_request.json`; it stands
-  down for driver-spawned supervisor-mode workers, whose per-unit end-of-turn is earned) — and
+  **`scripts/loop_heartbeat.py`** — the Stop hook guarding attended sessions in a live campaign (it
+  refuses an end-of-turn that isn't the human's `results/STOP` or a recorded `results/stop_request.json`,
+  and its block message routes toward launching the driver; it stands down for driver-spawned
+  supervisor-mode workers, whose per-unit end-of-turn is earned, and for any attended session while the
+  driver's `results/.driver_alive` sentinel is fresh) — and
   **`scripts/guard_discoveries.py`** — the PreToolUse hook that denies a `DISCOVERIES.md` write whose
   entry does not cite a promotable verdict artifact (`results/verdicts/<id>.json`, written by `verify`;
   CONFIRMED + named refuter; an INCONCLUSIVE kill is denied; **fail-closed on the promote path**). Fill
@@ -440,11 +470,14 @@ It fails if any literal `{{…}}`, dangling `[[OPTIONAL`, or stray `[PROPOSED]` 
 file is missing. A generated campaign with an unresolved token is not done.
 
 ## Step 5 — hand off (and START A FRESH SESSION)
-Tell the user what was created (the tree). Then the **critical handoff rule: do NOT start the loop in
-THIS setup session.** The campaign's `CLAUDE.md` (always-on doctrine + hard gates) and the DISCOVERIES
-enforcement hook only take effect in a session that **starts in the campaign folder** — this setup
-session was already open when they were written, so it has loaded neither. Instruct the user to launch a
-fresh session from the campaign directory:
+Tell the user what was created (the tree), and **name the destination up front: the loop runs in
+supervisor mode, launched and watched through the `run-campaign` skill.** The fresh session's job is
+setup, then `/physkit:run-campaign` — never executing the loop by hand.
+
+The **critical handoff rule: do NOT start the loop in THIS setup session.** The campaign's `CLAUDE.md`
+(always-on doctrine + hard gates) and the enforcement hooks only take effect in a session that **starts
+in the campaign folder** — this setup session was already open when they were written, so it has loaded
+neither. Instruct the user to launch a fresh session from the campaign directory:
 ```
 cd "<absolute path to campaign dir>"
 claude --dangerously-skip-permissions
@@ -453,20 +486,32 @@ claude --dangerously-skip-permissions
 no memory of where this session was running — a relative or partial path that resolved correctly here will
 point at the wrong place (or nowhere) in the new terminal. Resolve the campaign dir to its full path before
 handing over the command.
-*(add `--plugin-dir "<KIT_DIR>"` if running the kit per-session rather than installed).* Point them at
-`docs/charter.md` (re-read every iteration) and state the first actions: **implement `scripts/metric.py` +
-`save_figure()` and make `--selftest` pass; write `predictions/exp000_baseline.json` (the spend gate
-requires it — the expected floor is in the charter); then run experiment 000 (the baseline gate).** Have
-them confirm with `/context` that `CLAUDE.md` is loaded before the loop starts.
-**Then the loop itself runs in supervisor mode** — the unattended default:
-```
-{{PYTHON_CMD}} scripts/run_campaign.py --supervise
-```
-The driver pops units from the seeded `results/queue.json`, spawns a fresh worker agent per unit (the
-frozen spine + charter auto-load in each), enforces the artifact gates, and halts loudly on anything it
-cannot validate (`results/ESCALATE.md`, an empty queue, or an unvalidatable unit). Loop knobs live in
-`configs/loop.json` (user-owned; the charter's "How the loop runs" section explains the contract). An
-interactive session working `--config` by hand remains fine for attended work — the same gates apply.
+*(add `--plugin-dir "<KIT_DIR>"` if running the kit per-session rather than installed).*
+
+In that fresh session, the sequence is:
+1. **Pre-loop setup (not the loop):** implement `scripts/metric.py` + `save_figure()` and make
+   `--selftest` pass; write `predictions/exp000_baseline.json` (the spend gate requires it — the
+   expected floor is in the charter); run experiment 000 (the baseline gate). Confirm with `/context`
+   that `CLAUDE.md` is loaded.
+2. **Then invoke `/physkit:run-campaign`** — that session becomes the loop's cockpit: it runs the
+   driver's preflight and translates any failure into its fix, launches `--supervise` in the background,
+   narrates progress from the driver log, and relays the user's steering into `results/inbox/`.
+   (Fallback, no skill available: hand over `<python> scripts/run_campaign.py --preflight`, then
+   `--supervise` — writing out the actual python command detected in Step 0.5, e.g. `py -3`; never the
+   literal placeholder.)
+
+The driver runs its preflight (agent CLI, loop/queue config, metric self-test — each failure names its
+fix; standalone: `--preflight`), pops units from the seeded `results/queue.json`, spawns a fresh worker
+agent per unit (the frozen spine + charter auto-load in each), and enforces the artifact gates. Failures
+split by kind (ADR-0009): an **operational** failure (a worker that dies, hangs, or leaves its unit
+unvalidated) is retried, then shelved with the failure recorded — the loop continues; the driver
+hard-halts only on **integrity** conditions (`results/ESCALATE.md`, a corrupt or post-planner-empty
+queue) or **systemic** failure (several units failing in a row). Loop knobs live in `configs/loop.json`
+(user-owned; the charter's "How the loop runs" section explains the contract).
+**Attended work = watching and steering through the cockpit, not executing by hand.** A by-hand
+`--config` run is for debugging a single experiment — it is not a mode for running the loop; the
+interactive-executor pattern is retired (unbounded context, docs never re-read, premature stops,
+verification decay — the failure record that motivated the driver).
 - **In a project:** the campaign lives at `campaigns/<NN>_<slug>/` and its opening `../../LINEAGE.md` row is
   `status: active`. Remind the loop agent that shared data/docs are `../../data` + `../../shared/` (referenced,
   never copied — the ancestor `../../CLAUDE.md` carries the project rules), and that a verified **system-level**

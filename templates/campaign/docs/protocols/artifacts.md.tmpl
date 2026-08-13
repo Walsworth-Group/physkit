@@ -44,6 +44,34 @@ visualizations: {{PROMOTED_BEST_ARTIFACTS}}
 <!-- Extra figures, montages/animations, etc. Keep the artifacts of each successive best so the
      progression is inspectable. -->
 
+## Retention plan — what is kept forever vs regenerated on demand
+Disk is a real constraint on a long loop: ≈**{{DISK_PER_EXP}}** per experiment here, and a campaign that
+fills its volume overnight corrupts the save-set it was in the middle of writing. The driver enforces the
+floor (it refuses to launch, and halts at the loop top, below ~3 experiments of headroom — the estimate
+lives in `configs/loop.json` `unit_cost.typical_disk_mb`), but *what* to keep is a plan you make here.
+
+**Never droppable — the permanent record** (this is hard gate 4, enforced in code; deleting any of it
+un-saves the result): the scoreboard row · `results/result_<NN>.json` · the basic figure · the
+reproducibility bundle in `results/snapshots/exp<NN>_<slug>/` · the logbook/JOURNAL narrative · verdicts.
+These are small by construction — text, one figure, a code copy — so a retention plan never needs them.
+
+**Negotiable — bulk artifacts** (the "quicker-check" set above: model weights/checkpoints, generated
+datasets, computed operators, raw field/trace arrays). These may be dropped **only when regeneration is
+deterministic and recorded**: the snapshot pins the exact config + code, and the manifest pins the seed and
+command line, so re-running the snapshot reproduces the artifact bit-for-bit. Rules:
+- Record the decision **before** the loop runs, not after the disk fills: for each bulk artifact, *keep* or
+  *regenerate-on-demand*, with the regeneration command in `results/INDEX.md` beside the experiment.
+- **Keep the current-best's bulk artifacts** (and the runner-up's) — they are re-checked most often, and a
+  verifier waiting on a re-solve is the cost this rule exists to avoid.
+- **Never drop what cannot be regenerated deterministically** — anything touching hardware, external
+  services, wall-clock, or an unrecorded seed is a one-shot measurement, not a cache.
+- Dropping is **deletion of data**: it needs the user's confirmation (see Save discipline), it is logged in
+  `results/INDEX.md`, and it never happens silently mid-run.
+{{RETENTION_PLAN}}
+<!-- The campaign-specific plan, if bulk artifacts are large enough to need one: which artifacts are
+     kept, which are regenerate-on-demand + their command, and any pruning cadence. If experiments are
+     small (< a few MB), state that no plan is needed and why. -->
+
 ## How to run
 ```
 {{ARTIFACT_COMMAND}}

@@ -1,8 +1,10 @@
 {
   "_doc": "Loop configuration - the machine-readable knobs the driver (scripts/run_campaign.py --supervise) reads. Set at scaffold time by new-campaign from this campaign's unit cost (the WHY lives in docs/charter.md, 'How the loop runs'); human-editable mid-campaign - the driver logs any change it detects. Knob semantics: STRUCTURED_LOOP_PROPOSAL s4.1 rules 2-4.",
   "unit_cost": {
+    "_doc": "What one experiment costs. typical_wall_clock_s sets the loop knobs below; typical_disk_mb is what one unit ADDS to results/ (save-set + snapshot + figures + any bulk data), estimated at scaffold time from the artifact plan - the driver refuses to launch, and halts at the loop top, when free disk falls below 3 units' worth. 0 disables that check.",
     "class": "{{UNIT_COST_CLASS}}",
-    "typical_wall_clock_s": {{UNIT_COST_S}}
+    "typical_wall_clock_s": {{UNIT_COST_S}},
+    "typical_disk_mb": {{UNIT_COST_DISK_MB}}
   },
   "planner": {
     "_doc": "Fresh-context strategy agent: spawned when NEXT runs low, every cadence_units accepted units, on a declination, at a plateau, after a REFUTED verdict, or after a promotion. Writes ONLY strategy artifacts (results/queue.json + a journal strategy note).",
@@ -20,13 +22,24 @@
     "max_outstanding_units": {{MAX_OUTSTANDING_UNITS}}
   },
   "worker": {
-    "_doc": "Fresh-context iteration agent, one queue unit per spawn. Long solver runs execute under the driver or the worker's shell - NEVER inside a background subagent (10-min stall abort masquerades as a failed solve).",
+    "_doc": "Fresh-context iteration agent, one queue unit per spawn. Long solver runs execute under the driver or the worker's shell - NEVER inside a background subagent (the runner's results/.run_heartbeat is the driver's dead-worker signal, and a backgrounded solve loses it). iteration_timeout_hours = the absolute cap; inactivity_timeout_min = kill a worker with no output AND no heartbeat change for this long.",
     "model": "{{WORKER_MODEL}}",
     "iteration_timeout_hours": {{ITERATION_TIMEOUT_HOURS}},
-    "retries": 1
+    "retries": 1,
+    "inactivity_timeout_min": 30
+  },
+  "driver": {
+    "_doc": "Supervisor-driver knobs (SV-1..SV-5; ADR-0009 halt taxonomy). All code-defaulted - an older loop.json without this section keeps working. max_consecutive_failures: N operational (unit-scoped) failures in a row = systemic -> hard halt; below N the driver shelves the unit (kind=operational) and continues. stream: auto|on|off - auto adds the stream-json live feed only for the default claude CLI. inbox_max_chars caps the per-spawn USER-NOTES injection from results/inbox/. heartbeat_stale_min / detached_grace_min govern the post-exit wait for a detached runner that is still solving.",
+    "max_consecutive_failures": 3,
+    "planner_retries": 1,
+    "stream": "auto",
+    "inbox_max_chars": 20000,
+    "feed_line_chars": 160,
+    "heartbeat_stale_min": 5,
+    "detached_grace_min": 60
   },
   "verify": {
-    "_doc": "ADR-0006 tier: unit cost at/below the threshold -> full from-scratch re-execution; above -> judgment-focused verify + the cheapest discriminating spot-check (never zero re-execution). Derived numbers are ALWAYS recomputed from raw artifacts regardless.",
+    "_doc": "ADR-0008 tier: unit cost at/below the threshold -> full from-scratch re-execution; above -> judgment-focused verify + the cheapest discriminating spot-check (never zero re-execution). Derived numbers are ALWAYS recomputed from raw artifacts regardless.",
     "full_reproduction_threshold_s": {{VERIFY_REPRO_THRESHOLD_S}}
   }
 }
