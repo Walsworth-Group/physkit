@@ -1,11 +1,11 @@
 # Campaign Archetype Cheat-Sheet
 
 A reference for the `new-campaign` setup skill (and the researcher) when filling
-`campaign/docs/charter.md.tmpl`. Most physical-science autoresearch campaigns fall into a small set of
+`campaign/campaign.md.tmpl`. Most physical-science autoresearch campaigns fall into a small set of
 recurring archetypes (catalogued below as A–I). A campaign may match **none, one, or several** — determine which **apply**, and **inherit and merge** the
 metric/lever/FROZEN/failure-mode guidance from each relevant one (don't force a single best fit). If
 several apply *in sequence* rather than at once, that's a multi-stage campaign (see the note at the
-end). Then specialize the placeholders. The generic `charter.md` template is the union of the archetypes'
+end). Then specialize the placeholders. The generic `campaign.md` template is the union of the archetypes'
 rigor disciplines. The hardware-in-the-loop archetype (**E**) is fundamentally different from the
 compute-only ones and needs special treatment — see its section.
 
@@ -134,7 +134,7 @@ treatment** — the "experiment" is a real measurement on real hardware, not a c
   promoting a run that was quarantined or whose calibration had gone stale → make **passed-quarantine +
   calibration-in-window** an explicit precondition of promotion, checked alongside the verdict rather
   than assumed from the fact that the acquisition completed.
-  (The generic `charter.md` carries an optional "Hardware safety & irreversibility" block for this
+  (The generic `campaign.md` carries an optional "Hardware safety & irreversibility" block for this
   archetype; full operational doctrine in `docs/reference/hardware-in-the-loop.md`, principle-level in
   `docs/PRINCIPLES.md` §9.)
 
@@ -190,7 +190,7 @@ doctrine lives in the **`discovery-loop` skill** — this is the selection-guide
   validation gate; require **generalization/extrapolation across regimes**; **credit explanatory (mechanism)
   over descriptive (metric) discovery**; deliver an **interpretable artifact** and extract its design rule
   into `PHYSICS.md`. (Full loop, memory modes, and checklist: the `discovery-loop` skill;
-  simulator-scored search: `docs/SIMULATION_VALIDATION.md` §5; budget: `docs/protocols/expensive-evaluation.md`.)
+  simulator-scored search: `docs/SIMULATION_VALIDATION.md` §5; budget: `docs/reference/expensive-evaluation.md`.)
 
 ## H. Active / optimal experimental design (sequential experiment selection)
 *E.g. Bayesian optimization of a material/process, active learning, an
@@ -240,7 +240,7 @@ Operational doctrine: the **`model-selection`** skill.*
 ---
 
 ## Cross-archetype constants (fill these the same way for ANY archetype)
-These are settled doctrine in the generic `charter.md` and apply regardless of archetype:
+These are settled doctrine in the generic `campaign.md` and apply regardless of archetype:
 - ONE **frozen metric**; scoring math never changes mid-campaign.
 - **Exp 000 baseline gate** = the floor + an end-to-end pipeline/convention validation.
 - The **FROZEN / READ-ONLY / Mutable** code tripartition.

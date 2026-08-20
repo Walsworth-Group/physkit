@@ -1,5 +1,15 @@
 {
-  "_doc": "Loop configuration - the machine-readable knobs the driver (scripts/run_campaign.py --supervise) reads. Set at scaffold time by new-campaign from this campaign's unit cost (the WHY lives in docs/charter.md, 'How the loop runs'); human-editable mid-campaign - the driver logs any change it detects. Knob semantics: STRUCTURED_LOOP_PROPOSAL s4.1 rules 2-4.",
+  "_doc": "Loop configuration - the machine-readable knobs the driver (scripts/run_campaign.py --supervise) reads. Set at scaffold time by new-campaign from this campaign's unit cost (the WHY lives in roles/worker.md, 'How the loop runs'); human-editable mid-campaign - the driver logs any change it detects. Knob semantics: STRUCTURED_LOOP_PROPOSAL s4.1 rules 2-4.",
+  "campaign": {
+    "_doc": "What KIND of campaign this is - the two properties every mechanical check branches on. Both are SETUP-TIME decisions, not per-experiment skips: turning a control off because one result looks awkward is the failure the control exists to prevent. Changing either mid-campaign is legitimate only when the campaign's nature actually changed, and the change is visible in every later snapshot manifest (results/snapshots/<exp>/manifest.txt records both), never only here. prediction_mode: what the a-priori prediction gate requires before it will spend an evaluation - 'range' (a falsifiable numeric [low, high]; the default, and the strongest control), 'direction' (which way the metric should move versus a named prior experiment, and why - no number, still mechanically checkable), or 'none' (no bound; requires prediction_mode_reason, and is honest only for a genuinely unboundable answer - a fabricated range is a fake control, which is worse than none). noise_model: 'stochastic' (repeated runs differ; a win must clear the replicate spread) or 'deterministic' (repeated runs are identical, so the comparison is exact and the relevant test is a numerical tolerance, not a spread). noise_floor: the once-estimated replicate spread for a stochastic campaign (verify/SKILL.md, 'Clear the noise floor'), re-estimated only when something that could move it changes; null = not yet estimated, which leaves the noise-floor check unavailable rather than assumed-passed. tolerance: the numerical equality tolerance for a deterministic campaign; null = not yet set. metric_version / data_version: the comparability tags stamped onto every scoreboard row and every result JSON. A ranking claim is valid ONLY WITHIN one (metric_version, data_version) pair - when the FROZEN metric or the dataset changes, BUMP the tag here and re-score saved contenders under the new version before comparing. Never compare a number across versions.",
+    "prediction_mode": "{{PREDICTION_MODE}}",
+    "prediction_mode_reason": "{{PREDICTION_MODE_REASON}}",
+    "noise_model": "{{NOISE_MODEL}}",
+    "noise_floor": {{NOISE_FLOOR}},
+    "tolerance": {{METRIC_TOLERANCE}},
+    "metric_version": "{{METRIC_VERSION}}",
+    "data_version": "{{DATA_VERSION}}"
+  },
   "unit_cost": {
     "_doc": "What one experiment costs. typical_wall_clock_s sets the loop knobs below; typical_disk_mb is what one unit ADDS to results/ (save-set + snapshot + figures + any bulk data), estimated at scaffold time from the artifact plan - the driver refuses to launch, and halts at the loop top, when free disk falls below 3 units' worth. 0 disables that check.",
     "class": "{{UNIT_COST_CLASS}}",
@@ -29,7 +39,7 @@
     "inactivity_timeout_min": 30
   },
   "driver": {
-    "_doc": "Supervisor-driver knobs (SV-1..SV-5; ADR-0009 halt taxonomy). All code-defaulted - an older loop.json without this section keeps working. max_consecutive_failures: N operational (unit-scoped) failures in a row = systemic -> hard halt; below N the driver shelves the unit (kind=operational) and continues. stream: auto|on|off - auto adds the stream-json live feed only for the default claude CLI. inbox_max_chars caps the per-spawn USER-NOTES injection from results/inbox/. heartbeat_stale_min / detached_grace_min govern the post-exit wait for a detached runner that is still solving.",
+    "_doc": "Supervisor-driver knobs. All code-defaulted - an older loop.json without this section keeps working. max_consecutive_failures: N operational (unit-scoped) failures in a row = systemic -> hard halt; below N the driver shelves the unit (kind=operational) and continues. stream: auto|on|off - auto adds the stream-json live feed only for the default claude CLI. inbox_max_chars caps the per-spawn USER-NOTES injection from results/inbox/. heartbeat_stale_min / detached_grace_min govern the post-exit wait for a detached runner that is still solving.",
     "max_consecutive_failures": 3,
     "planner_retries": 1,
     "stream": "auto",
@@ -39,7 +49,7 @@
     "detached_grace_min": 60
   },
   "verify": {
-    "_doc": "ADR-0008 tier: unit cost at/below the threshold -> full from-scratch re-execution; above -> judgment-focused verify + the cheapest discriminating spot-check (never zero re-execution). Derived numbers are ALWAYS recomputed from raw artifacts regardless.",
+    "_doc": "Verification tier: unit cost at/below the threshold -> full from-scratch re-execution; above -> judgment-focused verify + the cheapest discriminating spot-check (never zero re-execution). Derived numbers are ALWAYS recomputed from raw artifacts regardless.",
     "full_reproduction_threshold_s": {{VERIFY_REPRO_THRESHOLD_S}}
   }
 }

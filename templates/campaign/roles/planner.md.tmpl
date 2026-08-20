@@ -1,0 +1,53 @@
+# Planner role — {{CAMPAIGN_TITLE}}
+
+Strategy-only guidance for the planner. It covers what the planner alone decides: when to re-open a
+shelved direction, what to do at a plateau, and when to search the literature. The worker never reads
+this file.
+
+The shared contract is not repeated here. The campaign definition (metric, levers, caps, promotion
+rules) is `campaign.md`; the hard gates are `CLAUDE.md`. Read both every cycle.
+
+## After a major discovery — re-open shelved directions
+A real win often changes what else is possible. When you confirm a new best, ask which
+previously-negative or untried directions might now behave differently, and budget a short
+re-exploration pass.
+
+## Getting Unstuck
+If {{STUCK_N}}+ experiments without a primary gain: re-read {{REANCHOR_DOCS}}; check whether the
+guardrail is also stuck (capacity/data-limited) or still moving (generalization-limited); escalate to
+the biggest unexploited structural lever ({{STRUCTURAL_LEVERS}}).
+- Do not declare the campaign done prematurely. "We've hit the ceiling", "this is optimal" and "we're
+  blocked on new data" are load-bearing claims, not stopping cues. Treat such a claim as a positive
+  result and try to refute it: attempt to beat the supposed limit with an orthogonal lever or a freer
+  model, and give the reasoned argument for why any gain that appears is non-physical, before stopping.
+  The loop runs until a direction is exhausted or you are told to stop. A plateau is a pivot signal, so
+  escalate the lever; a plateau that resists escalation is an audit signal instead (see "At a hard
+  plateau, audit the inheritance" below). Neither is a finish line. "I've stopped finding gains" is not
+  the same as "no gains exist." State a claimed limit as a claim, with the falsification you attempted,
+  and keep exploring orthogonal directions rather than idling. Acting on that claim means filing an
+  `exhausted` stop_request (`CLAUDE.md` HARD GATE 5), whose `untried_levers: []` is that claim in
+  checkable form.
+- Diagnose before you pivot. Name the failure type (idea-wrong / implementation-capped /
+  fixed-choice-fought / near-miss, or the non-pivot inherited-value-wrong handled in the next bullet)
+  and take the smallest jump the diagnosis justifies along the refine↔pivot spectrum. Escalate to an
+  orthogonal lever only once the current family is exhausted, and escalate decisively when it is. A
+  crash is a bug (`debug`), not a verdict. A near-miss is a gather-more signal, not a dead end. Full
+  diagnosis: the physkit plugin's `docs/reference/pivoting.md`.
+- At a hard plateau, audit the inheritance. If one-lever experiments across two or more lever families
+  pin at the same floor, or the current best sits far from its own a-priori expectation and no lever
+  moves the gap, the stall may sit upstream of every lever: a wrong inherited value (a calibration, a
+  derived quantity, a classification) that every experiment silently carries. Lever escalation cannot
+  escape that. Run the assumption audit (`assumption-audit`): enumerate what the current best inherits,
+  with provenance; rank by would-being-wrong-produce-this-stall; and spend one discriminating
+  experiment that solves for the top suspect's value from scratch, never one that confirms the
+  incumbent, before committing more optimization runs.
+
+[[OPTIONAL — literature search enabled (the user opted in to literature search):
+### Literature search rule
+Intensity: {{LITERATURE_LEVEL}}. Run a web literature search (6–10 queries covering the current
+bottleneck, the closest published analogues, and any new techniques since the last search), then update
+`LITERATURE.md` (add or supersede sections, re-rank the Priority Roadmap, update the date) and log it in
+JOURNAL.md.
+- When to search depends on the intensity: *only-when-needed* → search when stuck; *extensive* → also
+  search proactively at the start of a new direction and periodically, not only when stuck.
+]]

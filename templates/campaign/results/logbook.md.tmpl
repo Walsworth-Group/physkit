@@ -1,44 +1,45 @@
 # Logbook — {{CAMPAIGN_TITLE}} (append-only; the full narrative record)
 
-The complete, permanent history of the campaign: one entry per experiment, in order, **verbatim and
-never trimmed**. The runner (`scripts/run_campaign.py`) **auto-appends the facts** of each entry; the
-agent **completes the narrative slots** (Analysis, Expected-vs-found, Verification, Excluded-data, NEXT) of that same entry right after.
-This archive is what lets `results/JOURNAL.md` stay a short steering view.
+The complete, permanent history of the campaign: one entry per experiment, in order, verbatim and never
+trimmed. The runner (`scripts/run_campaign.py`) auto-appends the facts of each entry. The agent completes
+that entry's narrative slots right after: Analysis, Expected-vs-found, Verification, Excluded-data, NEXT.
+This archive lets `results/JOURNAL.md` stay a short steering view.
 
-**Rules — read these once, then never read the rest of this file:**
-- **Append only — never touch a PAST entry.** New entries are appended at the bottom (automatically, by
-  the runner). You complete the narrative of the **current** entry; once you move to the next experiment,
-  no earlier entry is ever edited, compressed, reordered, or deleted (including disputes, negative
-  results, and refuted findings).
-- **Never read this file in full.** It grows without bound, and loading it whole would bloat the working
-  context — which defeats its purpose. Consult it only by **targeted search** (grep for an exp id or a
-  term) or by reading a **specific slice** when you genuinely need an old detail.
-- **Entry format:** a `## <exp_id> - <label> - <UTC>` header, then **one bold-labelled field per line as a
-  bullet** — `- **Hypothesis**: …`, `- **Predicted**: …`, `- **Change**: …`, `- **Result**: …` (auto-filled
-  by the runner), then `- **Analysis**: …`, `- **Expected vs found**: …`, `- **Verification**: …`, `- **Excluded data**: …`, `- **Disputes & responses**: …`,
-  `- **Status**: …`, `- **Artifacts**: …`, `- **NEXT**: …` (the agent completes). **Keep each field on its
-  own bullet line — never collapse them into one paragraph** (a single newline renders as a space in
-  Markdown, so separate bullets are what make the entry readable).
+Rules — read these once, then do not read the rest of this file:
+- Append only. Never edit a past entry. New entries are appended at the bottom by the runner. Complete the
+  narrative of the current entry. Once you move to the next experiment, no earlier entry is edited,
+  compressed, reordered, or deleted, including disputes, negative results, and refuted findings.
+- Never read this file in full. It grows without bound, and loading it whole bloats the working context,
+  defeating its purpose. Consult it only by targeted search (grep for an exp id or a term), or by reading
+  a specific slice when an old detail is needed.
+- Entry format: a `## <exp_id> - <label> - <UTC>` header, then one bold-labelled field per line as a
+  bullet. The runner auto-fills `- **Hypothesis**: …`, `- **Predicted**: …`, `- **Change**: …`,
+  `- **Result**: …`; the agent completes `- **Analysis**: …`, `- **Expected vs found**: …`,
+  `- **Verification**: …`, `- **Excluded data**: …`, `- **Disputes & responses**: …`, `- **Status**: …`,
+  `- **Artifacts**: …`, `- **NEXT**: …`. Keep each field on its own bullet line; never collapse them into
+  one paragraph. A single newline renders as a space in Markdown, so separate bullets make the entry
+  readable.
 - The numbers live in `scoreboard.tsv`, settled findings in `DISCOVERIES.md`, the navigation map in
-  `INDEX.md`; this file is the full *narrative*.
+  This file is the full narrative.
 
-**Completing the current entry** (fill the slots the runner left blank, before moving on):
-- **Analysis** — inside the predicted range? guardrail hold? ceiling-move vs gap-to-ceiling? statistical
-  vs systematic? real win or overfit?
-- **Expected vs found** — the one-line gap between what you predicted and what you got (the gap is the
-  insight): matched / above / below, and by how much. When they diverge, that divergence is the finding —
-  name it, don't smooth it over.
-- **Verification** — the `{{VERIFY_SKILL}}` verdict: CONFIRMED / PROVISIONAL / QUESTIONABLE ASSUMPTION /
+Completing the current entry — fill the slots the runner left blank, before moving on:
+- **Analysis**: inside the predicted range? guardrail hold? ceiling-move vs gap-to-ceiling? statistical vs
+  systematic? real win or overfit?
+- **Expected vs found**: the one-line gap between prediction and result, matched / above / below, and by
+  how much. The gap is the insight. When they diverge, the divergence is the finding; name it rather than
+  smoothing it over.
+- **Verification**: the `{{VERIFY_SKILL}}` verdict, CONFIRMED / PROVISIONAL / QUESTIONABLE ASSUMPTION /
   REFUTED / INCONCLUSIVE, with key evidence.
-- **Excluded data** — any run or data point you dropped from this experiment's analysis, each with its cause
-  (a legitimate reason like "solver hit its iteration cap", never "looked wrong"). **Append-only, never
-  silent:** a silent drop is indistinguishable from cherry-picking (never manipulate the evaluation).
-  Investigate the anomaly before discarding — it may be the result. Leave `none` when nothing was excluded.
-- **Disputes & responses** — every issue raised by the verifier OR the user, each with your response;
-  never delete one (rebut if you disagree). Format:
+- **Excluded data**: any run or data point dropped from this experiment's analysis, each with a legitimate
+  cause, such as "solver hit its iteration cap", never "looked wrong". Exclusions are append-only and never
+  silent: a silent drop is indistinguishable from cherry-picking. Never manipulate the evaluation.
+  Investigate the anomaly before discarding it; it may be the result. Leave `none` when nothing was
+  excluded.
+- **Disputes & responses**: every issue raised by the verifier or the user, each with your response. Never
+  delete one; rebut if you disagree. Format:
   `date — raised by <verifier|user>: <issue> → response: <agree + fix | counter-argument>`.
-- **Status** — confirmed | PROVISIONAL (rests on an adapted eval) | QUESTIONABLE ASSUMPTION (shaky
+- **Status**: confirmed | PROVISIONAL (rests on an adapted eval) | QUESTIONABLE ASSUMPTION (shaky
   premise) | open.
-- **NEXT** — the orthogonal lever to try next.
+- **NEXT**: the orthogonal lever to try next.
 
 ---

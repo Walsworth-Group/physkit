@@ -16,103 +16,105 @@ description: >-
 
 # literature-review — understand the field, honestly and efficiently
 
-Before choosing a direction, pressure-testing an idea, or scoping a problem, you need an honest picture of what
-is already known: the key results, where the field is heading, and — most valuable — the closest prior work to
-*your* problem and what of its approach **transfers**. This skill produces that picture, cited and verified.
+Choosing a direction, pressure-testing an idea, or scoping a problem requires an honest picture of what is
+already known: the key results, where the field is heading, and the closest prior work to the problem at hand
+with the part of its approach that transfers. This skill produces that picture, cited and verified.
 
-Its two non-negotiables are **honesty** and **verified citations**. A literature review that quietly inflates
-consensus, hides disagreement, or — worst — invents a plausible-looking reference is worse than none: it
-launches work on false ground. Every load-bearing claim traces to a real source you confirmed, and the review
-says plainly what is established, what is contested, and what it could not find. *(This matters most for a
-researcher new to AI tools, who will not catch a fabricated DOI — so the citation gate is not optional.)*
+Two requirements are absolute: honesty, and verified citations. A review that inflates consensus, hides
+disagreement, or invents a plausible-looking reference is worse than none: it launches work on false ground.
+Every load-bearing claim traces to a real source you confirmed, and the review states what is established,
+what is contested, and what it could not find. The citation gate is not optional: a fabricated identifier is
+not detectable by the reader.
 
 ## When to use / not use
-- **Use** to understand a field, find prior art for an idea or problem, or survey the standard methods — as the
-  front-end of `assess-idea`, `frame-problem`, or `new-campaign`, or entirely on its own.
-- **`cite-check`** instead when you already have a specific reference list to verify (this skill *composes*
-  cite-check as its final gate). **`report`** instead to write up finished work. **`assess-idea`** judges
-  whether an idea is worth pursuing — it *consumes* this skill's output rather than replacing it.
+- **Use** to understand a field, find prior art for an idea or problem, or survey the standard methods, as the
+  front-end of `assess-idea`, `frame-problem`, or `new-campaign`, or on its own.
+- **`cite-check`** instead when you already have a specific reference list to verify; this skill composes
+  cite-check as its final gate. **`report`** instead to write up finished work. **`assess-idea`** judges
+  whether an idea is worth pursuing; it consumes this skill's output rather than replacing it.
 - **Self-contained.** It needs no other research skill. If a general `deep-research` skill is installed it can
-  accelerate the heavy multi-source pass, but this skill runs standalone and the procedure below assumes nothing.
+  accelerate the heavy multi-source pass; the procedure below assumes nothing beyond this skill.
 
 ## Procedure
 
-1. **Scope with the user — briefly.** Get the sub-area and, crucially, the **purpose**: grounding a campaign?
-   prior art for a specific idea? learning a method? deciding a direction? The purpose sets the depth and *what
-   to extract*. Ask one or two clarifying questions if the topic is broad — don't demand a perfect query, and
-   don't over-interrogate; a physicist new to the tool should feel helped, not quizzed.
+1. **Scope with the user.** Get the sub-area and the **purpose**: grounding a campaign, prior art for a
+   specific idea, learning a method, or deciding a direction. The purpose sets the depth and *what to
+   extract*. Ask one or two clarifying questions when the topic is broad. Do not require a fully specified
+   query, and do not extend the scoping past those questions.
 
-2. **Search broadly, arXiv-first, token-efficiently.** Run several queries (not one) covering the **core topic
-   + the closest published analogues + recent advances / "since when"** for the moving parts. Prefer the
-   **arXiv HTML** (`ar5iv.org/abs/<id>` or `arxiv.org/abs/<id>`) or LaTeX source over publisher PDFs (paywalls,
-   heavy formatting); when only a PDF exists, convert it with a scientific-PDF→markdown tool and read only the
-   relevant sections; **cache** what you fetch so you don't re-pull. For a large review, delegate parallel
-   query threads to **sub-agents** (context economy) and synthesize centrally.
+2. **Search broadly, arXiv-first, token-efficiently.** Run several queries, not one, covering the core topic,
+   the closest published analogues, and recent advances for the moving parts, including since when each
+   became possible. Prefer the arXiv HTML
+   (`ar5iv.org/abs/<id>` or `arxiv.org/abs/<id>`) or LaTeX source over publisher PDFs (paywalls, heavy
+   formatting). When only a PDF exists, convert it with a scientific-PDF→markdown tool and read only the
+   relevant sections. Cache what you fetch so it is not re-pulled. For a large review, delegate parallel
+   query threads to sub-agents (context economy) and synthesize centrally.
 
-3. **Read for the right things** (not a generic summary) — **screen on abstracts, conclude on full text.** A
-   load-bearing judgment (this *transfers* · this *supports* the claim · this is the *closest* prior art) comes
-   from the relevant full-text section, not the abstract; abstracts only *triage* which papers earn a deep
-   read, and any conclusion still resting on one is provisional. Read for:
-   - **Key results & the field's trajectory** — what's settled, and *what just became possible* (a new method,
-     a new regime, a new instrument) that opens directions (Wieman decision 1).
-   - **The closest prior art to the user's problem** — has this been tried? If it was **abandoned, why?**
-     (a dead end is as informative as a success) (Wieman decision 7).
-   - **Standard methods + their trade-offs** — so the work doesn't reinvent or miss a known technique.
-   - **What TRANSFERS** — the specific approaches, tricks, or results that carry over to the user's problem.
-     This "what can I borrow" lens is the review's highest-value output, not the summary.
+3. **Read for the right things**, not a generic summary. Screen on abstracts; conclude on full text. A
+   load-bearing judgment (this transfers, this supports the claim, this is the closest prior art) comes from
+   the relevant full-text section. An abstract triages which papers earn a deep read; a conclusion still
+   resting on one is provisional. Read for:
+   - **Key results and the field's trajectory** — what is settled, and what has newly become possible (a new
+     method, a new regime, a new instrument) that opens directions.
+   - **The closest prior art to the user's problem** — has this been tried, and if it was abandoned, why? An
+     abandoned approach is as informative as a successful one.
+   - **Standard methods and their trade-offs**, so the work does not reinvent or miss a known technique.
+   - **What transfers** — the specific approaches, tricks, or results that carry over to the user's problem.
+     This is the review's highest-value output, not the summary.
 
-4. **Organize into a brief.** Structure it as **established / contested / open**: what the field agrees on,
-   where it genuinely disagrees (name the disagreement — don't smooth it over), and the **open gaps** (which
-   are the opportunities that feed `research-direction` / `assess-idea`, Wieman decision 2). Include a
-   **methods table** (approach · what it's good/bad at) and a **priority-ranked reading list** (the few papers
-   worth reading first, and why), with the transferable approaches flagged.
+4. **Organize into a brief.** Structure it as established / contested / open: what the field agrees on, where
+   it disagrees, and the open gaps. Name each disagreement rather than smoothing it over. The open gaps are
+   the opportunities that feed `research-direction` and `assess-idea`. Include a methods table (approach ·
+   what it is good and bad at) and a priority-ranked reading list (the few papers worth reading first, and
+   why), with the transferable approaches flagged.
 
 5. **Verify every citation — the mandatory gate (`cite-check`).** Before the brief is delivered, confirm each
-   reference against the actual source: exact **title, full author list, year, venue, and DOI/arXiv id**, and
-   that the paper **actually supports the claim** it's cited for — **read from the full-text section, not the
-   abstract** (a claim supportable only from an abstract is carried as **provisional** — cite-check PROVISIONAL —
-   and the brief says so, never laundered into "established"). A reference that 404s, redirects, or points
-   to a different paper is **not a citation** — drop or fix it; one you cannot confirm is **flagged as
-   unconfirmed, never invented or approximated.** Prefer the arXiv version of the record.
+   reference against the actual source: exact title, full author list, year, venue, and DOI/arXiv id, and that
+   the paper supports the claim it is cited for. Read the claim support from the full-text section, not the
+   abstract. Support found only in an abstract is carried as provisional (cite-check PROVISIONAL) and the
+   brief says so; it is never presented as established. A reference that 404s, redirects, or points to a
+   different paper is not a citation: drop or fix it. A reference that cannot be confirmed is flagged as
+   unconfirmed, never invented or approximated. Prefer the arXiv version of the record.
 
-6. **Deliver honestly.** Distinguish **what's established in the literature** from **your synthesis** from
-   **what's uncertain or you couldn't find**; label each. State the field's open disagreements and the limits
-   of the search (what you didn't cover). In a **campaign**, write or refresh **`LITERATURE.md`** (summaries +
-   the ranked roadmap) and seed **`../../shared/PHYSICS.md`** (governing physics + references) — keep the two in sync.
+6. **Deliver honestly.** Label each part of the brief as established in the literature, your synthesis, or
+   uncertain / not found. State the field's open disagreements and the limits of the search, including what
+   was not covered. In a campaign, write or refresh `LITERATURE.md` (summaries + the ranked roadmap) and seed
+   `../../shared/PHYSICS.md` (governing physics + references), and keep the two in sync.
 
 ## Output
-A scannable, **cited** brief: established / contested / open · a methods table · the closest prior art (+ what
-transfers) · a priority-ranked reading list · explicitly flagged uncertainties and search limits. Every
-reference is clickable and **cite-check-verified**. Standalone: a message or a short doc. Campaign:
+A scannable, cited brief: established / contested / open · a methods table · the closest prior art and what
+transfers · a priority-ranked reading list · explicitly flagged uncertainties and search limits. Every
+reference is clickable and cite-check-verified. Standalone: a message or a short doc. Campaign:
 `LITERATURE.md` (+ `PHYSICS.md` references).
 
 ## Composition
-- **`cite-check`** — the mandatory final gate; never deliver an unverified reference.
+- **`cite-check`** — the mandatory final gate. Never deliver an unverified reference.
 - **`assess-idea`** — consumes this skill's prior-art + closest-solved-problem output (its step 4).
 - **`frame-problem`** — a field-informed physics inventory and predictive framework build on this.
 - **`new-campaign`** — seeds `LITERATURE.md` / `PHYSICS.md` from a review at setup.
 - **`report`** — if the review itself is a deliverable, `report` formats and re-verifies it.
-- **sub-agents** (context economy) — parallel search/read threads for a large review, synthesized centrally;
-  match the model to the task (light for fetch/scan, escalate for synthesis).
+- **sub-agents** (context economy) — parallel search and read threads for a large review, synthesized
+  centrally; match the model to the task (light for fetch and scan, escalate for synthesis).
 
 ## The failure modes to guard against
-- **Fabricated or misattributed citations** — the cardinal sin; the `cite-check` gate exists for exactly this.
-- **Abstract-driven conclusions** — grading a paper's support (or what it's even *about*) from its abstract;
-  the abstract is the sales pitch, written to sound broader and cleaner than the paper delivers. Screen on it,
-  conclude on the full text — a claim you can support only from an abstract is provisional, not established.
-- **Confirmation-seeking search** — when the task is "find papers that *support* X" you are primed to accept a
-  keyword-matching abstract. Ask instead what the literature *says* about X; a well-evidenced paper that
-  **complicates or refutes** X is a *successful* result (a well-evidenced negative is a success), not a failed row.
+- **Fabricated or misattributed citations** — the `cite-check` gate exists for this failure.
+- **Abstract-driven conclusions** — grading a paper's support, or its subject, from its abstract. An abstract
+  is written to sound broader and cleaner than the paper delivers. Screen on it, conclude on the full text; a
+  claim supportable only from an abstract is provisional, not established.
+- **Confirmation-seeking search** — a search for papers that *support* X returns keyword-matching abstracts
+  and misses those that complicate it. Query what the literature says about X instead. A well-evidenced
+  paper that complicates or refutes X is a successful result, not a failed row.
 - **Manufactured consensus** — smoothing over real disagreement to sound authoritative; name the conflict instead.
-- **Recency/availability bias** — over-weighting what's easy to find or newest; seek the foundational work too.
-- **"I don't recall seeing it" as evidence of novelty** — absence in your search is not proof the field hasn't
-  done it; say "not found in this search," not "novel."
+- **Recency and availability bias** — over-weighting what is easiest to find or newest; search the foundational
+  work as well.
+- **Absence of evidence reported as novelty** — absence from this search is not proof the field has not done
+  it; write "not found in this search," not "novel."
 
 ## Checklist
 - [ ] Purpose scoped with the user (depth + what-to-extract set accordingly).
 - [ ] Multiple queries run (core + analogues + recent); arXiv-first; fetches cached.
-- [ ] Read for trajectory, closest prior art (+ why-abandoned), methods, and **what transfers** (load-bearing judgments from full text, not the abstract) — not a generic summary.
+- [ ] Read for trajectory, closest prior art (+ why abandoned), methods, and what transfers (load-bearing judgments from full text, not the abstract) — not a generic summary.
 - [ ] Brief organized established / contested / open, with a methods table + priority-ranked reading list.
-- [ ] **Every citation cite-check-verified** (title/authors/year/venue/id + claim-support **from full text, not the abstract**); abstract-only support carried as provisional, unconfirmed ones flagged, none invented.
+- [ ] Every citation cite-check-verified (title/authors/year/venue/id + claim-support from full text, not the abstract); abstract-only support carried as provisional, unconfirmed ones flagged, none invented.
 - [ ] Honesty labels applied (established vs synthesis vs uncertain); field disagreements and search limits stated.
 - [ ] Campaign: `LITERATURE.md` written/refreshed and `PHYSICS.md` references seeded (kept in sync).

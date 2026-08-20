@@ -17,16 +17,13 @@ description: >-
 # experiment-design — spend each costly experiment on the most informative question
 
 When evaluations are expensive (a long simulation, an instrument run, a synthesis-and-characterize cycle),
-the highest-leverage decision is not *how* you model the system but *what you measure next*. This skill runs
-that loop: keep a probabilistic belief about the system, and at each step choose the experiment that most
-reduces what you don't yet know — toward an **optimum** or toward **precise parameters**. It is
-**archetype H**, the natural home for the autonomous-lab / Bayesian-optimization style of campaign.
-(Choosing experiments to **decide between competing models** is the closely-related archetype I,
-`model-selection`, which reuses this loop with a discrimination utility.)
+the decision with the most leverage is which measurement to make next, not how the system is modeled. This
+skill runs that loop: keep a probabilistic belief about the system, and at each step choose the experiment
+that most reduces what is not yet known, toward an optimum or toward precise parameters. It is
+**archetype H**, the home for the autonomous-lab and Bayesian-optimization style of campaign.
 
-Two objectives share one engine and differ only in the utility you maximize. (A third — discriminating
-between models — is **archetype I / `model-selection`**, which reuses this same machinery with a
-disagreement utility; a campaign can pull both H and I.)
+Two objectives share one engine and differ only in the utility maximized. Discriminating between competing
+models is a third objective, handled by **archetype I** (`model-selection`) below.
 | Objective | Utility to maximize | Classic form |
 |---|---|---|
 | **Find an optimum** | expected improvement toward the optimum | EI · UCB · Thompson sampling · knowledge-gradient |
@@ -51,41 +48,41 @@ Build a calibrated belief → then repeat:
 ```
 
 ## Calibration is the cardinal discipline
-**A miscalibrated belief misallocates every subsequent experiment** — this is the central failure mode of
-the whole archetype, more than the choice of acquisition function.
+A miscalibrated belief misallocates every subsequent experiment. This is the central failure mode of the
+archetype, ahead of the choice of acquisition function.
 - **Validate the surrogate/posterior's predictive uncertainty**, not just its mean: check coverage (do
   ~68% of held-out points fall in the 1σ band?), and recalibrate if not. An overconfident surrogate stops
   exploring; an underconfident one never exploits.
-- **Account for noise** (and heteroscedasticity): separate observation noise from model uncertainty;
+- **Account for noise** (and heteroscedasticity): separate observation noise from model uncertainty, and
   replicate where the signal is near the noise floor before trusting a point.
-- **Don't reward-hack the surrogate.** The selection will exploit surrogate error — periodically
-  cross-check apparent optima against the true evaluator / higher fidelity, exactly as in archetypes C/D/G.
+- **Do not reward-hack the surrogate.** The selection will exploit surrogate error. Cross-check apparent
+  optima against the true evaluator or a higher fidelity periodically, as in archetypes C/D/G.
 
 ## Discriminating between models? → archetype I
-If the goal is to decide *which competing model/hypothesis is true* (not to optimize or estimate within one
-model), that is **`model-selection` / archetype I**. When the discriminating experiments are themselves
-expensive and must be chosen sequentially, archetype I **composes this skill** — same surrogate/posterior
-loop, but the utility rewards experiments where the candidate models **disagree most** (T-optimality /
-expected change in the model posterior). A campaign can run H and I together (actively design experiments to
-discriminate) or either alone.
+If the goal is to decide which competing model or hypothesis is true, rather than to optimize or estimate
+within one model, that is `model-selection` / archetype I. When the discriminating experiments are
+themselves expensive and must be chosen sequentially, archetype I composes this skill: the same
+surrogate/posterior loop, with a utility that rewards experiments where the candidate models disagree most
+(T-optimality, or expected change in the model posterior). A campaign can run H and I together, designing
+experiments to discriminate, or either alone.
 
 ## Spend the budget well
-Follow `docs/protocols/expensive-evaluation.md`: count evaluations as a first-class metric and
-**benchmark sample-efficiency against random / grid / a classical optimizer** — active design has to *earn*
-its complexity by beating space-filling. Pre-screen with a cheap proxy where one exists (validate the proxy
-against the true evaluator first). Use a diminishing-returns / decision-theoretic stop.
+Follow `docs/reference/expensive-evaluation.md`. Count evaluations as a first-class metric, and benchmark
+sample-efficiency against random / grid / a classical optimizer: active design has to earn its complexity by
+beating space-filling. Pre-screen with a cheap proxy where one exists, and validate that proxy against the
+true evaluator first. Use a diminishing-returns / decision-theoretic stop.
 
 ## Cautions
 - **Surrogate miscalibration** (above) — the dominant failure.
-- **Greedy myopia.** One-step acquisition can be short-sighted; use a lookahead / batch-aware utility where
+- **Greedy myopia.** One-step acquisition can be short-sighted. Use a lookahead / batch-aware utility where
   the cost of a wasted experiment is high.
-- **Premature exploitation / collapse** — the loop hammering one region and missing the global structure;
-  diversity-aware or explicitly explorative acquisition guards against it.
-- **Constraint and safety handling** — for a hardware loop, inherit archetype E (hard safety limits as
-  constraints, confirm irreversible actions, interleave against drift). For simulation, inherit the V&V
+- **Premature exploitation / collapse** — the loop hammers one region and misses the global structure.
+  Diversity-aware or explicitly explorative acquisition guards against it.
+- **Constraint and safety handling.** For a hardware loop, inherit archetype E: hard safety limits as
+  constraints, confirm irreversible actions, interleave against drift. For simulation, inherit the V&V
   doctrine for the evaluator.
-- **The acquisition function itself can be a lever to discover** (archetype G / FunBO-style) — but treat
-  "this learned acquisition beats a standard one" as a hypothesis to verify, not assume.
+- **The acquisition function itself can be a lever to discover** (archetype G / FunBO-style). Treat "this
+  learned acquisition beats a standard one" as a hypothesis to verify, not an assumption.
 
 ## Composition
 - **`new-campaign`** scaffolds archetype H; the FROZEN evaluator/measurement + the objective are the
@@ -94,13 +91,13 @@ against the true evaluator first). Use a diminishing-returns / decision-theoreti
   recommendation, confirm it generalizes, and (for discrimination) confirm the margin is real, not a prior
   artifact.
 - **`correctness-suite`** guards the surrogate/evaluator and the acquisition implementation.
-- **`docs/protocols/expensive-evaluation.md`** governs the budget; hardware → archetype E; sim evaluator →
+- **`docs/reference/expensive-evaluation.md`** governs the budget; hardware → archetype E; sim evaluator →
   `SIMULATION_VALIDATION.md`.
 - **`report`** documents the recommended design/parameters/model with uncertainty and the experiment trail.
 
 ## Before you trust the recommendation — checklist
 - [ ] The objective (optimum / parameters / discrimination) and its utility are stated explicitly.
-- [ ] The surrogate/posterior is **calibrated** (predictive coverage checked); noise handled.
+- [ ] The surrogate/posterior is calibrated (predictive coverage checked); noise handled.
 - [ ] Sample-efficiency benchmarked vs random/grid/classical — active design beat space-filling.
 - [ ] Apparent optima cross-checked against the true evaluator (no surrogate reward-hacking).
 - [ ] A principled stop (decisive posterior / converged optimum / diminishing returns), not a blind budget burn.

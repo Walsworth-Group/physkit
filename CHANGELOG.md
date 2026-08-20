@@ -8,6 +8,280 @@ Dates are UTC. Each entry cites the run/finding that motivated it (the kit's own
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-20
+
+The campaign-structure redesign (Phases A-C). A campaign is now organized by **who reads what, and
+when**: `docs/charter.md` is split into `campaign.md` + `roles/worker.md` + `roles/planner.md`, the
+doctrine spine leaves the always-on file, and `docs/protocols/`, `results/INDEX.md`,
+`docs/baselines.md` and `docs/dataset.md` are gone. **This is a clean break** — a campaign scaffolded
+by 0.8.0 keeps working under 0.8.0, and `kit/docs/MIGRATING.md` carries the old -> new map and a
+six-step procedure. `validate_campaign.py` now *refuses* a pre-restructure tree at exit 3 rather than
+reporting every required path as missing, because a wall of missing-path errors reads as damage and
+invites an agent to "repair" a frozen campaign.
+
+Everything below this heading and above `[0.8.0]` shipped in this release.
+
+### Changed — the shipped prose is written in one register, and stops teaching from our internal incidents (S-1/S-3/S-3b, 2026-08-15..19)
+
+The kit's prose had accumulated the voice of the sessions that produced it: internal anecdotes, tracker
+ids, pinned dates, and paths that exist only in this repo. A reader learning the rule had to first
+decide which parts were about them. A style guide (`synthesis/AUTHORING_STYLE.md`) now states the
+contract, and three passes applied it — the 58 stable prose files, then the 13 campaign scaffolding
+files, then the prose the redesign itself added, including the comment and console text in the code
+templates.
+
+- **Anecdotes are replaced by the rule they were teaching**, stated as condition -> action ->
+  consequence. Where a rule could not be stated without its originating story, the story stayed.
+- **`kit/docs/PRINCIPLES.md` is substantially rewritten** (6,683 -> 6,302 words) and no longer claims
+  to be derived from a `synthesis/` content master. It **is** the canonical statement, with
+  `kit/docs/CORE.md`; the former upstream master was archived 2026-08-20 for lagging this file.
+- **`hard-won` is gone kit-wide** — one slogan replicated into nine files, where in every case the
+  sentence's antecedent already scoped the noun.
+- Skill `description:` frontmatter was held out of all three passes and is **byte-identical**: it is
+  the routing surface the harness selects on, so changing it changes which skill fires.
+
+Register only — no gate, default, threshold or procedure changed. Every pass was checked by
+independent verifiers, and **three of five rewrites in the last round were rejected** for changing
+meaning rather than register; the code-template edits were verified AST-identical.
+
+
+### Added — a campaign says what KIND of campaign it is, and the runner writes down what it checked (V0/V1, 2026-08-18)
+
+Two campaigns the kit could not serve honestly: one that cannot bound its answer in advance, and one that
+is deterministic. Both were told to do something impossible and both had to fake it. A campaign doing
+first-of-kind measurement could only satisfy the a-priori prediction gate by inventing a range wide enough
+to be unfalsifiable — which passes the gate and controls nothing, so the gate was already being defeated,
+silently. A deterministic campaign was held to a hard gate demanding a win "exceed measurement spread"
+when repeated runs of it are identical and there is no spread to exceed.
+
+- **`configs/loop.json` gains a `"campaign"` block.** `prediction_mode` (`range` | `direction` | `none`)
+  scopes what the spend gate accepts as a prediction; `noise_model` (`stochastic` | `deterministic`), with
+  `noise_floor` and `tolerance`, scopes what clearing the noise means. The prediction FILE stays mandatory
+  in every mode — what relaxes is the bound, never the requirement to write an expectation down before
+  spending. `none` costs a recorded `prediction_mode_reason`, refused at launch if empty, and `direction`
+  (which way, versus a named prior experiment) is the checkable middle so there is no single step from a
+  real bound to none at all. Reasoning, and why this is net *stronger* than the gate it replaces:
+  `DECISION_RECORDS.md` ADR-0010.
+- **Defaults reproduce the previous behaviour exactly**, so a `loop.json` written before this keeps
+  working. A *present but out-of-enum* value is refused rather than defaulted: a typo'd `"determinstic"`
+  falling back to `stochastic` would hold a deterministic campaign to a test it can never satisfy, and it
+  would fail in the direction that looks like rigor — the direction nobody investigates.
+- **`results/checks_<NN>.json`** — every experiment now leaves a machine-readable record of what the
+  runner checked: whether the result met its prediction, whether the change against the incumbent exceeds
+  this campaign's own resolution, comparability, hard bounds, guardrail, correctness-suite green-and-not-
+  stale, save-set complete. Before this the runner computed an out-of-range flag, printed `RED FLAG`, and
+  **nothing downstream read either**.
+- **Three-valued, and that is the point.** A check reports `pass`, `fail`, or `unavailable` — and an
+  `unavailable` carries a **`needs`** string naming exactly what this campaign would have to supply to
+  make it real. Reporting `pass` for a check that could not run is how a green becomes evidence for
+  something nobody measured; a hardcoded `null` is how a written artifact quietly stops being a gate. Two
+  checks (hard bounds, guardrail) ship permanently `unavailable` rather than inventing a threshold the kit
+  has never defined.
+- **`campaign-status` reads them**, and distinguishes three things that are not the same: a `fail` somebody
+  still owes an answer to, a standing `unavailable` blind spot, and an absent artifact meaning the
+  experiment bypassed the runner. It reports which checks have been unavailable on *every* experiment — a
+  check silently unavailable for forty runs deserves more attention than one that failed once.
+
+### Fixed — every scoreboard row the runner wrote was born failing the scoreboard's own rule (2026-08-18)
+
+`results/scoreboard.tsv` states that every row **must** carry `metric_version` and `data_version` and that
+a blank tag is a hygiene failure, and that `tier` must be present or cap-compliance stops being
+machine-auditable. The runner's row writer passed neither tag nor the tier, and a column missing from the
+row dict is written blank — so this was true of every campaign ever scaffolded, and the kit's own worked
+exemplar reproduced it. `campaign-status` has been asking agents to verify a property that had never once
+held. The runner now emits all three, and carries the two tags in `result_<NN>.json` so a later comparison
+reads them with the number rather than beside it.
+
+### Changed — one lever per experiment is stated in two places instead of fifteen (2026-08-18)
+
+Hard gate 2 stopped making one lever a rule or a default in 0.8.0, but the old framing survived across the
+kit. A whole-repo sweep found **15** normative restatements in 11 shipped files. They are now cut to
+pointers on the campaign surface, and the three doctrine masters the gate is derived from
+(`docs/CORE.md`, `docs/PRINCIPLES.md`, and the taxonomy behind them) reworded to the gate's own words so
+the constitution and the gate cannot drift apart. `PRINCIPLES.md`'s style rule had been using this very
+rule as its worked example of an aspirational rule, which quietly made the style guide a locus of it too.
+
+Untouched, deliberately: the places where "one-lever experiments across ≥2 lever families pin at the same
+floor" is the *trigger condition* for an assumption audit rather than a restatement of the rule — cutting
+those would break `assumption-audit` — and the uses that share the words but not the concept (`debug`'s
+bisect-one-change-at-a-time, `attribute-mechanism`'s one-knob-per-mechanism).
+
+### Changed — the worked example models a healthy campaign (2026-08-18)
+
+The toy campaign shipped with an all-skip correctness suite, so it reported EMPTY on every run and its own
+promotion gate was permanently blocked. An exemplar that has learned to live with a red gate teaches the
+reader that a failing check is normal. It now carries four real analytic checks on the two-loop field —
+midplane symmetry, the closed form at zero separation, the vanishing second derivative at the Helmholtz
+condition, and far-field decay — each of which fails on a bug the uniformity metric alone would score
+happily. Not stubs seeded to flip EMPTY→GREEN, which remains banned. The toy is also now the kit's worked
+example of a `deterministic` campaign, since its field is analytic and no RNG touches the solve path.
+
+### Added — a metric that cannot produce a number now says so, in code (EH-5, 2026-08-18)
+
+`scripts/metric.py` gains `PLAUSIBILITY_BOUNDS` — the hard physical bounds the campaign already stated
+in prose, in the one form code can act on. A result outside them is flagged in
+`results/checks_<NN>.json` as what it is: a bug in the scorer, the data or the pipeline, not a
+disappointing result. Before this the bounds existed only as prose in two documents, so the runner's
+plausibility check reported `unavailable` in every campaign that has ever existed.
+
+- **Flagged, not refused.** Refusing would lose the artifact you need to debug the violation, and it
+  would put quiet pressure on the next person to widen the bounds until their run goes through — which
+  is the fabricated-range failure wearing different clothes.
+- **Encode only what is true BY CONSTRUCTION** — a correlation cannot exceed 1, a variance cannot be
+  negative. Not the range you expect a good result to land in: that is the a-priori prediction, it
+  lives in `predictions/`, and conflating the two turns a mathematical impossibility into a
+  disappointing-result alarm that fires forever.
+- **The self-test refuses bounds that exclude the scorer's own perfect case**, before experiment 000.
+  Bounds that contradict the metric would otherwise flag every experiment for the life of the campaign.
+- It lives in FROZEN core deliberately: editing the bounds changes the core hash and invalidates the
+  recorded correctness green, because the bounds are part of what the metric *means*.
+
+### Fixed — a supervised loop no longer dies because an agent typed a checkmark (2026-08-18)
+
+The driver relays a live worker's output to the console. That output is arbitrary text written by a
+model, and the relay never checked what the console could encode — so on a stock Windows terminal
+(cp1252) the first `✓`, arrow, curly quote or emoji a worker emitted raised `UnicodeEncodeError` out
+of the watch loop and killed the run mid-unit. An overnight loop could be ended by a decoration.
+
+Found by the first real `claude -p` spawn ever run against this kit version. The deterministic suite
+could not have found it: its stub agent emits only ASCII, so the whole relay path had been exercised
+exclusively with characters that cannot fail. The fix makes the console lenient
+(`errors="replace"`) rather than switching it to UTF-8 — replacement is honest about what the
+terminal can show, where UTF-8 would trade the crash for mojibake — and the driver's own log keeps
+the full text, since it is opened UTF-8 separately.
+
+### Fixed — the mechanical checks now say only what they measured (2026-08-18)
+
+An adversarial audit of the work above ran 29 mutations against it; twelve survived a fully green
+suite. The defects were real and are fixed here, but the shape of them is the part worth recording:
+**every one was a check reporting a verdict it had not earned.**
+
+- `save_set` asserted that the figure was on disk without ever looking at it, and could not fail at
+  all — the record gate had already hard-exited on the same artifacts, so it was a constant `pass`
+  wearing a verification's clothes, inside the one file whose header warns against exactly that. It
+  now re-verifies all four artifacts at record time.
+- The change-vs-incumbent check computed a delta against a result scored under a **different**
+  `(metric_version, data_version)` and graded it `pass`, next to a comparability `fail` saying that
+  subtraction is meaningless. It now reports `unavailable` when the incumbent is not comparable.
+- The same check read resolvability as goodness: a catastrophic regression scored `pass` and raised
+  no flag, while a faithful replicate — the run `verify` requires in order to *estimate* the noise
+  floor — was red-flagged. Flagging the procedure the kit prescribes is how a reader learns to skim
+  past red flags. A resolvable regression now flags; a within-resolution change is reported as the
+  honest "these are the same number".
+- Blank comparability tags were graded `fail`, so every experiment of every campaign predating the
+  campaign block raised a permanent red flag that no experiment could fix. They are missing
+  **coverage** (`unavailable`, with what would supply it); a genuine version mismatch is still a
+  failure.
+- A missing or corrupt `configs/loop.json`, a `campaign` block that is not an object, a quoted
+  number, and a negative resolution all ran or crashed rather than refusing. A negative resolution is
+  the worst of them: it makes every noise check pass unconditionally, and fails in the direction that
+  looks like a clean result.
+
+
+### Changed — a campaign is reorganized by who reads what, and when (PR-9…PR-14, 2026-08-17)
+
+**This is a clean break in the campaign layout.** Existing campaigns keep working and are not migrated
+automatically; `docs/MIGRATING.md` has the procedure, and `validate_campaign.py` now *refuses* a
+pre-restructure tree rather than reporting it as broken.
+
+The problem was never correctness. Testers could not tell what the files were for, and the measurement
+said why: a worker was handed 72 KB, of which a single 41 KB `docs/charter.md` fused the campaign's
+definition, the worker's procedure and the planner's strategy into one document. A worker structurally
+could not act on about a quarter of what it was told to read.
+
+**The new tree.** `CLAUDE.md` (always-on) · `README.md` (human front door) · `campaign.md` (THE
+definition — mission, the FROZEN metric, levers, caps, promotion, the baseline gate, the dataset) ·
+`roles/worker.md` (per-experiment procedure, the iteration contract, the save-set) · `roles/planner.md`
+(strategy, getting unstuck, the literature rule) · `DOCTRINE_SNAPSHOT.md` · `configs/ results/ scripts/
+tests/ predictions/` · `docs/{ENGINEERING_NOTES,PROJECT_ORIENTATION,VERIFICATION_PLAN}.md`.
+
+- **Removed:** `docs/charter.md`, `results/INDEX.md`, `docs/protocols/` (7 files), `docs/baselines.md`
+  and `docs/dataset.md`. The protocols' two surviving files were absorbed into `roles/worker.md`, not
+  exiled; the baseline gate and the dataset became `campaign.md` sections.
+- **The always-on file is now light.** The inlined `CORE.md` snapshot — 13.6 KB of reference material
+  riding in every turn's context — moved to `DOCTRINE_SNAPSHOT.md`, **referenced, never auto-loaded**
+  and never re-synced against a newer `CORE.md` (it records what governed *that* run). `CLAUDE.md`
+  keeps only what binds a turn: the integrity core, the research reflexes, the hard gates, and the
+  routing table. 21.4 KB → 9.9 KB.
+- **Hard gate 2 no longer makes one lever a rule or a default.** It requires that an experiment *name*
+  the levers it moved and weigh what moving several together costs: one makes the cause plain, several
+  make the result a claim about the combination. Either is legitimate; leaving it unrecorded is not.
+- **"The only three ways the loop ends" is retired.** Gate 5 names the two actual decisions
+  (`results/STOP`, a recorded `results/stop_request.json`). The ~25-continuation stall release is
+  documented in `roles/worker.md` as what the old section itself called it — a failure signature, not
+  an exit.
+- **New `--show-prompt <worker|planner>`** prints the literal prompt the driver would spawn, with its
+  size and hash. Both spawn paths and the preview go through one `build_prompt()`, so a preview cannot
+  drift from a spawn.
+
+**Measured, not estimated:** worker feed 72.4 → 51.5 KiB; `roles/worker.md` and `roles/planner.md` share
+no substantive content beyond a two-line pointer both roles need; the rendered campaign has no dead
+shared-doc links, where it previously had three.
+
+**Fixed on the way through**, each shipping before this release:
+
+- **Every shared-doc link in the rendered charter was dead.** `../../shared/PHYSICS.md` from `docs/`
+  resolves to `<project>/campaigns/shared/`. Three things had to be wrong: `PLACEHOLDERS.md` claimed
+  the validator checks intra-tree doc links resolve (**it does not**), so nothing enforced the rule;
+  its example table then drifted into contradicting the rule stated two lines above it; and the
+  renderer reproduced the documented error. The renderer now computes depth.
+- **A sentence fragment in `docs/dataset.md`.** A six-line blockquote had been cut down to its last
+  line, which began mid-sentence. Repaired to the sentence that was meant to survive.
+- **Six hygiene checks were one deletion away from vanishing.** `protocols/checkpoint.md` asserted that
+  `campaign-status` encoded them; the assertion had never been tested. Five were covered — the sixth,
+  validating that the load-bearing upstream transform feeding the current-best is non-degenerate, was
+  not, and is now in `campaign-status` §2.
+- **46 unresolvable references** (internal tracker ids, kit PR numbers, dated incidents) were shipping
+  into every campaign, defined nowhere a campaign reader could reach. Removed, and a Tier 0 check keeps
+  them out.
+
+### Fixed — a wired gate must actually RUN, and a fail-open must land in the campaign it bypassed (F4/F5, 2026-08-15)
+
+Found while running the redesign's cheap confirmations (`synthesis/REDESIGN_CONFIRMATIONS_2026-08-15.md`).
+
+- **The toy campaign's hooks were dead, and no test could see it.** `tests/structured_loop/scaffold.py`
+  hardcoded `PYTHON_CMD: "python"`. On a stock Windows box that is the Microsoft Store *App Execution
+  Alias* stub: it prints "Python was not found", exits **49**, and never runs the script. Exit 49 is
+  non-zero and not 2, so Claude Code reports a non-blocking hook error and **allows the action** — a
+  campaign with no promotion gate and no loop persistence, silently. This is the default state of a fresh
+  Windows machine (Store aliases on by default, the installer's PATH box off by default). The scaffold now
+  **detects** the invocation, executing each candidate before trusting it; `new-campaign` Step 0.5 already
+  prescribed this and only the test scaffold disagreed.
+- **The suite could not catch it** because `tier1_gates.py` invokes the hook scripts with `sys.executable`,
+  bypassing `.claude/settings.json` entirely. New **Tier 1d** drives the gates *through* the settings
+  command string, and `validate_campaign.py` makes the same assertion against a real campaign — the item
+  that protects a tester rather than the kit's own toy.
+- **`guard_discoveries.py` could record a fail-open outside the campaign it bypassed.** It fell back to
+  `Path(".")`, so the unparseable-stdin bypass wrote `results/gate_failures.log` into the process's cwd.
+  `campaign-status` reads that log *inside* the campaign, so the one path built to keep a fail-open
+  non-silent was the path that could silence it — and the stray file would make an unrelated tree
+  hard-fail on a bypass that never concerned it. Now resolves from `CLAUDE_PROJECT_DIR` first and, with no
+  campaign root, writes nothing and announces on stderr. Still fails open.
+
+Each new check was **falsified before being trusted**: reintroducing `PYTHON_CMD="python"` fails three
+Tier 1d checks; reintroducing the `Path(".")` fallback fails three Tier 1e checks.
+
+### Changed — skills route through the campaign's own `CLAUDE.md` map, not a hardcoded charter path (PR-6, 2026-08-15)
+
+The keystone of the campaign-structure redesign (`synthesis/REDESIGN_PLAN_2026-08.md`). Kit skills used to
+name `docs/charter.md` directly, so the coming restructure would break every one of them.
+
+- **New `## Where things live` table** in `templates/campaign/CLAUDE.md.tmpl` — the campaign's map of
+  itself. `CLAUDE.md` exists in both the current and post-restructure layouts and is frozen with its
+  campaign, so a skill that routes through the table is correct in both. Fixed text, per the plan's
+  governing principle; a campaign that renames a document corrects the row.
+- **Seven live references across six skills repointed** (`verify` Step 0 and the spawned-refuter prompt,
+  `campaign-status` Step 0 + cadence + literature trigger + sibling-coupling + its campaign-vs-project
+  probe, `run-campaign` Step 0, `final-report`'s standard-homes list, `correctness-suite`,
+  `discovery-loop`). The `description:` frontmatter, `final-report`'s non-kit fallback, and `new-campaign`
+  (which authors the charter) are deliberately untouched.
+- **Legacy fallback**: no campaign scaffolded by a released kit has the table, and freeze-and-stamp means
+  none ever will. Tested rather than assumed — a cold agent on a legacy tree *recovered* by inference but
+  reported its instructions as wrong. One fallback clause per instruction, plus `kit/docs/MIGRATING.md`.
+- **New Tier 0 checks**, each falsified first: every row's path resolves, every `§section` exists, and —
+  after the first version shipped a row claiming `configs/loop.json` held the checkpoint cadence, which
+  lives in the charter — every row's **leading concept must occur in the file it names**.
+
 ## [0.8.0] - 2026-08-13
 
 ### Added — size the DISK cost per experiment, not just the time (SV-7, 2026-08-12)

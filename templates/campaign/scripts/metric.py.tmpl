@@ -1,7 +1,7 @@
 """metric.py — the FROZEN scorer for {{CAMPAIGN_TITLE}}.
 
 FROZEN: the scoring math here is the campaign's single source of truth. Do NOT edit it to change a
-number without re-validation + user sign-off (see docs/charter.md). You change what FEEDS the metric
+number without re-validation + user sign-off (see campaign.md). You change what FEEDS the metric
 (registration, params, preprocessing, decoder, design, …), never how it is computed.
 
 Primary metric: {{PRIMARY_METRIC}}  ({{PRIMARY_DIRECTION}} = better).
@@ -19,6 +19,39 @@ import numpy as np
 # below so a lower-is-better metric (residual, chi-square, error) needs no hand-edited asserts.
 PRIMARY_DIRECTION = "{{PRIMARY_DIRECTION}}"   # "higher" or "lower" — filled at campaign setup
 HIGHER_IS_BETTER = PRIMARY_DIRECTION.strip().lower().startswith("high")
+
+
+# The hard physical bounds on this metric, in the one form code can act on. This is the same concept
+# campaign.md states in prose as "Hard bounds" -- not a second, independent limit -- so if you change
+# one, change both; a number here that disagrees with the prose is a fork with a gate attached.
+#
+# `None` on either side means unbounded that way; `None` for the whole tuple means this campaign has not
+# encoded bounds, and the runner reports its plausibility check `unavailable` rather than inventing a
+# verdict. Encode only bounds that are true by construction: a correlation cannot exceed 1, a variance
+# cannot be negative, a probability lives in [0, 1]. Do not encode the range you expect a good result to
+# land in. That is the a-priori prediction, it belongs in predictions/<exp>.json, and conflating the two
+# turns a mathematical impossibility into a disappointing-result alarm.
+#
+# This file is FROZEN core, so editing these bounds changes the core hash and invalidates the recorded
+# correctness-suite green. That is intended: the bounds are part of what the metric means, so a green
+# certified under different bounds is not evidence about this scorer.
+PLAUSIBILITY_BOUNDS = {{PLAUSIBILITY_BOUNDS}}   # (low, high); None on a side = unbounded there
+
+
+def implausible(score: float) -> str:
+    """"" if `score` is physically possible for this metric, else the reason it is not.
+
+    A violation is a bug, not a bad result: the scorer, the data or the pipeline is wrong, and no
+    interpretation of the number is worth making until that is found.
+    """
+    if not PLAUSIBILITY_BOUNDS:
+        return ""
+    low, high = PLAUSIBILITY_BOUNDS
+    if low is not None and score < low:
+        return f"{score:.6g} is below the hard lower bound {low:g}"
+    if high is not None and score > high:
+        return f"{score:.6g} is above the hard upper bound {high:g}"
+    return ""
 
 
 def _better(a: float, b: float) -> bool:
@@ -67,6 +100,11 @@ def selftest() -> None:
 
     # 1. Perfect prediction is optimal (direction-aware: set by PRIMARY_DIRECTION above).
     s_scrambled = compute_metric(scrambled, target)
+    # Bounds that exclude the scorer's own perfect case are wrong bounds, and they would flag every
+    # experiment forever. Cheapest possible place to catch that: here, before experiment 000.
+    bad = implausible(s_perfect)
+    assert not bad, (f"PLAUSIBILITY_BOUNDS excludes the metric's own perfect case ({bad}). The bounds "
+                     "contradict the scorer; fix whichever is wrong before running anything.")
     assert _better(s_perfect, s_scrambled), (
         "perfect prediction did not score better than a scrambled one "
         f"(perfect={s_perfect}, scrambled={s_scrambled}) — check the sign/convention"

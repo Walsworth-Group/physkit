@@ -16,57 +16,57 @@ description: >-
 
 # discovery-loop — evolve an interpretable artifact, then certify it
 
-Most of the kit optimizes a *fixed* method's parameters (archetypes A–F). This skill is for the other kind
-of goal: **discovering the method itself** — a program, a symbolic law, a heuristic, a design rule, a
-control policy — by using an LLM as a variation operator inside a search loop (the FunSearch lineage:
-LLM-generate → evaluate → select → reflect → repeat). It is **archetype G**. The deliverable that makes it
-worth the trouble is an **interpretable, generalizing artifact**: human-readable code or symbolic form a
-physicist can check, extract a rule from, and edit.
+Most of the kit optimizes a fixed method's parameters (archetypes A–F). This skill discovers the method
+itself: a program, a symbolic law, a heuristic, a design rule, or a control policy, evolved by an LLM
+acting as the variation operator in a search loop (the FunSearch lineage: LLM-generate → evaluate →
+select → reflect → repeat). This is **archetype G**. The deliverable is an **interpretable, generalizing
+artifact**: human-readable code or symbolic form a physicist can check, extract a rule from, and edit.
 
-Two honest framing points up front, because they set realistic expectations:
-- **LLMs are weak at raw numerical optimization.** Their value here is *flexibility, exploration, and
-  intent* — proposing structurally novel candidates and writing interpretable code — not sample-efficient
-  number-crunching. If the task is "tune these 8 continuous knobs," use a classical optimizer, not this.
-- **On a mature, expert-tuned problem, the realistic outcome is "rediscover SOTA + a small advance,"** not a
-  miracle. Bound expectations a priori and call a clean rediscovery what it is: a validation, not a failure.
+Two framing points bound expectations:
+- LLMs are weak at raw numerical optimization. Their value is flexibility, exploration, and intent:
+  proposing structurally novel candidates and writing interpretable code, not sample-efficient
+  number-crunching. To tune a fixed set of continuous knobs, use a classical optimizer, not this loop.
+- On a mature, expert-tuned problem the realistic outcome is rediscovery of the state of the art plus a
+  small advance. Bound expectations a priori; a clean rediscovery is a validation, not a failure.
 
 ---
 
 ## Step 0 — set the three design axes (and what you're evolving)
-A discovery loop has three orthogonal choices plus the genome. Decide them deliberately — they matter more
-than prompt-fiddling.
+A discovery loop has three orthogonal choices plus the genome. Decide each deliberately; they matter more
+than prompt wording.
 
-1. **The object evolved (the genome).** The LLM is a domain-agnostic variation operator over *any* text
-   genome — an equation, a code function, a parameter-string, a design spec, a controller. **Pick the
-   representation that fits the physics; representation often dominates the optimizer** (code-space search
-   can crush a binary-vector GA on the same problem). Prefer a representation a trusted checker can verify
-   and a human can read.
-2. **The search engine** (selectable by landscape):
-   - **population / island** (diversity, the EoH/ReEvo family) — good general default; islands resist
+1. **The object evolved (the genome).** The LLM is a domain-agnostic variation operator over any text
+   genome: an equation, a code function, a parameter string, a design spec, a controller. Pick the
+   representation that fits the physics; representation often dominates the optimizer, and code-space
+   search can beat a binary-vector genetic algorithm on the same problem. Prefer one a trusted checker can
+   verify and a human can read.
+2. **The search engine**, by landscape:
+   - **population / island** (diversity, the EoH/ReEvo family) — a general default; islands resist
      premature convergence.
    - **tree / MCTS / PUCT** — preserves early-poor-but-promising candidates that population methods cull;
-     good for deceptive landscapes.
-   - **neighborhood / local** — when you have a strong incumbent to refine.
-   **Rank-normalize scores before any exploration rule** so one exploration constant transfers across tasks
-   and metric scales.
-3. **The feedback memory** — how accumulated insight conditions generation (a capability/cost gradient):
-   - **prompt only** (cheapest, but brittle — LLMs "get lost" in long ever-growing prompts; keep it
-     consolidated);
-   - **reflections / "verbal gradients"** (ReEvo-style: a *separate generator and reflector role*; the
-     reflector analyzes *why* A beat B before the generator mutates — reflection-before-mutation, plus
-     accumulated long-term hints);
-   - **an evolving concept library** (LaSR-style: abstract elite patterns into *named concepts* — which in
-     physics are often literal physical principles — that condition future generation; curatable, inspectable).
-   Heavier memory = more capability **and** more cost and contamination risk. Default to reflections; reach
-   for a concept library when reusable structure is the point.
-4. *(Advanced)* **generator self-improvement** — frozen generator (default) vs fine-tuning the generator on
-   its own successful traces (heavyweight; a real contamination/overfitting hazard). Don't reach for this
-   until the frozen loop is working and you've justified the cost.
+     use on deceptive landscapes.
+   - **neighborhood / local** — for refining a strong incumbent.
 
-**Scope generation to the lever functions ("function-only").** Let the LLM write **only** the mutable
-functions that are the actual levers; keep the harness, the evaluator, and data acquisition **FROZEN and
-READ-ONLY**. Function-only generation beats whole-pipeline generation and is the discovery-loop instance of
-the kit's FROZEN/READ-ONLY/MUTABLE tiering.
+   Rank-normalize scores before any exploration rule, so one exploration constant transfers across tasks
+   and metric scales.
+3. **The feedback memory** — how accumulated insight conditions generation, a capability/cost gradient:
+   - **prompt only**: cheapest, and brittle because generation degrades in long ever-growing prompts. Keep
+     it consolidated.
+   - **reflections**, or verbal gradients (ReEvo-style): separate generator and reflector roles. The
+     reflector analyzes why A beat B before the generator mutates, and accumulates long-term hints.
+   - **an evolving concept library** (LaSR-style): abstract elite patterns into named concepts (in physics,
+     often literal physical principles) that condition future generation. Curatable and inspectable.
+
+   Heavier memory buys capability at more cost and contamination risk. Default to reflections; use a
+   concept library when reusable structure is the point.
+4. *(Advanced)* **generator self-improvement** — a frozen generator (the default), or fine-tuning it on
+   its own successful traces. Fine-tuning is heavyweight and carries a contamination and
+   overfitting hazard: do not use it until the frozen loop works and its cost is justified.
+
+**Scope generation to the lever functions ("function-only").** The LLM writes only the mutable lever
+functions. The harness, evaluator, and data acquisition stay **FROZEN and READ-ONLY**.
+Function-only generation outperforms whole-pipeline generation, and is the discovery-loop instance of the
+kit's FROZEN/READ-ONLY/MUTABLE tiering.
 
 ---
 
@@ -87,97 +87,97 @@ SEED (a trivial or expert heuristic as in-context init) → then repeat:
   5. SELECT     — population/island/tree update; preserve diversity (don't collapse to one lineage early).
   6. STOP?      — on diminishing returns (convergence detected), not a fixed budget burned blindly.
 ```
-**Alternate explore and exploit:** a global evolutionary/reflective mode for breadth and a local refine
-mode for depth — and prove the synergy by ablation. A strong pattern for numeric-heavy physics is
-**explore-with-LLM, exploit-with-classical**: use the LLM to scope an unfamiliar space and yield
-interpretable structure, then lift that structure into a faster specialized optimizer (typed GP / a
-classical method), or have the LLM write the program *skeleton* and a classical optimizer tune its numeric
-constants.
+**Alternate explore and exploit:** a global evolutionary/reflective mode for breadth, a local refine mode
+for depth. Prove the synergy by ablation. For numeric-heavy physics use **explore-with-LLM,
+exploit-with-classical**: the LLM scopes an unfamiliar space and yields interpretable structure, then lift
+that structure into a faster specialized optimizer (typed GP or a classical method). Alternatively the LLM
+writes the program skeleton and a classical optimizer tunes its numeric constants.
 
 ---
 
 ## Spend the evaluation budget well
-Discovery loops are evaluation-hungry; when each evaluation is expensive, follow
-`docs/protocols/expensive-evaluation.md`:
-- **Track and report the number of evaluations**, and **benchmark sample-efficiency against a classical
-  baseline** (BO / RL / NSGA-II / GP). "LLM as optimizer" is a *hypothesis* — make it beat a real baseline,
-  don't credit the apparatus by assumption.
-- **Discover on small instances, benchmark on large** (scale generalization doubles as an acceptance test).
-- **Diminishing-returns stop**; pre-screen with a cheap proxy before a full-fidelity evaluation; validate
-  any surrogate against the true evaluator (surrogate errors mislead the search).
+Discovery loops are evaluation-hungry. When evaluations are expensive, follow
+`docs/reference/expensive-evaluation.md`:
+- Track and report the number of evaluations, and benchmark sample-efficiency against a classical baseline
+  (BO, RL, NSGA-II, GP). "LLM as optimizer" is a hypothesis: make it beat a real baseline; do not credit
+  the apparatus by assumption.
+- Discover on small instances, benchmark on large. Scale generalization doubles as an acceptance test.
+- Stop on diminishing returns. Pre-screen with a cheap proxy before a full-fidelity evaluation. Validate
+  any surrogate against the true evaluator; surrogate error misleads the search.
 
 ## Certify discoveries — discover-then-certify
-The search is an *untrusted stochastic proposer*; warrant comes from an **independent** check, not from the
-generator. Compose **`verify`** and add the discovery-specific gates:
-- **Discover-then-certify.** Where an independent exact/certifying method exists, prefer a *certificate*
-  over a re-run, and **state explicitly what is certified vs conjectured**, and over what range. (An
-  interpretable artifact often *enables* a formal check — e.g. a Lyapunov stability proof on a discovered
-  control law: pick representations a trusted checker can verify.)
-- **Re-discover the known SOTA / ground truth as a validation gate** before trusting a novel improvement —
-  "can the loop recover the known-good answer?"
-- **Generalize-across-regimes / extrapolation test** — run the discovered artifact on larger/unseen
+The search is an untrusted stochastic proposer: warrant comes from an **independent** check, not the
+generator. Compose `verify` and add the discovery-specific gates:
+- **Discover-then-certify.** Where an independent exact or certifying method exists, prefer a certificate
+  over a re-run. State explicitly what is certified and what is conjectured, and over what range. An interpretable
+  artifact often enables a formal check, such as a Lyapunov stability proof on a discovered control law:
+  pick representations a trusted checker can verify.
+- **Re-discover the known SOTA or ground truth as a validation gate** before trusting a novel improvement:
+  the loop must recover the known-good answer first.
+- **Generalize-across-regimes / extrapolation test.** Run the discovered artifact on larger and unseen
   instances and across regimes (geometries, parameters), not just the training set.
-- **Anti-memorization (LLMs regurgitate their training data).** Use **black-box prompting** (withhold the
-  problem's identity/name) and **re-test on synthetic, un-memorizable instances** when the benchmark may be
-  in training data.
-- **Novelty / equivalence check** — confirm a "discovery" is genuinely new at the component level, not a
-  cosmetic restatement of a known method.
-- **Ablate the machinery + multi-LLM robustness** — prove the search/reflection actually beats a simple
-  direct-LLM baseline and attribute gains to components; test across more than one model backbone and report
-  run variance. Report the **outcome distribution and stability** over repeats, not just the best run.
-- **Credit explanatory over descriptive discovery** — a recovered *mechanism* (a `PHYSICS.md`-level
-  understanding) counts for more than a metric move; evaluate the process, not only the outcome.
-- **Honest limit:** physical-science claims rarely have a proof-checker, so warrant is bounded by the
-  strength of the independent re-derivation / higher-fidelity simulation / experiment — name that bound;
-  don't overclaim certification you don't have.
+- **Anti-memorization.** An LLM can reproduce material from its training data. Use black-box prompting,
+  withholding the problem's identity and name, and re-test on synthetic, un-memorizable instances when the
+  benchmark may be in training data.
+- **Novelty / equivalence check.** Confirm a discovery is new at the component level, not a restatement of
+  a known method.
+- **Ablate the machinery and test multi-LLM robustness.** Prove the search and reflection beat a direct-LLM
+  baseline and attribute gains to components. Test across more than one model backbone. Report run
+  variance, and the outcome distribution and stability over repeats, not the best run alone.
+- **Credit explanatory over descriptive discovery.** A recovered mechanism (`PHYSICS.md`-level
+  understanding) counts for more than a metric move. Evaluate the process, not only the outcome.
+- **State the limit of the warrant.** Physical-science claims rarely have a proof-checker, so warrant is
+  bounded by the strength of the independent re-derivation, higher-fidelity simulation, or experiment. Name
+  that bound; never claim certification you do not have.
 
 ## The deliverable is interpretable — extract the rule
-The point of using an LLM (vs a black-box optimizer) is that the discovered artifact is **human-readable**.
-Realize that value:
-- **Move the black box to design-time:** use the LLM to *synthesize* an interpretable program, then deploy
-  and verify the *artifact*, not the model.
-- **Extract the design rule** into `PHYSICS.md` / the report — the recovered principle, not just the code.
-- **Human-in-the-loop edit-and-re-evolve:** an interpretable artifact can be read, improved by a domain
-  expert, and fed back — A/B the human edit. Support this as a first-class flow, not a fallback.
+An LLM is used instead of a black-box optimizer because its artifact is human-readable. Realize that
+value:
+- **Move the black box to design-time.** Use the LLM to synthesize an interpretable program, then deploy
+  and verify the artifact, not the model.
+- **Extract the design rule** into `PHYSICS.md` / the report: the recovered principle, not only the code.
+- **Human-in-the-loop edit-and-re-evolve.** An interpretable artifact can be read, improved by a domain
+  expert, and fed back. A/B the human edit; support this as a first-class flow, not a fallback.
 
 ## Cautions (discovery-specific failure modes)
-- **Reward-hacking the evaluator** — the loop will exploit any evaluator inaccuracy; cross-check winners
-  against higher fidelity (`SIMULATION_VALIDATION.md` §5: feasibility gate + dual direct+downstream objective).
-- **Over-prompting hurts on rugged landscapes** — injecting physics priors helps on structured landscapes
-  but *over-constrains exploration* on noisy ones. Treat domain-prompt richness as a lever to **test**, not
-  a free win.
-- **Complexity creep** — repeated LLM prompting adds needless complexity; **monitor the complexity
-  trajectory** (AST size / parameter count over generations) and enforce parsimony actively. Complexity-up +
-  performance-flat ⇒ intervene.
-- **Brittle long feedback prompts** — keep reflection memory structured and consolidated, not an
-  ever-growing transcript (this is why the kit's slim-core / consolidation discipline applies here too).
-- **Bigger/hotter isn't always better** — test model size and temperature; a smaller, cooler model
-  sometimes wins on constraint satisfaction and consistency.
-- **Reward shaping is load-bearing** — the metric dominates success and is not automatic; design it
-  deliberately (frozen-metric care) so the loop can't win by gaming a degenerate optimum.
+- **Reward-hacking the evaluator.** The loop exploits any evaluator inaccuracy. Cross-check winners against
+  higher fidelity (`SIMULATION_VALIDATION.md` §5: feasibility gate + dual direct-and-downstream objective).
+- **Over-prompting on rugged landscapes.** Physics priors help on structured landscapes and over-constrain
+  exploration on noisy ones. Treat domain-prompt richness as a lever to test, not a free win.
+- **Complexity creep.** Repeated LLM prompting adds needless complexity. Monitor the complexity trajectory
+  (AST size or parameter count over generations) and enforce parsimony actively. Complexity rising while
+  performance stays flat requires intervention.
+- **Brittle long feedback prompts.** Keep reflection memory structured and consolidated, not an
+  ever-growing transcript. The kit's slim-core and consolidation discipline applies here.
+- **Bigger and hotter is not always better.** Test model size and temperature; a smaller, cooler model can
+  win on constraint satisfaction and consistency.
+- **Reward shaping is load-bearing.** The metric dominates success and is not automatic. Design it with
+  frozen-metric care so the loop cannot win by gaming a degenerate optimum.
 
 ## Audit artifacts
 - A **breakthrough plot** (best score vs number of evaluations) and the **saved search tree / lineage** of
-  the elite artifact — the discovery-loop analogue of the scoreboard + figures.
-- The **complexity trajectory** (a `campaign-status` health metric — over-engineering detector).
-- Every elite artifact saved by label with its evaluation, reflection trace, and snapshot (reproducibility).
+  the elite artifact: the discovery-loop analogue of the scoreboard + figures.
+- The **complexity trajectory**, a `campaign-status` health metric (over-engineering detector).
+- Every elite artifact saved by label with its evaluation, reflection trace, and snapshot
+  (reproducibility).
 
 ## Composition
-- **`new-campaign`** scaffolds archetype G (this is the loop its `charter.md` runs); the FROZEN evaluator +
+- `new-campaign` scaffolds archetype G, the loop its campaign definition runs; its FROZEN evaluator and
   benchmark are the campaign's frozen metric.
-- **`verify`** certifies each promoted discovery (discover-then-certify; anti-memorization; novelty).
-- **`correctness-suite`** guards the FROZEN evaluator/harness itself.
-- **`docs/protocols/expensive-evaluation.md`** governs the budget; **`SIMULATION_VALIDATION.md` §5** governs
+- `verify` certifies each promoted discovery (discover-then-certify; anti-memorization; novelty).
+- `correctness-suite` guards the FROZEN evaluator and harness.
+- `docs/reference/expensive-evaluation.md` governs the budget; `SIMULATION_VALIDATION.md` §5 governs
   simulator-scored search.
-- **`report` / `final-report`** documents the discovered artifact, its design rule, and its certified-vs-
-  conjectured scope; **`record-decision`** captures the *why* of the genome/search-engine/memory choices.
+- `report` and `final-report` document the discovered artifact, its design rule, and its
+  certified-vs-conjectured scope; `record-decision` captures why the genome, search engine, and memory
+  were chosen.
 
 ## Before you trust a discovery — checklist
 - [ ] The three axes (engine · memory · generator) and the genome were chosen deliberately and recorded.
 - [ ] Generation is function-only; harness/evaluator/data are FROZEN.
-- [ ] A parse/feasibility gate + a parsimony constraint run *during* search.
+- [ ] A parse/feasibility gate and a parsimony constraint run during search.
 - [ ] Evaluation budget tracked; sample-efficiency benchmarked vs a classical optimizer; diminishing-returns stop.
-- [ ] The discovery was **certified independently** (certificate where possible; certified-vs-conjectured stated).
+- [ ] The discovery was certified independently (certificate where possible; certified-vs-conjectured stated).
 - [ ] Re-discovers known SOTA; generalizes/extrapolates across regimes; passes anti-memorization + novelty checks.
 - [ ] Machinery ablated vs a direct-LLM baseline; tested across ≥2 model backbones; stability reported.
 - [ ] The artifact is interpretable; its design rule is extracted into `PHYSICS.md` / the report.

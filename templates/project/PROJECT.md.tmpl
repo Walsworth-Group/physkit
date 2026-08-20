@@ -1,8 +1,8 @@
 # Project — {{PROJECT_TITLE}}
 
-The home for the whole investigation into **{{PHYSICAL_SYSTEM}}**. Individual attempts live under
-`campaigns/`; ad-hoc work under `sessions/`; both share this project's data + docs. The index of everything
-(what each campaign changed and found) is **`LINEAGE.md`** — read it first to orient.
+The home for the whole investigation into {{PHYSICAL_SYSTEM}}. Individual attempts live under
+`campaigns/`; ad-hoc work under `sessions/`; both share this project's data and docs. `LINEAGE.md` is the
+index of everything: what each campaign changed and found. Read it first to orient.
 
 ## End goal & the decision it serves
 - **Goal (concretely):** {{GOAL_STATEMENT}}
@@ -10,24 +10,24 @@ The home for the whole investigation into **{{PHYSICAL_SYSTEM}}**. Individual at
 - **Done looks like:** {{DONE_CRITERIA}}
 
 ## The physical system (project-wide invariants)
-Facts true across **every** campaign — the shared reality no campaign may silently contradict:
+Facts true across every campaign. No campaign may silently contradict them.
 {{SYSTEM_INVARIANTS}}
-(Full physics + target of study in `shared/PHYSICS.md`; units/sign/frame conventions in `shared/CONVENTIONS.md`;
-the measurement rig / apparatus params in `shared/INSTRUMENT.md`.)
+Full physics and target of study: `shared/PHYSICS.md`. Units, sign, and frame conventions:
+`shared/CONVENTIONS.md`. Measurement rig and apparatus parameters: `shared/INSTRUMENT.md`.
 
 ## Canonical data — referenced, never copied
-- **Location:** {{DATA_LOCATION}}   *(`data/` read-only copy, or the resolved `data_path` pointer below)*
+- **Location:** {{DATA_LOCATION}} — a read-only `data/` copy, or the resolved `data_path` pointer below.
 - **`data_path` (if off-tree):** {{DATA_PATH}}
-- **Rule:** campaigns reference the data by **relative path** (`../../data`); the loop **never writes into
-  `data/`** and **never copies** it into a campaign. This is what keeps the tree portable and duplication-free.
+- **Rule:** campaigns reference the data by relative path (`../../data`). The loop never writes into `data/`
+  and never copies it into a campaign. This keeps the tree portable and free of duplicates.
 
 ## Shared, promoted artifacts
-`shared/` also holds artifacts a campaign froze that siblings consume (e.g. a validated forward model, a
-generated training set) — each versioned. Downstream campaigns reference `../../shared/<artifact>`, never a
-sibling's working folder. Current promoted artifacts: {{PROMOTED_ARTIFACTS}}
+`shared/` also holds artifacts a campaign froze for siblings to consume, such as a validated forward model or
+a generated training set. Each is versioned. Downstream campaigns reference `../../shared/<artifact>`,
+never a sibling's working folder. Current promoted artifacts: {{PROMOTED_ARTIFACTS}}
 
 ## Layout
 `PROJECT.md` (this) · `LINEAGE.md` (index) · `DISCOVERIES.md` (promoted verified findings) ·
 `ENGINEERING_NOTES.md` (durable "why"s) · `CLAUDE.md` (always-on rules) · `data/` · `shared/` ·
-`campaigns/<name>/` · `sessions/<date>_<slug>/` · `reports/`. The whole tree relocates as one unit — all
-internal references are relative.
+`campaigns/<name>/` · `sessions/<date>_<slug>/` · `reports/`. All internal references are relative, so the
+whole tree relocates as one unit.

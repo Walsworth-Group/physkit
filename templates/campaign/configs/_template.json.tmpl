@@ -1,11 +1,13 @@
 {
-  "_comment": "TEMPLATE config for {{CAMPAIGN_TITLE}}. DO NOT RUN. Copy to exp<NN>_<slug>.json and override per experiment (ONE lever vs current best by default; move several together only deliberately - coupled levers, a screen, an interaction test - and expect verify to grade the attribution cost). Use ABSOLUTE paths so the config is reproducible regardless of working directory.",
+  "_comment": "TEMPLATE config for {{CAMPAIGN_TITLE}}. DO NOT RUN. Copy to exp<NN>_<slug>.json and override per experiment against the current best, recording which levers this config moves (CLAUDE.md HARD GATE 2). Use ABSOLUTE paths so the config is reproducible regardless of working directory.",
   "exp_name": "exp{{NN}}_{{SLUG}}",
   "seed": {{DEFAULT_SEED}},
 
   "_narrative": "--- written at the HYPOTHESIZE step; auto-logged to results/logbook.md ---",
   "_hypothesis": "why this change should move {{PRIMARY_METRIC}} the right way",
   "_predicted": "expected {{PRIMARY_METRIC}} ~ <point> in [lo, hi]; basis = units / bound / prior run",
+  "_tier": "Scout",
+  "_tier_doc": "Scout | Confirmation | Extended - the run-length tier from campaign.md. The runner copies it onto the scoreboard row; keep it on EVERY row, or cap-compliance stops being machine-auditable: a campaign that loses the tag partway through cannot show it obeyed its own caps.",
 
   "_inputs": "--- data / problem inputs ---",
   {{INPUT_PATH_FIELDS}},
@@ -13,6 +15,6 @@
   "_method": "--- the LEVERS for this experiment ---",
   {{METHOD_FIELDS}},
 
-  "_run": "--- run / cost controls (obey the caps in docs/charter.md) ---",
+  "_run": "--- run / cost controls (obey the caps in campaign.md) ---",
   {{RUN_FIELDS}}
 }

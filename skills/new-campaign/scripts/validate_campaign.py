@@ -13,8 +13,15 @@ Campaign validation fails (exit 1) on anything new-campaign left unresolved:
   * a literal {{PLACEHOLDER}} token, a dangling [[OPTIONAL … block, a stray [PROPOSED] tag,
   * an un-stripped .tmpl file,
   * a missing required file (charter, scoreboard, journal, discoveries, config template, the two code stubs),
+  * an illegal campaign property in configs/loop.json "campaign" - an out-of-enum prediction_mode /
+    noise_model, or prediction_mode 'none' with no recorded reason (mirrors the runner's preflight),
   * no project home above the campaign, or a missing shared/{PHYSICS,CONVENTIONS,INSTRUMENT}.md in it,
-  * a LOCAL copy of any shared doc in the campaign's docs/ (design §4.1).
+  * a LOCAL copy of any shared doc in the campaign's docs/ (design §4.1),
+  * a hook whose interpreter does not RUN on this machine — a wired-but-dead gate is worse than an
+    absent one, because it looks like coverage (bare `python` is the Store alias stub on stock Windows),
+  * a dangling row in CLAUDE.md's §Where things live table — live skills route through it instead of
+    naming a campaign path, and a wrong row misdirects them quietly (the agent guesses rather than
+    erroring). A campaign with no such table predates it and is skipped, not failed.
 Legacy trees using the retired multi-stage suffix (charter_<NAME>.md / configs_<NAME>/ / results_<NAME>/) still
 validate — the required-file checks glob — but new stages are scaffolded as sibling campaigns, not suffixes.
 
@@ -36,6 +43,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -49,9 +57,11 @@ LEAK_LITERALS = ("[[OPTIONAL", "[PROPOSED]")
 ABS_PATH = re.compile(r"(?:[A-Za-z]:[\\/])|(?:\\\\[A-Za-z0-9_.$-]+\\)")
 
 CAMPAIGN_REQUIRED_GLOBS = [
-    ("program charter", "docs/charter*.md"),
+    ("campaign definition", "campaign.md"),
+    ("worker role", "roles/worker.md"),
+    ("planner role", "roles/planner.md"),
+    ("doctrine snapshot", "DOCTRINE_SNAPSHOT.md"),
     ("scoreboard ledger", "results*/scoreboard.tsv"),
-    ("index", "results*/INDEX.md"),
     ("logbook", "results*/logbook.md"),
     ("journal", "results*/JOURNAL*.md"),
     ("discoveries", "results*/DISCOVERIES*.md"),
@@ -131,6 +141,15 @@ def project_root_of(campaign: Path) -> Path | None:
     return cand if (cand / "PROJECT.md").is_file() and (cand / "LINEAGE.md").is_file() else None
 
 
+# The campaign-property enums. An intentional twin of run_campaign.py.tmpl's PREDICTION_MODES /
+# NOISE_MODELS: the validator must run against a scaffolded tree without importing that campaign's
+# runner, which would pull in numpy, metric and frozen_core just to read two strings. The twin is checked
+# rather than trusted: tier0_static.py asserts the two lists
+# agree, so a mode added on one side and not the other fails the suite instead of drifting.
+PREDICTION_MODES = ("range", "direction", "none")
+NOISE_MODELS = ("stochastic", "deterministic")
+
+
 def check_loop_files(root: Path, errors: list[str]) -> None:
     """The driver's config/ledger must PARSE, not merely exist: a loop.json missing a hard-dereferenced
     key passes an existence glob and then crashes supervise() at launch (or worse, mid-night). Mirrors
@@ -150,6 +169,20 @@ def check_loop_files(root: Path, errors: list[str]) -> None:
                     float(node)
                 except Exception:
                     errors.append(f"loop.json is missing the numeric key the driver requires: {name}")
+            camp = cfg.get("campaign") or {}
+            mode = str(camp.get("prediction_mode") or "range").strip().lower()
+            noise = str(camp.get("noise_model") or "stochastic").strip().lower()
+            if mode not in PREDICTION_MODES:
+                errors.append(f"loop.json campaign.prediction_mode is {mode!r}; expected one of "
+                              + " | ".join(PREDICTION_MODES))
+            if noise not in NOISE_MODELS:
+                errors.append(f"loop.json campaign.noise_model is {noise!r}; expected one of "
+                              + " | ".join(NOISE_MODELS))
+            if mode == "none" and not str(camp.get("prediction_mode_reason") or "").strip():
+                errors.append("loop.json sets campaign.prediction_mode='none' with an empty "
+                              "campaign.prediction_mode_reason - record why this campaign cannot "
+                              "honestly bound its answer. Running unbounded is a legitimate choice; "
+                              "making it without a recorded reason leaves the control unowned.")
         except Exception as exc:
             errors.append(f"loop.json does not parse as JSON ({exc})")
     queue_files = list(root.glob("results*/queue.json"))
@@ -159,6 +192,98 @@ def check_loop_files(root: Path, errors: list[str]) -> None:
             assert isinstance(q.get("next"), list) and isinstance(q.get("shelved"), list)
         except Exception as exc:
             errors.append(f"queue.json does not parse as a queue ledger ({exc})")
+
+
+def check_routing_table(root: Path, errors: list[str]) -> None:
+    """Every row of CLAUDE.md's §Where things live table must resolve in THIS campaign.
+
+    Live skills route through that table instead of naming a campaign path, so a dangling row misdirects
+    the whole skills layer — and it misdirects QUIETLY, because a wrong path degrades (the agent guesses
+    and moves on) rather than erroring. The template says "Keep it true", which is an exhortation; the
+    kit's own rule is enforce, don't exhort.
+
+    A campaign with no table is NOT an error: it was scaffolded before the table existed and is frozen
+    that way by design. Its skills fall back to `docs/charter*.md`, which is a required glob above.
+    """
+    text = _read_text(root / "CLAUDE.md")
+    if text is None:
+        return                                   # absence is already reported by the required-files scan
+    rows, in_table = [], False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            in_table = "Where things live" in line
+            continue
+        if not in_table or not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 2 or set(cells[-1]) <= set("- ") or cells[0].lower().startswith("what you need"):
+            continue                             # separator or header row
+        m = re.search(r"`([^`]+)`", cells[-1])
+        if m:
+            section = cells[-1].split("§", 1)[1].strip().strip("`") if "§" in cells[-1] else ""
+            rows.append((cells[0], m.group(1), section))
+    if not rows:
+        return                                   # pre-table campaign; the charter glob still gates it
+
+    for label, rel, section in rows:
+        target = root / rel
+        if not target.exists():
+            errors.append(f"CLAUDE.md routing table points at a path that does not exist: "
+                          f"'{label}' -> {rel}. Correct the row to match this campaign's tree.")
+            continue
+        if section and target.is_file():
+            headings = [L.lstrip("#").strip()
+                        for L in (_read_text(target) or "").splitlines() if L.startswith("#")]
+            if not any(section.lower() in h.lower() for h in headings):
+                errors.append(f"CLAUDE.md routing table names a section that does not exist: "
+                              f"'{label}' -> {rel} §{section}.")
+
+
+def check_hook_wiring(root: Path, errors: list[str]) -> None:
+    """The gates must be INVOKABLE, not merely present. A hook whose interpreter does not resolve is a
+    campaign with no promotion gate and no loop persistence -- silently, because Claude Code reports a
+    non-zero, non-2 hook exit as a non-blocking error and allows the action.
+
+    The live failure: on stock Windows, bare `python` is the Microsoft Store App Execution Alias stub. It
+    prints "Python was not found" and exits 49 without running the script. The Store aliases are on by
+    default and the Python installer's "Add python.exe to PATH" box is off by default, so this is the
+    DEFAULT state of a fresh Windows box, not an exotic one. Existence checks cannot see it, and neither
+    can a test suite that invokes the hook scripts directly with sys.executable.
+    """
+    settings = root / ".claude" / "settings.json"
+    text = _read_text(settings)
+    if text is None:
+        return                                   # absence is already reported by the required-files scan
+    try:
+        cfg = json.loads(text)
+    except Exception as exc:
+        errors.append(f".claude/settings.json does not parse as JSON ({exc})")
+        return
+    cmds = [h.get("command", "") for group in (cfg.get("hooks") or {}).values()
+            for entry in group for h in (entry.get("hooks") or []) if h.get("type") == "command"]
+    if not cmds:
+        errors.append(".claude/settings.json declares no command hooks — the gates are not wired")
+        return
+    for cmd in cmds:
+        interp = cmd.split('"')[0].strip()
+        if not interp:
+            continue
+        script = (cmd.split('"')[1].rsplit("/", 1)[-1] if '"' in cmd else cmd)
+        try:
+            r = subprocess.run(f'{interp} -c "print(1)"', shell=True,
+                               capture_output=True, text=True, timeout=30)
+            ok = r.returncode == 0 and r.stdout.strip() == "1"
+        except Exception as exc:
+            ok, r = False, None
+            errors.append(f"hook interpreter {interp!r} (for {script}) could not be run ({exc})")
+            continue
+        if not ok:
+            detail = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()
+            errors.append(
+                f"hook interpreter {interp!r} (for {script}) does not run: exit {r.returncode}"
+                + (f" — {detail[0][:100]}" if detail else "")
+                + ". The gate is silently DEAD. Use an invocation that resolves on this machine"
+                  " (`py -3` on Windows, `python3` on macOS/Linux) in .claude/settings.json.")
 
 
 def validate_campaign(root: Path) -> list[str]:
@@ -194,6 +319,8 @@ def validate_campaign(root: Path) -> list[str]:
 
     # 1d. The loop driver's config + queue ledger parse and carry the keys the driver dereferences.
     check_loop_files(root, errors)
+    check_hook_wiring(root, errors)
+    check_routing_table(root, errors)
 
     # 2. No leftover tokens / un-stripped templates anywhere in the tree.
     scan_leftovers(sorted(root.rglob("*")), root, errors)
@@ -250,6 +377,40 @@ def validate_project(root: Path) -> list[str]:
     return errors
 
 
+def legacy_layout(root: Path) -> str | None:
+    """Name the pre-restructure file if this is a pre-PR-9 campaign, else None.
+
+    PR-9 replaced `docs/charter.md` with `campaign.md` + `roles/`. A campaign scaffolded before that
+    is not broken; it is an older layout. Run the normal checks against it and EVERY required-path
+    rule fires at once, which reads as damage rather than as a version difference -- and an agent
+    that believes the damage will "repair" a frozen tree to make the validator happy. That is a named
+    risk in the plan ("An agent mutates a frozen campaign to satisfy the new validator"), so the
+    probe has to come BEFORE the first per-path error, not be inferred from a wall of them.
+    """
+    if (root / "campaign.md").is_file():
+        return None                                     # post-restructure (or mid-migration): proceed
+    for old in ("docs/charter.md", "docs/program.md"):  # program.md is the oldest naming
+        if (root / old).is_file():
+            return old
+    hits = sorted(root.glob("docs/charter*.md"))        # the retired multi-stage suffix
+    return hits[0].relative_to(root).as_posix() if hits else None
+
+
+def _say(line: str) -> None:
+    """Print a line that may carry non-ASCII, on a console that may not accept it.
+
+    A Windows console defaults to cp1252, so a single U+2192 lifted from a campaign's own prose into
+    an error message raised UnicodeEncodeError and killed the report MID-LIST -- the validator failed
+    while telling you why it failed, and truncated at whatever line held the first arrow. The tool
+    that reports problems must not be the tool that dies on them.
+    """
+    try:
+        print(line)
+    except UnicodeEncodeError:
+        enc = sys.stdout.encoding or "ascii"
+        print(line.encode(enc, "backslashreplace").decode(enc, "replace"))
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: python validate_campaign.py <target_dir>", file=sys.stderr)
@@ -261,13 +422,26 @@ def main() -> int:
 
     is_project = (root / "PROJECT.md").is_file() and (root / "LINEAGE.md").is_file() and (root / "campaigns").is_dir()
     kind = "PROJECT" if is_project else "CAMPAIGN"
+
+    if not is_project:
+        old = legacy_layout(root)
+        if old:
+            print(f"REFUSING TO VALIDATE - {root}\n")
+            print(f"  This campaign predates the PR-9 restructure: it has {old} and no campaign.md.")
+            print("  That is a layout difference, not a defect, and this validator only knows the")
+            print("  current one (campaign.md + roles/worker.md + roles/planner.md). Checking it")
+            print("  anyway would report every required path as missing and read as damage.\n")
+            print("  Migrate with kit/docs/MIGRATING.md, or validate it with the kit version that")
+            print("  scaffolded it. Do NOT edit this tree to satisfy this check.")
+            return 3
+
     errors = validate_project(root) if is_project else validate_campaign(root)
 
     if errors:
-        print(f"{kind} VALIDATION FAILED - {len(errors)} issue(s):\n")
+        _say(f"{kind} VALIDATION FAILED - {len(errors)} issue(s):\n")
         for e in errors:
-            print(f"  - {e}")
-        print(f"\nResolve every item above; a {kind.lower()} with an unresolved issue is not done.")
+            _say(f"  - {e}")
+        _say(f"\nResolve every item above; a {kind.lower()} with an unresolved issue is not done.")
         return 1
 
     print(f"{kind} VALIDATION PASSED - {root}")

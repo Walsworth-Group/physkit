@@ -19,15 +19,14 @@ description: >-
 
 # verify — assume you are wrong until independently proven right
 
-The burden of proof is on the positive result. This skill operationalizes the core verification stance:
-a result is not real until an *independent* check has tried to refute it and failed. **Convergence is not
-correctness; a clean-looking number is not a verified one.** Warrant rides on the checker, not on the
-generator's reasoning — so verify by a mechanism-diverse independent route, recompute every reported
-number from a fresh run, and **falsify with code, not prose** (edge cases, randomized inputs,
-counterexamples).
+The burden of proof is on the positive result. A result is not real until an independent check has tried to
+refute it and failed. Convergence is not correctness, and a clean-looking number is not a verified one.
+Warrant rides on the checker, not on the generator's reasoning. Verify by a mechanism-diverse independent
+route, recompute every reported number from a fresh run, and falsify with code rather than prose: edge
+cases, randomized inputs, counterexamples.
 
-It works at two scales. **General mode** checks a standalone claim in any session. **Campaign mode**
-(further down) is the full adversarial apparatus for promoting a campaign finding — it learns the metric,
+It works at two scales. General mode checks a standalone claim in any session. Campaign mode
+(further down) is the full adversarial apparatus for promoting a campaign finding: it learns the metric,
 scorer, and rules from the campaign's own charter and spawns an independent refuter. Use the depth the
 stakes deserve.
 
@@ -36,169 +35,171 @@ stakes deserve.
 ## General mode — check any result or claim
 
 ### 1 · Gather the claim, not the conclusion
-Get the thing asserted and the inputs needed to reproduce it — **without** anchoring on the author's
-narrative of why it's right. Form an independent view; the reasoning you're checking is exactly what might
-be wrong. Note the **a-priori range** the answer should fall in (from `frame-problem`, or compute one now
-with `dimensional-analysis`): a result outside its predicted envelope is a bug or a discovery, and you
-decide which here.
+Get the thing asserted and the inputs needed to reproduce it, without the author's narrative of why it is
+right. Form an independent view: the reasoning under check is what might be wrong. Note the a-priori range
+the answer should fall in, taken from `frame-problem` or computed now with `dimensional-analysis`. A result
+outside its predicted envelope is a bug or a discovery, and this step decides which.
 
 ### 2 · Route by claim type to the decisive check
-Different claims fail in different ways. Lead with the check that would actually catch the failure:
+Different claims fail in different ways. Lead with the check that would catch the failure:
 
-- **A new or derived equation / quantity → dimensional sanity-check *first*.** The cheapest check there is:
-  do the units even work? Invoke `dimensional-analysis`. Then test a **limiting case** (a known special
-  case, a small/large-parameter limit, a symmetry the result must respect). An equation that fails units
-  or a known limit is wrong — stop before anything more expensive.
+- **A new or derived equation / quantity → dimensional sanity-check first.** Do the units work? Invoke
+  `dimensional-analysis`. Then test a limiting case: a known special case, a small- or large-parameter
+  limit, or a symmetry the result must respect. An equation that fails units or a known limit is wrong.
+  Stop there, before anything more expensive.
 - **A computed number / result → recompute it from a fresh run.** Re-run the producing computation and
-  confirm the value matches — **every reported number, not just the headline**. A number that doesn't
-  reproduce, or that was only ever stated once and never recomputed, is REFUTED. Convergence ≠ correctness:
-  re-derive the value, don't trust that the solver converged. A number the *model* produced (mental
-  arithmetic, an "estimated" or remembered value) rather than code is REFUTED on sight — there is nothing to
-  reproduce; regenerate it from code first. (A pre-run a-priori estimate is exempt — it exists to be checked
-  against the code, not reported as the result.) **Label which metric path each number is** (a
-  relaxed/auxiliary score vs the frozen primary metric); an unlabelled number can't be compared
-  apples-to-apples or drive a promotion.
-- **A fit or a prediction → interrogate the *nature* of the error (see below), not just its magnitude**,
-  in addition to recomputing it.
-- **A claim that two quantities agree (or disagree) → test it in units of the combined uncertainty, don't
+  confirm every reported number matches, not only the headline. A number that does not reproduce, or that
+  was stated once and never recomputed, is REFUTED. Convergence is not correctness:
+  re-derive the value rather than trusting that the solver converged. A number the model produced (mental
+  arithmetic, an estimated or remembered value) rather than code is REFUTED on sight; there is nothing to
+  reproduce, so regenerate it from code first. A pre-run a-priori estimate is exempt: it exists to be
+  checked against the code, not reported as the result. Label each number's metric path: a relaxed or
+  auxiliary score versus the frozen primary metric. An unlabelled number cannot be compared
+  apples-to-apples and cannot drive a promotion.
+- **A fit or a prediction → interrogate the nature of the error (§3), not just its magnitude**, in addition
+  to recomputing it.
+- **A claim that two quantities agree (or disagree) → test it in units of the combined uncertainty, do not
   eyeball it.** For *a ± σ_a* and *b ± σ_b* (independent errors), the tension is
-  *t = |a − b| / √(σ_a² + σ_b²)*: *t ≲ 1* agree, *t ≈ 2* mild tension, *t ≳ 3* a real discrepancy — a
-  physical difference or an underestimated error bar, never "close enough." **141 ± 0.003 is not in
-  agreement with 142** (*t ≈ 330*), yet two values agreeing only because both bars are huge is a weak
-  agreement, not a confirmation. No error bar on either side → not comparable; get one first. Correlated
-  errors → subtract the covariance (√(σ_a² + σ_b² − 2σ_ab)). Resolve a real tension, never average it
-  (universalism; distinct from §4's noise-floor test of one delta against its own spread).
+  *t = |a − b| / √(σ_a² + σ_b²)*: *t ≲ 1* agree, *t ≈ 2* mild tension, *t ≳ 3* a real discrepancy, meaning
+  a physical difference or an underestimated error bar and never "close enough." 141 ± 0.003 is not in
+  agreement with 142 (*t ≈ 330*). Two values that agree only because both bars are large are a weak
+  agreement, not a confirmation. No error bar on either side means the two are not comparable; get one
+  first. For correlated errors, subtract the covariance (√(σ_a² + σ_b² − 2σ_ab)). Resolve a real tension,
+  never average it (universalism). This is distinct from §4's noise-floor test of one delta against its
+  own spread.
 - **A comparison between candidates → check the scorer, the reference, and the starting point for
-  entanglement, *first*.** Name all three and state what each shares with the things being compared. A
-  reference that was *fitted under* one candidate, a scorer carrying a nuisance parameter inherited from the
-  incumbent, or a sweep scored against its own starting point favours that candidate **by construction** —
-  and the number it returns looks exactly like evidence. Two tells: the comparison's argmin is the incumbent
-  for *every* candidate (tautological), or the supposedly neutral arbiter reproduces one candidate's fitted
-  parameter *exactly*. Re-score under a reference that shares nothing with any candidate, or profile the
-  shared component out — never argue that the entanglement is small.
+  entanglement, first.** Name all three and state what each shares with the things being compared. A
+  reference that was fitted under one candidate, a scorer carrying a nuisance parameter inherited from the
+  incumbent, or a sweep scored against its own starting point favours that candidate by construction, and
+  the number it returns looks like evidence. Two tells: the comparison's argmin is the incumbent for every
+  candidate (tautological), or the supposedly neutral arbiter reproduces one candidate's fitted parameter
+  identically. Re-score under a reference that shares nothing with any candidate, or profile the shared
+  component out. Never argue that the entanglement is small.
 - **A claim / comparison → falsify it with code.** Write controls: verify against known examples (inputs
   whose answer you can derive or look up), test edge/degenerate/extreme inputs, randomize inputs, search
-  for counterexamples. Beat the **trivial baselines** (all-zeros / constant / mean / a trivial physical
-  state) and any prior known result — a result worse than a trivial answer is no win. *(Nuance: if a
-  **non-physical** trivial answer scores better than a plausible result, that flags a metric/units problem,
-  not a target to beat.)*
+  for counterexamples. Beat the trivial baselines (all-zeros / constant / mean / a trivial physical state)
+  and any prior known result; a result worse than a trivial answer is not a win. If a non-physical trivial
+  answer scores better than a plausible result, that flags a metric or units problem rather than a target
+  to beat.
 - **A "we're done / at the ceiling / blocked / optimal" conclusion → treat it as a load-bearing positive
-  claim and try to REFUTE it.** A stopping decision is high-stakes — it ends the work — so it earns the same
-  adversarial scrutiny as a win: require an explicit attempt to beat the supposed limit (an orthogonal lever,
-  a freer model, a cheap what-if) and a reasoned argument for why any gain found is non-physical, before the
-  "done" stands. "I've stopped finding gains" is not "no gains exist"; an unfalsified ceiling is INCONCLUSIVE,
-  not CONFIRMED.
+  claim and try to REFUTE it.** A stopping decision ends the work, so it earns the same adversarial
+  scrutiny as a win. Require an explicit attempt to beat the supposed limit (an orthogonal lever, a freer
+  model, a cheap what-if) and a reasoned argument for why any gain found is non-physical, before the "done"
+  stands. "I've stopped finding gains" is not "no gains exist"; an unfalsified ceiling is INCONCLUSIVE, not
+  CONFIRMED.
 
 ### 3 · Interrogate the nature of the error — and the statistic you read it with
-For any fit, regression, calibrated model, or learned predictor, **don't stop at the error magnitude —
-examine the residuals for structure.** (The last bullet, on statistic choice, applies to *any* claim read off
-a summary number, not only a fit.)
+For any fit, regression, calibrated model, or learned predictor, do not stop at the error magnitude:
+examine the residuals for structure. The last bullet, on statistic choice, applies to any claim read off a
+summary number, not only to a fit.
 - **Structured residuals** — a trend, a dependence on an input variable, a spatial/temporal pattern,
-  autocorrelation, a systematic over/under-shoot in one regime — signal a **bug or unaccounted-for physics
-  (model-form error)**. They point back to a parked or missing effect in the physics inventory
-  (`frame-problem`), and they are **one of the best sources of genuine discovery** — investigate them.
+  autocorrelation, a systematic over- or under-shoot in one regime — signal a bug or unaccounted-for
+  physics (model-form error). They point back to a parked or missing effect in the physics inventory
+  (`frame-problem`), and they are among the best sources of discovery. Investigate them.
 - **Random, zero-mean residuals consistent with the noise model** are what "done" looks like.
 - Plot residuals against each input and against the fitted value; check for autocorrelation. "The error is
-  small" is not the same as "the error is unstructured." Don't write structure off as noise without proof.
-- **And check that the statistic answers the question you asked.** Name the question, name the statistic, say
-  why they match — *before* reading anything off the number. Four cheap mismatches, each of which has produced
-  a confident wrong conclusion: a **mean where a max belongs** (averaging a sign-changing quantity nearly
-  cancels it, so a ceiling built that way can understate by an order of magnitude — bound with the extreme, or
-  a per-region swing); an **unpaired spread applied to a paired comparison** (two models scored on the *same*
-  data are paired, and a Δ far inside the across-realization scatter can be many σ once paired); a **central
-  statistic where the hypothesis is "rare and large"** (a median over hundreds of units is blind to a sparse
-  subpopulation *by construction* — it cannot return anything but a clean negative; use a tail statistic); and
-  a **fitter fed the wrong residual** (fitting a background to *(data − model)* when you meant to fit it to the
-  data, so the fit absorbs the very thing you were testing for). Same check each time: state the question in
-  words, then ask whether this number could come out small even if the true answer is "large."
-- Be precise about overfitting: claim it only from a *specific signature* (a gain that doesn't hold on
-  held-out data; a fit better than the known truth), **never** as a catch-all, and **never** when the
-  change *raised* raw fit error (that cannot be overfitting). Separate statistical from systematic error.
+  small" is not the same as "the error is unstructured." Do not write structure off as noise without proof.
+- **Check that the statistic answers the question you asked.** Name the question, name the statistic, and
+  state why they match, before reading anything off the number. Four cheap mismatches, each of which has
+  produced a confident wrong conclusion:
+  - A mean where a max belongs. Averaging a sign-changing quantity nearly cancels it, so a ceiling built
+    that way can understate by an order of magnitude. Bound with the extreme, or with a per-region swing.
+  - An unpaired spread applied to a paired comparison. Two models scored on the same data are paired, and a
+    Δ far inside the across-realization scatter can be many σ once paired.
+  - A central statistic where the hypothesis is "rare and large". A median over hundreds of units is blind
+    to a sparse subpopulation by construction and cannot return anything but a clean negative. Use a tail
+    statistic.
+  - A fitter fed the wrong residual. Fitting a background to *(data − model)* when the intent was to fit it
+    to the data lets the fit absorb the effect being tested for.
+
+  Same check each time: state the question in words, then ask whether this number could come out small even
+  if the true answer is "large."
+- Be precise about overfitting. Claim it only from a specific signature: a gain that does not hold on
+  held-out data, or a fit better than the known truth. Never claim it as a catch-all, and never when the
+  change raised raw fit error, which cannot be overfitting. Separate statistical from systematic error.
 - **A per-step/sequential fit's clean residuals can be manufactured, not earned.** When consecutive fits
-  (frame-by-frame, step-by-step) share a drifting nuisance parameter, each step can silently co-adapt to
-  absorb real signal — residuals look random precisely because the model quietly moved to hide the
-  structure, not because it's right (`simulation-design` §3). Before trusting clean per-step residuals as
-  "done," check whether a joint or monotonicity-constrained refit across steps reproduces them — if the
-  constrained fit's residuals show structure the per-step fit's didn't, the per-step version was absorbing
-  error, not explaining it.
+  (frame-by-frame, step-by-step) share a drifting nuisance parameter, each step can co-adapt to absorb real
+  signal: the residuals look random because the model moved to hide the structure, not because it is right
+  (`simulation-design` §3). Before trusting clean per-step residuals as "done," check whether a joint or
+  monotonicity-constrained refit across steps reproduces them. If the constrained fit's residuals show
+  structure the per-step fit's did not, the per-step version was absorbing error rather than explaining it.
 
 ### 4 · Prefer an independent, mechanism-diverse check
-The strongest verification comes from a *different route* reaching the same answer: a second method, an
+The strongest verification comes from a different route reaching the same answer: a second method, an
 independent re-derivation, a certifying solver, an analytic cross-check. For any substantial or
-load-bearing claim, **spawn a fresh agent** (Agent tool, `subagent_type: general-purpose`) and give it the
-adversarial prompt below, so it re-derives from scratch in its own context rather than inheriting your
-assumptions. **Pass the why, never the reasoning:** tell the spawned agent what this claim *gates* (a
-promotion, a report, a decision) and the stakes — an agent that knows why the check matters verifies
-harder than one handed a bare task — but never share your generating reasoning or expected answer, which
-would contaminate its independence. Replicate across seeds/perturbations for anything stochastic, and use
-a **statistical test** for close calls — a difference smaller than the spread is not automatically noise
-(real effects can be weak), but it's not automatically real either. **If you cannot spawn one, the check is
-INCONCLUSIVE — say so.** A control you designed yourself is not mechanism-diverse: it tests the confounds
-you thought of, which are the ones you already handled.
+load-bearing claim, spawn a fresh agent (Agent tool, `subagent_type: general-purpose`) and give it the
+adversarial prompt below, so it re-derives from scratch in its own context rather than inheriting prior
+assumptions. Pass the why, never the reasoning: state what this claim gates (a promotion, a report, a
+decision) and the stakes, because an agent told why the check matters verifies harder than one handed a
+bare task. Never share the generating reasoning or the expected answer; either contaminates the check's
+independence. Replicate across seeds and perturbations for anything stochastic, and use a
+statistical test for close calls: a difference smaller than the spread is not automatically noise, since
+real effects can be weak, and it is not automatically real either. If no such agent can be spawned, the
+check is INCONCLUSIVE — say so. A control designed by the claimant is not mechanism-diverse; it tests the
+confounds already thought of, which are the ones already handled.
 
 ### 4b · When the verdict is disputed — escalate to a blinded third party
-A refuter's verdict can itself be wrong, and arguing it out *with* the refuter reproduces the original error:
-by then both parties have read the same evidence and are defending positions. So **neither defer nor
-re-litigate** — spawn a *third* agent and blind it. Hand it both positions with provenance stripped
-("Analysis 1" / "Analysis 2" — never which one is yours), tell it explicitly not to weight by source, and
-require it to **run a check neither analysis ran** rather than pick a side. Its verdicts include *both
-wrong*: a conclusion can be right while every argument offered for it is not. Held-out data already on disk
-and a method neither side tried are where it earns its cost. Record its verdict alongside the dispute,
-append-only. **A dispute closed by argument rather than by a new measurement is still open** — and a
-rebuttal you wrote yourself is not independent of the reasoning that produced the claim.
+A refuter's verdict can itself be wrong, and arguing it out with the refuter reproduces the original error:
+by then both parties have read the same evidence and are defending positions. Neither defer nor
+re-litigate. Spawn a third agent and blind it. Hand it both positions with provenance stripped
+("Analysis 1" / "Analysis 2", never which one is yours), tell it explicitly not to weight by source, and
+require it to run a check neither analysis ran rather than pick a side. Its verdicts include both wrong: a
+conclusion can be right while every argument offered for it is not. Held-out data already on disk and a
+method neither side tried are where it earns its cost. Record its verdict alongside the dispute,
+append-only. A dispute closed by argument rather than by a new measurement is still open, and a rebuttal
+written by the claimant is not independent of the reasoning that produced the claim.
 
 ### 5 · Bounds & physicality
-Confirm the result is physically possible: within hard bounds (probabilities in [0,1], known ranges), **no
-fitted parameter outside its physical range** (wrong sign, out of bounds), nothing above its own ceiling.
-Anything impossible means a bug or a leak — **REFUTED until explained, and never carried into a reported
-"best" config while it stands.** Three traps specific to physically-motivated fits:
-- **A physically-*shaped* template with a *fitted* amplitude/sign is not a physical prediction.** If the
-  first-principles value (the physical amplitude, scale = +1, …) is *not* what the fit chose — worse, if it
-  *hurts* the metric — the lever is an empirical corrector in physical clothing: grade it QUESTIONABLE
-  ASSUMPTION, don't credit it as first-principles.
-- **A known physical input that *hurts* the fit is an anomaly to explain, not to override with a fitted fudge
-  factor.** And **cross-fit agreement on the *same unphysical value* is not validation** — two fits agreeing
-  on the same wrong number are both wrong.
-- **Frame consistency (geometry-heavy claims).** For any result that crosses coordinate frames, run the
+Confirm the result is physically possible: within hard bounds (probabilities in [0,1], known ranges), no
+fitted parameter outside its physical range (wrong sign, out of bounds), nothing above its own ceiling.
+Anything impossible means a bug or a leak. It is REFUTED until explained, and never carried into a reported
+"best" config while it stands. Three traps specific to physically-motivated fits:
+- A physically-shaped template with a fitted amplitude or sign is not a physical prediction. If the
+  first-principles value (the physical amplitude, scale = +1, …) is not what the fit chose, or if that value
+  hurts the metric, the lever is an empirical corrector in physical clothing: grade it QUESTIONABLE
+  ASSUMPTION and do not credit it as first-principles.
+- A known physical input that hurts the fit is an anomaly to explain, not to override with a fitted fudge
+  factor. Cross-fit agreement on the same unphysical value is not validation: two fits agreeing on the same
+  wrong number are both wrong.
+- Frame consistency (geometry-heavy claims). For any result that crosses coordinate frames, run the
   frame-consistency check in [`docs/reference/coordinate-frames.md`](../../docs/reference/coordinate-frames.md):
-  every quantity's frame declared, no symbol overloaded across frames, orientation/handedness resolved from an
-  independent reference (not the fit). Correct code with undeclared frames is still unverifiable.
+  every quantity's frame declared, no symbol overloaded across frames, orientation/handedness resolved from
+  an independent reference, not the fit. Correct code with undeclared frames is still unverifiable.
 
 ### 5b · Provenance, authority, and irreversible actions
 A result is only as trustworthy as the facts it rests on and the source those facts came from.
-- **When sources conflict, resolve a load-bearing fact to the highest-authority artifact** — parse the saved
-  model, probe the released data, run the shipped weights — not a lower-authority proxy (paper text, leftover
-  code) and *not a statistic you derived from the data* (a correlation you computed is weaker than the source
-  it came from). The authority ladder and the PINNED/REPORTED/INFERRED/RECALLED/REASONED tags are in
-  `docs/PRINCIPLES.md` Ctx 4.
-- **A fact acted on at INFERRED/RECALLED is itself a claim to verify.** Try to *falsify* it before it becomes
-  load-bearing — especially when a cheaper discriminator is already in hand. (A campaign that pins an
-  inferred quantity and builds on it, skipping an available refuting check, is the classic expensive error.)
-- **Before any irreversible action** (overwrite/delete/regenerate inputs, a hardware move), require the
-  justifying diagnosis to reach **CONFIRMED via the highest-authority artifact** — read the actual pipeline
-  source, don't act on a derived statistic. Gating a destructive step to the user on a below-CONFIRMED
-  diagnosis makes the human your only backstop; confirm first.
+- When sources conflict, resolve a load-bearing fact to the highest-authority artifact: parse the saved
+  model, probe the released data, run the shipped weights. Do not resolve it to a lower-authority proxy
+  (paper text, leftover code) or to a statistic you derived from the data: a correlation you computed is
+  weaker than the source it came from. The authority ladder and the
+  PINNED/REPORTED/INFERRED/RECALLED/REASONED tags are in `docs/PRINCIPLES.md` Ctx 4.
+- A fact acted on at INFERRED or RECALLED is itself a claim to verify. Attempt to falsify it before it
+  becomes load-bearing, and run any cheaper discriminating check that is already available. An unfalsified
+  inference can otherwise carry a long series of experiments before it is caught.
+- Before any irreversible action (overwrite/delete/regenerate inputs, a hardware move), require the
+  justifying diagnosis to reach CONFIRMED via the highest-authority artifact: read the actual pipeline
+  source rather than acting on a derived statistic. Gating a destructive step to the user on a
+  below-CONFIRMED diagnosis makes the human the only backstop. Confirm first.
 
 ### 5c · Reflect against your own confirmation bias (before you grade)
-The hardest error to catch is the one you are motivated not to see: once you have decided an answer is right,
-the pull is to suppress alternatives and read every new datum as confirmation. This is the chief threat to the
-reflective decisions, and generating failure modes is a *learnable* skill experts have and novices lack — so
-run the ritual explicitly, don't just intend to be objective:
-- **State the result you expected or hoped for** — name it, so the bias is visible.
-- **Make the strongest case that it is WRONG** — argue the other side as hard as you argued yours; list the
+Once an answer has been decided, the pull is to suppress alternatives and read every new datum as
+confirmation. Generating failure modes is a learnable skill, so run the ritual explicitly rather than
+intending to be objective:
+- State the result that was expected or hoped for, so the bias is visible.
+- Make the strongest case that it is wrong. Argue the other side as hard as the original case, and list the
   concrete ways it could fail.
-- **Name the single observation or control that would refute it** — then check whether you actually ran it.
-  If not, run it before concluding.
-- **Consider the alternative conclusion you are resisting**, especially an unwelcome one (the effect is noise;
-  a rival model fits too; the "win" is an artifact) — and give it a fair hearing.
-This is *your own* reflection; it complements — does not replace — the independent refuter (§4), whose value
-is precisely that it never shared your hope, nor the blinded adjudicator (§4b) you owe it when you disagree
-with that refuter.
+- Name the single observation or control that would refute it, then check whether it was actually run. If
+  not, run it before concluding.
+- Consider the alternative conclusion being resisted, especially an unwelcome one (the effect is noise; a
+  rival model fits too; the win is an artifact), and give it a fair hearing.
+
+This reflection complements the independent refuter (§4), which never shared the hope, and the blinded
+adjudicator (§4b) owed when the refuter is disputed. It replaces neither.
 
 ### 6 · Grade the verdict and surface the premise
-Return one of the five verdicts (defined below), state what is **certified vs conjectured** and over what
-range, and **name any load-bearing assumption** the result hinges on. Record the *why* of a non-obvious
-check (`record-decision`) so it isn't lost.
+Return one of the five verdicts (defined below), state what is certified versus conjectured and over what
+range, and name any load-bearing assumption the result hinges on. Record the reason for a non-obvious check
+(`record-decision`) so it is not lost.
 
 ---
 
@@ -206,229 +207,242 @@ check (`record-decision`) so it isn't lost.
 
 - **CONFIRMED** — survived an independent attempt to refute it; reproduced, bounded, and unstructured where
   it should be. May proceed.
-- **PROVISIONAL** — stands, but rests on an *adapted evaluation* (a guardrail/auxiliary check changed to
-  accommodate a legitimate lever). Usable, but flagged until the adaptation's fairness is reviewed. Faithful
-  (removed a real artifact) vs lenient (relaxed the bar) is the judgment.
-- **QUESTIONABLE ASSUMPTION** — may well be correct, but **hinges on a dubious or unverified premise**: an
-  assumed parameter value, an approximation/physical model, or a property of the data. State the assumption
-  and how to test it. (PROVISIONAL is about an adapted *evaluation*; QUESTIONABLE ASSUMPTION is about a shaky
-  *premise*.)
-- **REFUTED** — failed: didn't reproduce, lost to a trivial baseline, violated a bound, or a control broke
-  it. Don't promote; log why; treat the refuting control as its own result.
-- **INCONCLUSIVE** — a consistent-but-weak signal whose spread still overlaps the comparison. **Gather more**
-  (replicates, data, a sharper test) — do not dismiss as noise *or* claim the effect. Name the one control
+- **PROVISIONAL** — stands, but rests on an adapted evaluation: a guardrail or auxiliary check changed to
+  accommodate a legitimate lever. Usable, but flagged until the adaptation's fairness is reviewed. The
+  judgment is faithful (removed a real artifact) versus lenient (relaxed the bar).
+- **QUESTIONABLE ASSUMPTION** — may well be correct, but hinges on a dubious or unverified premise: an
+  assumed parameter value, an approximation or physical model, or a property of the data. State the
+  assumption and how to test it. PROVISIONAL is about an adapted evaluation; QUESTIONABLE ASSUMPTION is
+  about a shaky premise.
+- **REFUTED** — failed: did not reproduce, lost to a trivial baseline, violated a bound, or a control broke
+  it. Do not promote; log why; treat the refuting control as its own result.
+- **INCONCLUSIVE** — a consistent-but-weak signal whose spread still overlaps the comparison. Gather more
+  (replicates, data, a sharper test). Do not dismiss it as noise or claim the effect. Name the one control
   that would decide it.
 
 A crash is a code bug to fix and re-run, not by itself a refutation of the idea.
 
 ---
 
-## Depth scales with cost (the ADR-0008 tier: re-solving is tiered, re-scoring never is)
-The expensive thing is the *forward* computation (the solve/training run); the *derivation chain* — the
+## Depth scales with cost (re-solving is tiered, re-scoring never is)
+The expensive step is the forward computation (the solve or the training run). The derivation chain — the
 scorer and every derived number, recomputed from the stored raw artifact — is cheap regardless. So:
-- **Always, at any cost tier:** recompute every derived number **from the raw artifacts** (a transcribed
-  value is never trusted); check the config actually ran, log consistency, and prediction-vs-result.
-- **Cheap to recompute** (at/below the campaign's `configs/loop.json` `verify.full_reproduction_threshold_s`
-  when one exists; otherwise seconds–minutes): **full from-scratch re-execution** PLUS extra rigor —
-  multiple seeds/perturbations and a statistical test. A cheap computation has no excuse for a single-seed
-  conclusion.
-- **Expensive / long (above the threshold):** don't force a full re-run, but **never zero re-execution.**
-  Scrutinize the *code* (the change, its logic, conventions), the *conclusions* (do they follow from the
+- **Always, at any cost tier:** recompute every derived number from the raw artifacts, because a
+  transcribed value is never trusted; check that the config actually ran, log consistency, and
+  prediction-vs-result.
+- **Cheap to recompute** (at or below the campaign's `configs/loop.json`
+  `verify.full_reproduction_threshold_s` when one exists; otherwise seconds to minutes): full from-scratch
+  re-execution, plus multiple seeds or perturbations and a statistical test. A cheap computation has no
+  excuse for a single-seed conclusion.
+- **Expensive / long** (above the threshold): do not force a full re-run, but never zero re-execution.
+  Scrutinize the code (the change, its logic, its conventions) and the conclusions (do they follow from the
   logged numbers? are saved metrics internally consistent and recomputable from saved outputs?), re-check
-  the *saved artifacts* — **and run the cheapest discriminating spot-check** (one config of the sweep, a
-  coarse-mesh replica, the selftest): the minimum re-execution that could catch the error class at issue.
-State which mode you used in the verdict. (Rationale + revisit-if triggers: `synthesis/DECISION_RECORDS.md`
-ADR-0008 — an interpretive scoping of the frozen-core reproduction rule, user-decided 2026-08-07.)
+  the saved artifacts, and run the cheapest discriminating spot-check: one config of the sweep, a
+  coarse-mesh replica, or the selftest. That is the minimum re-execution that could catch the error class at
+  issue.
+
+State which mode you used in the verdict. Tiering applies to re-solving only; it never licenses skipping
+the recomputation of derived numbers from raw artifacts. If a tiered verification later proves to have
+missed an error in the part not re-run, lower the threshold.
 
 ---
 
 ## Campaign mode — promoting a finding (the full adversarial apparatus)
 
-When the claim is a candidate result in an autoresearch campaign, verification is the **gate** between
-"looks like a win" and writing it into `results/DISCOVERIES.md`. A promotion is not real until this returns
+When the claim is a candidate result in an autoresearch campaign, verification is the gate between "looks
+like a win" and writing it into `results/DISCOVERIES.md`. A promotion is not real until this returns
 CONFIRMED.
 
-**Step 0 — learn the campaign (parametrize the check).** Read `docs/charter.md` (or `charter_<NAME>.md`)
-and note: the **FROZEN primary metric** + direction and the **FROZEN scorer** path; the **run command** and
-**baseline (exp 000)**; the **guardrail**, diagnostics, and any **ceilings**; the **levers** and the
-**FROZEN / READ-ONLY / MUTABLE** lists (in particular, *is code a lever?* — forward-model campaigns mutate
-the code under test); and the campaign-specific extra checks the charter's *Independent verification*
-section already names (the `{{VERIFY_EXTRA_CHECKS}}` slot — honor them). These fill the `<…>` slots below.
+**Step 0 — learn the campaign (parametrize the check).** Read the campaign's `CLAUDE.md` and follow its
+**§Where things live** table to the campaign definition and each document below — it is that campaign's own
+map, so route through it rather than assuming a path. *A campaign scaffolded before the table existed has
+none; read `docs/charter*.md` (or `docs/program.md` in the oldest trees — lint-ok: a fallback must name
+the retired spelling) directly.* Note: the FROZEN
+primary metric and direction, and the FROZEN scorer path; the run command and the baseline (exp 000); the
+guardrail, the diagnostics, and any ceilings; the levers and the FROZEN / READ-ONLY / MUTABLE lists, in
+particular whether code is a lever, since forward-model campaigns mutate the code under test; and the
+campaign-specific extra checks its *Independent verification* section already names (the
+`{{VERIFY_EXTRA_CHECKS}}` slot — honor them). These fill the `<…>` slots below.
 
-**Inputs.** Identify the candidate by experiment id / config path; resolve it to the config + claimed
-numbers from `results/scoreboard.tsv` and `results/result_<NN>.json`. **Read only the claim** — config,
-scoreboard row, result JSON. **Do not pre-read the JOURNAL narrative**; the verifier must form an
+**Inputs.** Identify the candidate by experiment id / config path; resolve it to the config and the claimed
+numbers from `results/scoreboard.tsv` and `results/result_<NN>.json`. Read only the claim: the config, the
+scoreboard row, the result JSON. Do not pre-read the JOURNAL narrative; the verifier must form an
 independent view.
 
 **Spawn the independent refuter** (Agent tool, one call per candidate; verify several in parallel in one
 message) with the prompt below, `<…>` filled from Step 0, reproduce-mode chosen by run cost. Run it on a
-model **at least as capable** as the one that produced the result — a *different* capable model is ideal
-(it adds mechanism diversity); **never a weaker model**, which yields false CONFIRMs.
+model at least as capable as the one that produced the result. A different capable model is preferable: it
+adds mechanism diversity. Never use a weaker model, which yields false CONFIRMs.
 
 **On return — write the verdict ARTIFACT, then record it append-only.** First write
-**`results/verdicts/<exp_id_or_slug>.json`** — the machine-checkable artifact the promotion gate (BOTH the
-DISCOVERIES surface AND the current-best/scoreboard surface) and the loop driver consume. **Copy this stub
-and fill every `<…>` — all fields are REQUIRED; do not hand-improvise a subset:**
+`results/verdicts/<exp_id_or_slug>.json`, the machine-checkable artifact consumed by the promotion gate
+(BOTH the DISCOVERIES surface and the current-best/scoreboard surface) and by the loop driver. Copy this
+stub and fill every `<…>`; all fields are REQUIRED. Do not hand-improvise a subset:
 ```json
 {"claim": "<one line>", "exp_id": "<id>", "verdict": "CONFIRMED",
  "kill_tier": null, "refuter": "<the spawned agent's id — never this session>",
  "confounded_levers": [], "disentangler": null, "resolves_confounded": [],
  "utc": "<current UTC stamp>", "summary": "<2-3 sentences>"}
 ```
-`refuter` is the id of the independent agent you spawned above (§4) — capture it from that agent and paste it
-here; it is *never* this session's id. **The gate rejects a verdict with an empty/absent `refuter` on BOTH
-promotion paths** (a refuterless CONFIRMED does not graduate — a dropped field blocks your own promotion), so
-fill the stub literally rather than reconstructing the schema from memory. (`kill_tier` is set only for a
-negative/kill-claim — see *Verifying a kill-claim* below; `confounded_levers` / `disentangler` are set
-whenever more than one lever moved — see *Confounded attribution* below.) A DISCOVERIES entry must **cite this file by
-name** or the hook denies the write. Then put the verdict on the
-experiment's `**Verification**:` line; log every concern the verifier raised — *even on CONFIRMED* — under
-`**Disputes & responses**:`, each with your response. **Never delete a raised issue; if you disagree, add a
-counter-argument** — and if the disagreement is load-bearing, escalate it per §4b rather than settling it
-yourself; your rebuttal of the checker inherits the reasoning the checker was called to test. Do the same for
-any concern the **user** raises. Then gate: CONFIRMED → may promote;
-PROVISIONAL / QUESTIONABLE ASSUMPTION → **working result only** — must NOT graduate to DISCOVERIES, **nor be
-reported as "current-best" / "best" without its caveat carried inline**, until the adaptation/assumption is
-reviewed; REFUTED → don't promote, add the refuting control as its own experiment; INCONCLUSIVE → run the
-named control before deciding. **No claim-splitting:** a headline number is inseparable from the config that
-produced it — you may not promote "the number" while grading its config's physics QUESTIONABLE, nor let a
-promoted config keep a fitted parameter outside its physical range. **This is about the config's validity,
-not about attribution among its levers** — "which lever earned the win" is a *separate* claim, graded
-separately, and a shaky answer to it does not block the empirical one (see *Confounded attribution*).
+`refuter` is the id of the independent agent you spawned above (§4). Capture it from that agent and paste
+it here; it is never this session's id. The gate rejects a verdict with an empty or absent `refuter` on
+BOTH promotion paths, so a refuterless CONFIRMED does not graduate and a dropped field blocks your own
+promotion. Fill the stub literally rather than reconstructing the schema from memory. `kill_tier` is set
+only for a negative or kill-claim, per *Verifying a kill-claim* below. `confounded_levers` and
+`disentangler` are set whenever more than one lever moved, per *Confounded attribution* below. A DISCOVERIES
+entry must cite this file by name or the hook denies the write.
 
-**Clear the noise floor before promoting.** A delta only counts if it exceeds measurement jitter.
-Establish the **noise floor** — repeat the evaluation across seeds/perturbations (or re-runs of a
-stochastic pipeline) and take the spread (SD or MAD) of the primary metric — and require the improvement
-over the incumbent to be **several times that spread**, not within it. Report the win as
-`Δ = <value> ± <spread> (n=<reps>)`; an improvement *inside* the noise floor is **INCONCLUSIVE**, not a
-win, however good the single number looks. For an expensive eval where many reps aren't affordable,
-estimate the floor once on a representative case and reuse it. (This is the statistical backing for the
-spread column in the scoreboard.)
+Then put the verdict on the experiment's `**Verification**:` line. Log every concern the verifier raised,
+including on a CONFIRMED, under `**Disputes & responses**:`, each with your response. Never delete a raised
+issue; if you disagree, add a counter-argument. If the disagreement is load-bearing, escalate it per §4b
+rather than settling it yourself, because your rebuttal of the checker inherits the reasoning the checker
+was called to test. Do the same for any concern the user raises.
+
+Then gate. CONFIRMED → may promote. PROVISIONAL / QUESTIONABLE ASSUMPTION → working result only: it must
+not graduate to DISCOVERIES, and must not be reported as "current-best" or "best" without its caveat
+carried inline, until the adaptation or assumption is reviewed. REFUTED → do not promote; add the refuting
+control as its own experiment. INCONCLUSIVE → run the named control before deciding. No claim-splitting: a
+headline number is inseparable from the config that produced it, so you may not promote "the number" while
+grading its config's physics QUESTIONABLE, nor let a promoted config keep a fitted parameter outside its
+physical range. This is about the config's validity, not about attribution among its levers. "Which lever
+earned the win" is a separate claim, graded separately, and a shaky answer to it does not block the
+empirical one (see *Confounded attribution*).
+
+**Clear the noise floor before promoting.** A delta only counts if it exceeds measurement jitter. Establish
+the noise floor: repeat the evaluation across seeds or perturbations (or re-runs of a stochastic pipeline)
+and take the spread (SD or MAD) of the primary metric. Require the improvement over the incumbent to be
+several times that spread, not within it. Report the win as `Δ = <value> ± <spread> (n=<reps>)`. An
+improvement inside the noise floor is INCONCLUSIVE, not a win, however good the single number looks. For an
+expensive eval where many reps are not affordable, estimate the floor once on a representative case and
+reuse it. This is the statistical backing for the spread column in the scoreboard. **Record the number where the machinery can read it** — `configs/loop.json` `campaign.noise_floor` — or it stays an estimate in someone's head and every later run reports its noise check `unavailable`. A **deterministic** campaign (`campaign.noise_model`) has no spread to estimate: set `campaign.tolerance` instead and skip this section.
 
 ### Confounded attribution (fires whenever more than one lever moved)
 
-**Always ask first: how many levers changed versus the comparison?** One lever is the default and needs no
-further work here. When two or more moved — deliberately (coupled levers, a screen, an interaction test) or
-by accident — record the entangled set and the experiment that would separate it:
+Always ask first: how many levers changed versus the comparison? A single-lever comparison needs no
+further work here. When two or more moved, deliberately (coupled levers, a screen, an interaction test) or
+by accident, record the entangled set and the experiment that would separate it:
 
 ```json
 "confounded_levers": ["preproc_norm", "decoder_loss"],
 "disentangler": "exp 042: decoder_loss alone vs current best"
 ```
 
-An empty list asserts attribution is clean; a non-empty list **requires** `disentangler` — the cheapest
-ablation that would isolate the suspected contributor. The field exists to name a debt, not to discharge
-one: stamping it does not settle anything, it queues the run that will. **When you later run that
-disentangler, name the levers it separated in the new verdict's `resolves_confounded`** — that is what
-closes the debt and releases the levers back to the planner.
+An empty list asserts attribution is clean. A non-empty list requires `disentangler`: the cheapest ablation
+that would isolate the suspected contributor. The field names a debt rather than discharging one, so
+stamping it settles nothing and instead queues the run that will. When you later run that disentangler,
+name the levers it separated in the new verdict's `resolves_confounded`. That is what closes the debt and
+releases the levers back to the planner.
 
-Confounding is a property of the *design*, orthogonal to the verdict (exactly as `kill_tier` is). It grades
-the claims separately:
+Confounding is a property of the design, orthogonal to the verdict, as `kill_tier` is. It grades the claims
+separately:
 
-- **The empirical claim** ("this config scores X") is **unaffected** — the number was measured, and a
-  current-best is an empirical fact, not a causal one. It may be CONFIRMED and promoted with the set
-  recorded. You are allowed to hold the best configuration you have without yet knowing why it wins.
-- **The causal claim** ("lever L is why") **cannot be CONFIRMED** while the set is non-empty — it is
-  QUESTIONABLE ASSUMPTION, with the confounded set as the named premise. Report the win without attributing
-  it, or run the disentangler.
-- **A kill claim gets the strict treatment** — see below. This is the asymmetric case.
+- The empirical claim ("this config scores X") is unaffected: the number was measured, and a current-best
+  is an empirical fact, not a causal one. It may be CONFIRMED and promoted with the set recorded. Holding
+  the best configuration available without yet knowing why it wins is allowed.
+- The causal claim ("lever L is why") cannot be CONFIRMED while the set is non-empty. It is
+  QUESTIONABLE ASSUMPTION, with the confounded set as the named premise. Report the win without
+  attributing it, or run the disentangler.
+- A kill claim gets the strict treatment described below. This is the asymmetric case.
 
-**Why the negative case is the dangerous one.** The whole apparatus above — refuter, verdict artifact,
-promotion gate — is aimed at *positives*. A multi-lever win runs into all of it; a multi-lever loss just
-updates the journal, so a confounded negative routes around the machinery that would have caught it. The
-mechanism to hunt is **masking**: lever A helps, lever B hurts more, the combination scores below baseline,
-and *both* get retired. A good direction dies silently, and negatives are rarely re-litigated.
+The apparatus above — refuter, verdict artifact, promotion gate — is aimed at positives. A multi-lever win
+runs into all of it, while a multi-lever loss only updates the journal, so a confounded negative routes
+around the machinery that would have caught it. The mechanism to hunt is masking: lever A helps, lever B
+hurts more, the combination scores below baseline, and both get retired. A good direction dies silently,
+and negatives are rarely re-litigated.
 
-So: **a multi-lever negative refutes the combination, not its members.**
-- The combination *as a unit* may earn `EVIDENCE_AGAINST` if the implementation is verified sound.
-- Every lever in `confounded_levers` is **INCONCLUSIVE** individually — cause not attributed — which by the
-  tier rules below does not steer and never graduates. No lever in that set may be recorded as ruled out.
-- Each such lever **remains untried** for planning and exhaustion purposes. A lever tried only inside a
-  confounded unit has not been tried; `loop_heartbeat` refuses an `exhausted` stop while any lever sits in
-  that state, because a single bad combined experiment must not be able to end a campaign.
+So a multi-lever negative refutes the combination, not its members.
+- The combination as a unit may earn `EVIDENCE_AGAINST` if the implementation is verified sound.
+- Every lever in `confounded_levers` is INCONCLUSIVE individually, because cause is not attributed. By the
+  tier rules below that does not steer and never graduates. No lever in that set may be recorded as ruled
+  out.
+- Each such lever remains untried for planning and exhaustion purposes. A lever tried only inside a
+  confounded unit has not been tried. `loop_heartbeat` refuses an `exhausted` stop while any lever sits in
+  that state, so a single bad combined experiment cannot end a campaign.
 
 ### Verifying a kill-claim (steering-negatives and invalidations)
-A **negative** finding that will *steer* the campaign — it kills a lever/topology branch, declares a
-ceiling/plateau, shelves a direction, or invalidates prior results — is promoted to DISCOVERIES and
-verified **exactly like a win**, because the failed-experiment population is *more* bug-contaminated than
-the winning one: most implementation errors degrade performance, so bugs masquerade as "this approach
-doesn't work," and an unexamined negative quietly kills a branch forever. (A claimed *invalidation* —
-"the scoreboard is tainted", "the metric is broken" — gets this check **before** the campaign
-reprioritizes or forks on it; the false alarm is the symmetric failure mode.)
+A negative finding that will steer the campaign — it kills a lever or topology branch, declares a ceiling
+or plateau, shelves a direction, or invalidates prior results — is promoted to DISCOVERIES and verified
+exactly like a win. The failed-experiment population is more bug-contaminated than the winning one: most
+implementation errors degrade performance, so bugs masquerade as "this approach doesn't work," and an
+unexamined negative kills a branch permanently. A claimed invalidation ("the scoreboard is tainted", "the
+metric is broken") gets this check before the campaign reprioritizes or forks on it; the false alarm is the
+symmetric failure mode.
 
-The refuter's checklist **differs from the positive case** — hunt the false-negative sources:
-- **Implementation error** — signs/units/ports/conventions; the selftest and correctness suite on the
-  exact code that produced the negative. A crash or an envelope breach (a result below the a-priori
-  *floor*) is itself evidence of a bug, not of a dead idea.
+The refuter's checklist differs from the positive case. Hunt the false-negative sources:
+- **Implementation error** — signs/units/ports/conventions; run the selftest and the correctness suite on
+  the exact code that produced the negative. A crash, or an envelope breach (a result below the a-priori
+  floor), is itself evidence of a bug rather than of a dead idea.
 - **Strawman comparison** — did the killed alternative get materially less tuning budget than the
   incumbent? A fair kill requires comparable effort.
 - **Insufficient search** — dead after 2 configs in a large design space is a sampling statement, not a
   death certificate.
-- **Mechanism** — a promoted negative carries *why* it fails, not just that it scored low; never name a
-  cause of death from resemblance (`attribute-mechanism`).
+- **Mechanism** — a promoted negative carries why it fails, not just that it scored low. Never name a cause
+  of death from resemblance (`attribute-mechanism`).
 
 **Grade the kill on three tiers** (recorded as `kill_tier` in the verdict artifact; the verdict field
 itself still grades whether the *claim as stated* is CONFIRMED):
-- **REFUTED** — mechanism understood; the idea *cannot* work (a reasoning-/proof-level kill, e.g. an
+- **REFUTED** — mechanism understood; the idea cannot work (a reasoning- or proof-level kill, such as an
   exact symmetry cancellation). Prunes the branch.
-- **EVIDENCE_AGAINST** — a clean negative experiment (implementation verified sound), but a single
-  instantiation cannot establish that *no* implementation works. Deprioritizes — the branch is shelved
-  with its evidence, revivable by the planner; independent EVIDENCE_AGAINST entries may accumulate
-  toward a prune (recorded, with the entries cited).
-- **INCONCLUSIVE** — cause not attributed; the implementation, not the idea, may be at fault. **Does not
-  steer and never graduates** — queue a fix-and-rerun unit instead (the DISCOVERIES hook denies an
-  INCONCLUSIVE kill).
+- **EVIDENCE_AGAINST** — a clean negative experiment with the implementation verified sound, but a single
+  instantiation cannot establish that no implementation works. Deprioritizes: the branch is shelved with
+  its evidence and is revivable by the planner. Independent EVIDENCE_AGAINST entries may accumulate toward
+  a prune, recorded with the entries cited.
+- **INCONCLUSIVE** — cause not attributed; the implementation, not the idea, may be at fault. Does not
+  steer and never graduates. Queue a fix-and-rerun unit instead; the DISCOVERIES hook denies an
+  INCONCLUSIVE kill.
 
 ### Adversarial prompt to give the spawned agent
 Fill every `<…>` from Step 0. Omit the bracketed CODE/FORWARD block if code is not a lever. Choose the
 reproduce mode by run cost.
 
-> You are an independent verifier for the campaign at `<campaign dir>`. Read its `docs/charter.md` for the
-> metric and rules. **Assume the following result is WRONG and try to refute it.** Your default verdict is
-> REFUTED unless the evidence forces CONFIRMED.
+> You are an independent verifier for the campaign at `<campaign dir>`. Read its `CLAUDE.md` and follow the
+> **§Where things live** table to the metric and the rules; if it has no such table, read `docs/charter*.md`
+> directly. Assume the following result is wrong and try to refute it. Your default verdict is REFUTED
+> unless the evidence forces CONFIRMED.
 >
 > Candidate: `<config path>`. Claimed: `<METRIC> = <value>` (`<direction>` = better; baseline exp 000 =
 > `<baseline>`), guardrail `<GUARDRAIL> = <value>`, plus `<any ceilings / diagnostics claimed>`.
 >
-> **Why this check matters:** `<what the claim gates — promotion to current-best / a report figure / a
+> Why this check matters: `<what the claim gates — promotion to current-best / a report figure / a
 > go-no-go decision>`. Your verdict is that gate; the work will be published, so the result must be
-> defensible. *(You are told the stakes, not the original reasoning — that is deliberate.)*
+> defensible. You are given the stakes, not the original reasoning; that is deliberate.
 >
-> Report what you actually observe (numbers, not vibes). **Falsify with code, not prose** — verify against
-> known examples, test edge/degenerate/extreme inputs, randomize inputs, search for counterexamples. A
-> crash is a code bug to fix/report, not a refutation of the idea. Surface load-bearing assumptions — if the
-> result stands only under a dubious/unverified premise, that's a QUESTIONABLE ASSUMPTION.
+> Report what you actually observe, as numbers. Falsify with code, not prose: verify against known
+> examples, test edge/degenerate/extreme inputs, randomize inputs, search for counterexamples. A crash is a
+> code bug to fix and report, not a refutation of the idea. Surface load-bearing assumptions; if the result
+> stands only under a dubious or unverified premise, that is a QUESTIONABLE ASSUMPTION.
 > 1. **Reproduce (mode by run cost).** FAST: re-run `<RUN COMMAND> --config <config path>` (tee to
 >    `results/diagnostics/verify_<exp_id>_<UTCstamp>.log 2>&1`), recompute `<METRIC>` from scratch with the
 >    FROZEN scorer `<scorer path>`; doesn't reproduce → REFUTED. LONG/EXPENSIVE: recompute `<METRIC>` from
->    the **saved artifacts** and confirm internal consistency, lean on the code + conclusions checks.
->    Either way recompute **every reported number** from a fresh evaluation; *convergence is not
->    correctness*. A number that doesn't match → REFUTED.
+>    the saved artifacts and confirm internal consistency, leaning on the code and conclusions checks.
+>    Either way recompute every reported number from a fresh evaluation; convergence is not correctness. A
+>    number that doesn't match → REFUTED.
 > 2. **Replicate — test, don't assume noise.** Re-run with perturbed params and, for stochastic steps,
 >    different seeds; report spread; apply a paired statistical test. No consistent effect → noise (REFUTED);
->    consistent trend whose spread overlaps the comparison → INCONCLUSIVE (gather more); clear test-significant
->    effect → passes. Best-of-many-configs → higher bar (look-elsewhere), still resolved by a test.
+>    consistent trend whose spread overlaps the comparison → INCONCLUSIVE (gather more); clear
+>    test-significant effect → passes. Best-of-many-configs → higher bar (look-elsewhere), still resolved by
+>    a test.
 > 3. **Beat trivial baselines and prior bests.** Compare `<METRIC>` to the recorded baseline/prior best and
 >    to trivial/degenerate solutions (all-zeros / constant / mean / trivial physical state). A trivial
->    solution beating the candidate → not a win. A *non-physical* trivial winner → flags a metric/units
+>    solution beating the candidate → not a win. A non-physical trivial winner → flags a metric/units
 >    problem; scrutinize scaling/normalization/definition.
 > 4. **Metric integrity / no goalpost-moving.** Did this experiment change anything the metric/guardrail
->    *consumes* (`<metric inputs>`) in a way that flatters the number without improving true performance? Is
+>    consumes (`<metric inputs>`) in a way that flatters the number without improving true performance? Is
 >    the comparison to exp 000 apples-to-apples? Null-control: feed the scorer a scrambled input and confirm
->    it collapses to the no-skill floor. **Entanglement:** does the scorer, the reference, or the comparison's
->    starting point share a *fitted* component with the candidate (a reference fitted under it, an inherited
->    nuisance parameter, a sweep scored from its own start)? Then it favours that candidate by construction —
+>    it collapses to the no-skill floor. Entanglement: does the scorer, the reference, or the comparison's
+>    starting point share a fitted component with the candidate (a reference fitted under it, an inherited
+>    nuisance parameter, a sweep scored from its own start)? Then it favours that candidate by construction:
 >    re-score under something that shares nothing, or profile the shared component out.
 > 5. **Ceiling vs gap, and the nature of the residuals.** Is the win a CEILING move (physical bound rose —
 >    real) or a gap-to-ceiling move (a freer model closed the gap — suspect overfitting; must clear the
->    guardrail)? Examine the residuals for **systematic structure vs random noise** — structure means a bug
->    or unaccounted-for physics, not just error to report. Claim overfitting only from a specific signature,
->    never when the change *raised* raw fit error.
-> 6. **Guardrail — confirm it can fail, not just that it passed.** A guardrail that would read the *same*
->    regardless of the lever under test is not exercising the code path it's meant to guard — it gives false
->    confidence, worse than no guardrail. Check: does `<GUARDRAIL>` actually depend on this experiment's
+>    guardrail)? Examine the residuals for systematic structure vs random noise: structure means a bug or
+>    unaccounted-for physics, not just error to report. Claim overfitting only from a specific signature,
+>    never when the change raised raw fit error.
+> 6. **Guardrail — confirm it can fail, not just that it passed.** A guardrail that would read the same
+>    regardless of the lever under test is not exercising the code path it is meant to guard; it gives false
+>    confidence, worse than no guardrail. Check: does `<GUARDRAIL>` depend on this experiment's
 >    change (perturb the lever and confirm the guardrail value moves), or does it pass identically either way?
->    If it can't be shown to fail on a deliberately bad input, flag it as untested, don't credit the pass.
+>    If it can't be shown to fail on a deliberately bad input, flag it as untested and do not credit the pass.
 >    Only once that's established, confirm `<GUARDRAIL>` passes (not materially worse than baseline; overfit
 >    flag False).
 > 7. **Bounds & units.** Physically possible? Every fitted parameter inside its range; nothing above its
@@ -437,15 +451,15 @@ reproduce mode by run cost.
 >    not a lucky subset, no regression on anchors.
 > 9. **Fairness of any adapted evaluation.** FAITHFUL (removed a real artifact → may be CONFIRMED, flag
 >    PROVISIONAL) vs LENIENT (relaxed the bar → REFUTED). The FROZEN metric, data, and known ground truth must
->    NOT have been touched — if they were, REFUTED outright.
+>    not have been touched — if they were, REFUTED outright.
 > [CODE / FORWARD-MUTATING ONLY:
-> 10. **Code soundness.** Sign/convention slip (the #1 forward bug — see `../../shared/CONVENTIONS.md`), units error,
->    geometry mismatch. `--selftest` still passes; no stale cache reused after a core change; no silently-added
->    free parameters (must be no freer). **Upstream preprocessing:** the load-bearing transform feeding the
->    metric (registration / pose / normalization) is non-degenerate on the data it's applied to — a degenerate
->    step can pass the score while silently mis-handling specific inputs.
-> 11. **Multi-condition agreement.** Win holds at EVERY evaluated condition, not one. A one-condition win is an
->    artifact. ]
+> 10. **Code soundness.** Sign/convention slip (check this first — see `../../shared/CONVENTIONS.md`), units
+>    error, geometry mismatch. `--selftest` still passes; no stale cache reused after a core change; no
+>    silently-added free parameters (must be no freer). Upstream preprocessing: the load-bearing transform
+>    feeding the metric (registration / pose / normalization) is non-degenerate on the data it is applied
+>    to — a degenerate step can pass the score while silently mis-handling specific inputs.
+> 11. **Multi-condition agreement.** Win holds at every evaluated condition, not one. A one-condition win is
+>    an artifact. ]
 >
 > Return a structured verdict: `verdict`; `questionable_assumption`; `verification_mode`; `adapted_eval`;
 > `reproduced_metric` (+ spread); `beats_trivial` (note if a non-physical trivial wins); `ceiling_or_gap`;
@@ -455,33 +469,33 @@ reproduce mode by run cost.
 ---
 
 ## Notes & composition
-- **Verification only.** Never promotes, never edits a FROZEN metric/physics, never edits data. It
+- **Verification only.** Never promotes, never edits a FROZEN metric or physics, never edits data. It
   re-runs, re-derives, and reports.
 - **Composes:** `dimensional-analysis` (the units/bounds first check), `frame-problem` (the a-priori range
   and the physics inventory a structured residual points back to), `correctness-suite` (which turns a
-  hard-won check here into a standing regression gate), `record-decision` (the *why* of a non-obvious
+  check produced here into a standing regression gate), `record-decision` (the reason for a non-obvious
   check). `report`'s report-time verification step composes this skill.
-- The campaign `charter.md` names this skill in its *Independent verification* section — honor the extra
-  checks it lists.
+- The campaign definition (via `CLAUDE.md` §Where things live) names this skill in its *Independent
+  verification* section — honor the extra checks it lists.
 
 ## Before you call it verified — checklist
 - [ ] Checked the claim independently, without anchoring on the author's reasoning.
 - [ ] New/derived equation → dimensional check + a limiting case, first.
 - [ ] Every reported number recomputed from a fresh run (not transcribed).
-- [ ] Fit/prediction → residuals examined for structure vs random noise; **the statistic checked against the question it is meant to answer** (mean-vs-max, paired-vs-unpaired, a central statistic where the hypothesis is "rare and large", a fitter fed the wrong residual).
-- [ ] Any comparison between candidates → **scorer, reference, and starting point checked for entanglement** with the things being compared (a reference fitted under one candidate favours it by construction).
+- [ ] Fit/prediction → residuals examined for structure vs random noise; the statistic checked against the question it is meant to answer (mean-vs-max, paired-vs-unpaired, a central statistic where the hypothesis is "rare and large", a fitter fed the wrong residual).
+- [ ] Any comparison between candidates → scorer, reference, and starting point checked for entanglement with the things being compared (a reference fitted under one candidate favours it by construction).
 - [ ] Any "these agree/disagree" claim tested via the combined-uncertainty tension (*t = |a−b|/√(σ_a²+σ_b²)*), not eyeballed; error bars on both sides; a real tension resolved, not averaged.
 - [ ] Falsified with code (known examples, edge cases, counterexamples); beats trivial baselines.
-- [ ] Result within physical bounds and its a-priori range; **every fitted parameter inside its physical range** (a physically-shaped free-amplitude lever not credited as a physical prediction; a known input that *hurts* treated as an anomaly, not overridden with a fudge factor).
-- [ ] Every reported number **labelled with its metric path**; a cross-frame result passed the **frame-consistency check** (`docs/reference/coordinate-frames.md`).
-- [ ] QUESTIONABLE/PROVISIONAL **not promoted or reported as "best" without its caveat inline**; no claim-splitting (the number is inseparable from its config).
+- [ ] Result within physical bounds and its a-priori range; every fitted parameter inside its physical range (a physically-shaped free-amplitude lever not credited as a physical prediction; a known input that hurts treated as an anomaly, not overridden with a fudge factor).
+- [ ] Every reported number labelled with its metric path; a cross-frame result passed the frame-consistency check (`docs/reference/coordinate-frames.md`).
+- [ ] QUESTIONABLE/PROVISIONAL not promoted or reported as "best" without its caveat inline; no claim-splitting (the number is inseparable from its config).
 - [ ] Load-bearing facts resolved to the highest-authority source (not a derived statistic); any INFERRED/RECALLED fact falsification-tested before it's relied on.
 - [ ] Any irreversible action was gated on a CONFIRMED diagnosis (highest-authority artifact read), not a derived statistic.
 - [ ] Substantial claim → an independent / mechanism-diverse route (often a fresh agent) agreed.
-- [ ] Any **disputed verdict** escalated to a **blinded third party** required to run a check neither side ran (§4b) — not settled by argument between the claimant and the refuter.
+- [ ] Any disputed verdict escalated to a blinded third party required to run a check neither side ran (§4b), not settled by argument between the claimant and the refuter.
 - [ ] Campaign mode: the correctness suite (`tests/correctness_checks.py`) is green, or explicitly N/A — a red suite blocks promotion.
-- [ ] Campaign mode: the **verdict artifact** `results/verdicts/<id>.json` written (with a named refuter) — the DISCOVERIES hook and the loop driver consume it, and the entry must cite it.
-- [ ] A **kill-claim** got the negative-refuter checklist (implementation error / strawman / insufficient search / mechanism) and a `kill_tier` — INCONCLUSIVE kills queue a fix-and-rerun, never graduate.
-- [ ] **Counted the levers that moved.** More than one → `confounded_levers` + a `disentangler` recorded; the causal claim graded QUESTIONABLE ASSUMPTION (the empirical one may still promote); a negative kills only the **combination** — every member INCONCLUSIVE, still untried, checked for **masking** (one lever helping while another hurts more).
-- [ ] Reproduction mode chosen per the ADR-0008 tier (threshold from `configs/loop.json` when present); above-threshold verification still ran the cheapest discriminating spot-check — never zero re-execution.
+- [ ] Campaign mode: the verdict artifact `results/verdicts/<id>.json` written (with a named refuter) — the DISCOVERIES hook and the loop driver consume it, and the entry must cite it.
+- [ ] A kill-claim got the negative-refuter checklist (implementation error / strawman / insufficient search / mechanism) and a `kill_tier` — INCONCLUSIVE kills queue a fix-and-rerun, never graduate.
+- [ ] Counted the levers that moved. More than one → `confounded_levers` + a `disentangler` recorded; the causal claim graded QUESTIONABLE ASSUMPTION (the empirical one may still promote); a negative kills only the combination — every member INCONCLUSIVE, still untried, checked for masking (one lever helping while another hurts more).
+- [ ] Reproduction mode chosen per the cost tier (threshold from `configs/loop.json` when present); above-threshold verification still ran the cheapest discriminating spot-check — never zero re-execution.
 - [ ] Verdict graded; load-bearing assumption named; disputes recorded append-only (campaign mode).

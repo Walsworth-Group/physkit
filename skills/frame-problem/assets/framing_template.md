@@ -1,15 +1,15 @@
 # Framing — <problem in one line>
 
 > The durable frame for this problem, produced by `frame-problem` once the goal was clear. Update it as
-> understanding changes (it's living). In a campaign, its parts graduate: inventory → `PHYSICS.md`,
+> understanding changes. In a campaign its parts graduate: inventory → `PHYSICS.md`,
 > goal + steps → `PROJECT_ORIENTATION.md`, verification plan → the verification gate.
 
 **Date:** <YYYY-MM-DD> · **Status:** draft / confirmed-with-user / in-progress
 
 ## Goal & the decision it drives
 - **Goal:** <what we're trying to find/predict/optimize, concretely>
-- **Decision it serves:** <what this answer is for — what it lets someone decide or do>
-- **What is explicitly NOT claimed / out of scope:** <…>
+- **Decision it serves:** <what this answer lets someone decide or do>
+- **What is not claimed / out of scope:** <…>
 
 ## Physics inventory
 A-priori bound on the answer (ceiling / floor / order of magnitude): **<… — how derived>**
@@ -25,19 +25,19 @@ Domain of validity: **<…>** · Key assumptions: **<…>**
 
 ## Verification plan — how we'll know the answer is right (decided up front)
 Mark each as **V** (verification: solving the equations right) or **Val** (validation: solving the right
-equations, on held-out/independent data). *Verify before validate; calibration ≠ validation.*
+equations, on held-out/independent data). Verify before validate; calibration ≠ validation.
 
 - [ ] (V) Dimensional / units sanity — run first.
 - [ ] (V) Analytic / closed-form limit reproduced: <which limit>.
 - [ ] (V) Conservation / symmetry invariant holds: <which>.
-- [ ] (V) Numerical convergence demonstrated: <refine what until stable> *(if discretized)*.
-- [ ] (V) Independent-method parity: <second method that should agree>.
+- [ ] (V) Numerical convergence demonstrated: <refine what until stable> (if discretized).
+- [ ] (V) Independent-method parity: <second method that must agree>.
 - [ ] (Val) Comparison to data / benchmark: <which, with uncertainty on both sides>.
-- [ ] Application-specific checks / known gotchas: <field-standard checks for THIS problem>.
+- [ ] Application-specific checks / known gotchas: <field-standard checks for this problem>.
 
 ## Decomposition — steps, with checkpoints where it matters
-Build the simplest sufficient version first; add deferred effects one at a time; one lever per step by
-default (several only deliberately — note which steps do it and why).
+Build the simplest sufficient version first; add deferred effects one at a time, naming what each
+step changes. Adding several at once is legitimate; say which, and why.
 
 | # | Step (what it produces) | Depends on | Check at this step? |
 |---|---|---|---|

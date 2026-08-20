@@ -15,67 +15,67 @@ review: living
 
 # IP & attribution — cite and adapt, never reproduce
 
-The kit's provenance ethic and copyright discipline point the same direction: **a capability is trustworthy
-only when it is keyed to a real source, and shippable only when what shipped is *yours* — the cited idea,
-re-expressed, never the source's expression, copied.** Ideas, methods, equations, and algorithms are not
-copyrightable; their *expression* — the prose, the code, the figures — is. So the rule is one line:
+A capability is trustworthy only when it is keyed to a real source. It is shippable only when what ships
+is yours: the cited idea, re-expressed, not the source's expression copied. Ideas, methods, equations,
+and algorithms are not copyrightable; their expression is — the prose, the code, the figures. One rule
+follows:
 
 > **Cite + adapt, never reproduce.** Learn the principle from the source, re-implement or re-express it
 > yourself, and key the result to a real citation surfaced to the user.
 
-This is a discipline doc, not legal advice — where real money or publication is at stake, the posture is
-confirmed by a human (open decision #8: cite-and-adapt-only for the capability library).
+This is a discipline doc, not legal advice. Where money or publication is at stake, a human confirms the
+cite-and-adapt-only posture before the material ships.
 
 ## The three named risk patterns
 
-Each of these was called out explicitly before any capability work began — check every ingest and every
-build against all three:
+Check every ingest and every build against all three.
 
-- **Bootleg-source ingestion.** A scanned textbook or paper PDF of unclear provenance (the canonical
-  example: a bootleg Levitt) must not become KB raw material. The KB already makes provenance mandatory at
-  ingest — *how obtained* is part of the provenance record, not a nicety. A source you cannot legitimately
-  access is a source the kit does not ingest; content already derived from one is quarantined, not shipped.
-- **Port vs. re-implementation.** Translating a package's source line-by-line into another language (e.g. a
-  `SpinDynamica` → Python *port*) produces a derivative work of that code — the language changed, the
-  expression didn't. The legitimate path is a **re-implementation from cited principles**: work from the
-  published equations, the documented algorithm, the paper — not from the source code — and say so in the
-  capability's provenance. If you have read the source code, you are no longer clean; prefer building from
-  the paper first and using the package only as an independent *check* of your output.
-- **Scaffolding borrow.** Third-party agent scaffolding — Anthropic's plugin examples, another project's
-  skills or prompt text — carries its own license. Check it before adapting; take the *pattern*, rewrite
-  the prose; never wholesale-copy another plugin's text into shipped kit content.
+- **Bootleg-source ingestion.** A scanned textbook or paper PDF of unclear provenance must not become
+  knowledge-base raw material. Provenance is mandatory at ingest, and *how obtained* is part of that
+  record. A source you cannot legitimately access is a source the kit does not ingest. Content already
+  derived from one is quarantined, not shipped.
+- **Port vs. re-implementation.** Translating a package's source line by line into another language
+  produces a derivative work of that code: the language changed, the expression did not. The legitimate
+  path is a **re-implementation from cited principles**. Work from the published equations, the documented
+  algorithm, and the paper, not from the source code, and say so in the capability's provenance.
+  Reading the source code forfeits that independence, so prefer building from the paper first and using
+  the package only as an independent check of your output.
+- **Scaffolding borrow.** Third-party agent scaffolding carries its own license: published plugin
+  examples, another project's skills or prompt text. Check the license before adapting. Take the pattern
+  and rewrite the prose. Never copy another plugin's text wholesale into shipped kit content.
 
 ## The provenance gate for capability work
 
-Every capability built from external material (the C1–C4 cluster: PDF ingests, Zotero sync, the
-physics/math capability library, user drop-ins) passes through the KB's existing source-keying — no new
-machinery, just no exceptions:
+Every capability built from external material (PDF ingests, reference-manager sync, the physics/math
+capability library, user drop-ins) passes through the knowledge base's existing source-keying. No new
+machinery, and no exceptions:
 
-1. **Every capability skill is keyed to a real citation** — a resource `@key` in the KB registry
-   (`wiki/registry.md`), with full provenance (source, author, date, **how obtained**) recorded at ingest.
-2. **The provenance is surfaced to the user**, not buried: a capability answers *"per `@key`"*, so the user
-   always knows whose method they are using and can go to the source.
-3. **Verbatim material is minimal and attributed** — a brief quote with attribution where the exact wording
-   matters, or nothing; figures and long passages are never reproduced, they are cited.
-4. **The citation is real** — it resolves to the actual paper claimed (`/physkit:cite-check`); a capability
-   keyed to an unverifiable citation is not shippable.
+1. **Every capability skill is keyed to a real citation** — a resource `@key` in the knowledge-base
+   registry, with full provenance (source, author, date, *how obtained*) recorded at ingest.
+2. **The provenance is surfaced to the user**, not buried. A capability answers *"per `@key`"*, so the
+   user knows whose method they are using and can go to the source.
+3. **Verbatim material is minimal and attributed** — a brief quote with attribution where the exact
+   wording matters, or nothing. Figures and long passages are never reproduced; they are cited.
+4. **The citation is real** — it resolves to the actual paper claimed (`/physkit:cite-check`). A
+   capability keyed to an unverifiable citation is not shippable.
 
 ## Pre-ship checklist
 
-Before any capability (or the library) ships or is monetized, every box checks:
+Before any capability, or the library, ships or is monetized, every box checks:
 
 - [ ] Every capability keyed to a real, resolvable citation — `cite-check` passes on the set.
 - [ ] No verbatim copyrighted text beyond brief, attributed quotes; no reproduced figures.
-- [ ] No ported code: every implementation traceable to cited principles (paper/spec), and its provenance
-      says which; any consulted package used only as an independent check, and named.
-- [ ] Every borrowed scaffold/template/prompt pattern license-checked, with attribution where required.
-- [ ] No content derived from a source of unclear or illegitimate provenance (the *how obtained* field is
-      filled and clean for every ingested source involved).
-- [ ] The posture (cite-and-adapt-only) confirmed by decision #8 before monetizing.
+- [ ] No ported code: every implementation traceable to cited principles (paper or spec), and its
+      provenance says which; any consulted package used only as an independent check, and named.
+- [ ] Every borrowed scaffold, template, or prompt pattern license-checked, with attribution where
+      required.
+- [ ] No content derived from a source of unclear or illegitimate provenance: the *how obtained* field is
+      filled and clean for every ingested source involved.
+- [ ] The cite-and-adapt-only posture confirmed by a human before monetizing.
 
 ## Pointers
 
-`knowledge-base/CLAUDE.md` (provenance mandatory at ingest; `raw/` immutable); the `add-new-resource` /
-`ingest-transcript` skills (the ingest procedure that records *how obtained*); `/physkit:cite-check` (every
-key resolves to the real paper); `export-bibtex` (the registry→bibliography path that keeps `@keys`
-honest); open decision #8 (the human confirmation of this posture before shipping/monetizing).
+The knowledge base's own rules govern the ingest half: provenance mandatory at ingest, raw sources
+immutable, *how obtained* recorded by the ingest procedure. `/physkit:cite-check` confirms every key
+resolves to the paper claimed. The registry-to-bibliography export keeps `@keys` honest. A human confirms
+the cite-and-adapt-only posture before anything built this way ships or is monetized.

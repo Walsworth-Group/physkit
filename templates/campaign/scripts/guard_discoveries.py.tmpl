@@ -9,8 +9,8 @@ refuter recorded a promotable verdict artifact in results/verdicts/<id>.json:
 For a NEGATIVE (kill-claim) finding, "kill_tier" is "REFUTED" or "EVIDENCE_AGAINST" (an "INCONCLUSIVE"
 kill never graduates - it queues a fix-and-rerun unit instead).
 
-Three promotion surfaces, two strictness tiers (merged design, 2026-08-08 - the citation protocol and
-the surface/recency protocol were built independently on two branches and are complementary):
+Three promotion surfaces, two strictness tiers. The citation rule and the surface/recency rule are
+independent and complementary - a write must satisfy both, not either:
   * results*/DISCOVERIES.md writes - SUBJECT-MATCHED + FAIL-CLOSED: the entry must cite its verdict
     file by name (incl. REVISES/retraction entries - an invalidation is as load-bearing as a promotion);
     the cited artifact must be CONFIRMED with a named refuter and a graduating kill tier. Any guard
@@ -24,11 +24,11 @@ the surface/recency protocol were built independently on two branches and are co
     results/gate_failures.log (campaign-status hard-fails on a non-empty log); a refuterless verdict is a
     clean, recoverable DENY (fix the verdict or run verify, then retry), not a bypass.
 Both surfaces also require an AFFIRMATIVE GREEN correctness suite (results/correctness_state.json, written
-by run_campaign) - not merely 'not red' (EH-9). RED, EMPTY (a freshly-scaffolded all-skip suite: zero active
+by run_campaign) - not merely 'not red'. RED, EMPTY (a freshly-scaffolded all-skip suite: zero active
 checks), ERROR, ABSENT, and a never-run (no state file) all block, because none is evidence the machinery is
 right - deleting/never-finishing the suite was the trivial silent bypass. ABSENT/EMPTY are excused only by an
 explicit tests/CORRECTNESS_NA.md (a recorded N/A decision, never a silent gap). A green is further rejected
-if STALE - recorded against a different FROZEN/core hash than the code on disk now (EH-8; the file set is
+if STALE - recorded against a different FROZEN/core hash than the code on disk now (the file set is
 scripts/frozen_core.py). No finding built on a red/empty/absent suite, or on a green that no longer matches
 the code it certified, is trustworthy.
 
@@ -74,10 +74,62 @@ def _campaign_root(fp: Path) -> Path | None:
     return None
 
 
+def _env_campaign_root() -> Path | None:
+    """The campaign root from CLAUDE_PROJECT_DIR, which Claude Code sets to the tree that wired this hook.
+
+    Used when the written path cannot resolve a root (the unparseable-stdin fail-open has no path at all).
+    """
+    d = os.environ.get("CLAUDE_PROJECT_DIR", "").strip()
+    if not d:
+        return None
+    p = Path(d)
+    return p if (p / "scripts").is_dir() and (p / "configs").is_dir() else None
+
+
+def _is_discoveries_surface(fp: Path | None) -> bool:
+    """True for a campaign's own `results*/DISCOVERIES*.md` — basename-matched, parent-scoped.
+
+    This used to be `if "DISCOVER" in fp_str.upper()`, a substring test over the whole path, which was
+    wrong in BOTH directions:
+
+    * OVER-selected. Any path containing "discover" hit the promotion gate — `scripts/discover_peaks.py`
+      was denied, as would anything under a directory named for the `discovery-loop` skill. A gate that
+      blocks ordinary source writes teaches agents to route around it.
+    * UNDER-selected. Renaming the ledger silently disabled hard gate #1 — no error, no log, just no
+      gate. The recon flagged this as the highest-blast-radius anchor in the kit.
+
+    Matches `DISCOVERIES*.md` (not exactly `DISCOVERIES.md`) so a suffixed ledger stays gated, which is
+    the same glob `validate_campaign.py` requires.
+
+    SCOPE, stated rather than left implicit: the PROJECT-level `<project>/DISCOVERIES.md` is NOT gated
+    here. It never really was — `_campaign_root` cannot resolve above a campaign, so every project-level
+    write failed with "the correctness suite is MISSING" and could not be satisfied by any action. An
+    unsatisfiable deny is not protection. Gating the project ledger needs a check that knows about
+    project roots; V6 owns it.
+    """
+    if fp is None or not fp.name.upper().endswith(".MD"):
+        return False
+    if not fp.name.upper().startswith("DISCOVERIES"):
+        return False
+    return fp.parent.name.lower().startswith("results")
+
+
 def _note_bypass(root: Path | None, reason: str):
-    """Fail-open must never be silent: record it so campaign-status can hard-fail on it."""
+    """Fail-open must never be silent: record it so campaign-status can hard-fail on it.
+
+    The record MUST land in the campaign that was bypassed. It used to fall back to Path(".") -- the
+    process's cwd -- so a bypass with no resolvable root wrote results/gate_failures.log wherever the hook
+    happened to be invoked from. campaign-status reads that log INSIDE the campaign, so the one path built
+    to keep a fail-open non-silent was the path that could silence it; worse, the stray log makes an
+    UNRELATED tree hard-fail on a bypass that never concerned it. So: resolve from CLAUDE_PROJECT_DIR
+    before giving up, and if no campaign root can be established, write nothing and say so on stderr.
+    """
+    root = root or _env_campaign_root()
+    if root is None:
+        print(f"guard_discoveries FAIL-OPEN (no campaign root; not logged): {reason}", file=sys.stderr)
+        return
     try:
-        log = (root or Path(".")) / "results" / "gate_failures.log"
+        log = root / "results" / "gate_failures.log"
         log.parent.mkdir(parents=True, exist_ok=True)
         with open(log, "a", encoding="utf-8") as f:
             f.write(f"{datetime.now(timezone.utc).isoformat()}\tFAIL-OPEN\t{reason}\n")
@@ -128,7 +180,7 @@ def _has_na_waiver(root: Path | None) -> bool:
 
 
 def correctness_blocks_promotion(root: Path | None) -> str | None:
-    """Deny-reason if the correctness suite does NOT green-light a promotion, else None (EH-9).
+    """Deny-reason if the correctness suite does NOT green-light a promotion, else None.
 
     Promotion requires an AFFIRMATIVE GREEN - not merely 'not red'. A freshly-scaffolded all-skip suite
     (EMPTY), a missing suite (ABSENT), an unreadable/anomalous state (ERROR), and a never-run state (no file)
@@ -169,12 +221,12 @@ def _current_core_hash(root: Path | None) -> str | None:
 
 def green_is_stale(root: Path | None) -> bool:
     """True if the recorded correctness state is GREEN but was recorded against a DIFFERENT core than the code
-    on disk now (EH-8) - a stale green must not gate a promotion (edit the FROZEN scorer, then promote an old
+    on disk now - a stale green must not gate a promotion (edit the FROZEN scorer, then promote an old
     result). Compares correctness_state.json's stored core_hash to a freshly computed one.
 
     Fail-SAFE: any inability to judge (no state, not green, no stored hash, frozen_core missing/unimportable,
-    core unreadable) returns False. Staleness is an ADDED protection layer, so an error degrades to pre-EH-8
-    behavior - it never over-blocks a legitimate promotion."""
+    core unreadable) returns False. Staleness is an ADDED protection layer, so an error degrades to the
+    behavior from before the check existed - it never over-blocks a legitimate promotion."""
     if root is None:
         return False
     st = _read_correctness(root)
@@ -184,7 +236,7 @@ def green_is_stale(root: Path | None) -> bool:
         return False                       # non-green is owned by correctness_blocks_promotion, not staleness
     recorded = st.get("core_hash")
     if not recorded:
-        return False                       # pre-EH-8 state carries no hash -> cannot judge staleness
+        return False                       # an older state carries no hash -> cannot judge staleness
     current = _current_core_hash(root)
     if not current:
         return False                       # cannot hash the core now -> do not enforce
@@ -210,14 +262,19 @@ def _check_verdict(path: Path, name: str) -> str | None:
                 "(PROVISIONAL/QUESTIONABLE stay working results with their caveat inline)")
     tier = v.get("kill_tier")
     if tier:
-        tier_norm = str(tier).strip().upper().replace(" ", "_")
+        # Normalize BOTH separators. The vocabulary is unchanged -- only REFUTED and EVIDENCE_AGAINST
+        # graduate -- but the kit spelled the tier three ways and only one parsed: the definition writes
+        # "EVIDENCE AGAINST" (space, accepted), the guard's own docstring "EVIDENCE_AGAINST", and
+        # PLANNER_PROMPT "EVIDENCE-AGAINST" (hyphen), which this check REJECTED. An agent that copied
+        # the wording out of its own prompt had a legitimate kill denied over a typographic dash.
+        tier_norm = str(tier).strip().upper().replace(" ", "_").replace("-", "_")
         if tier_norm not in {"REFUTED", "EVIDENCE_AGAINST"}:
             return (f"verdicts/{name} kill_tier '{tier}' cannot graduate - an INCONCLUSIVE kill "
                     "(cause unattributed) queues a fix-and-rerun unit; it does not prune")
     # `or ""` NOT `, ""`: an explicit JSON null ("refuter": null) makes .get return None, and str(None)
     # is the NON-EMPTY string "None" - which passed this check and promoted. That is exactly what a model
     # leaves behind when it copies the verdict stub without filling the field, and it was observed live
-    # (CS-3-V Tier 3a: a real worker promoted a current-best on refuter:null). Missing key, "", "   ",
+    # (a real worker promoted a current-best on refuter:null). Missing key, "", "   ",
     # null, and false must all deny; only a real id promotes.
     if not str(v.get("refuter") or "").strip():
         return (f"verdicts/{name} names no refuter - the verdict must come from an independent "
@@ -283,8 +340,8 @@ def main():
     fp = Path(fp_str) if fp_str else None
     root = _campaign_root(fp) if fp else None
 
-    # ---- surface 1: DISCOVERIES writes - subject-matched, FAIL-CLOSED ----
-    if "DISCOVER" in fp_str.upper():
+    # ---- surface 1: results*/DISCOVERIES*.md writes - subject-matched, FAIL-CLOSED ----
+    if _is_discoveries_surface(fp):
         try:
             suite_reason = correctness_blocks_promotion(root)
             if suite_reason:
@@ -294,7 +351,7 @@ def main():
                 _deny("DISCOVERIES gate: the correctness suite's green was recorded against a DIFFERENT "
                       "version of the FROZEN/core code than what is on disk now (scripts/frozen_core.py) - a "
                       "green does not survive an edit to the code it certified. Re-run the experiment (or the "
-                      "suite via run_campaign) so it validates the current core, then promote. Hard gate #1 / EH-8.")
+                      "suite via run_campaign) so it validates the current core, then promote. Hard gate #1.")
                 return
             refs = sorted(set(VERDICT_REF_RE.findall(_written_text(ti))))
             if not refs:
@@ -335,7 +392,7 @@ def main():
         if green_is_stale(root):
             _deny("promotion gate: the correctness suite's green was recorded against a DIFFERENT version of "
                   "the FROZEN/core code than what is on disk now (scripts/frozen_core.py) - re-run the suite "
-                  "(run_campaign) so it validates the current core before marking a current-best. EH-8.")
+                  "(run_campaign) so it validates the current core before marking a current-best.")
             return
         if recent_promotable_verdict(root):
             _allow()

@@ -1,14 +1,14 @@
 # Lineage — {{PROJECT_TITLE}}
 
-The project's master index: **every campaign and session, what changed, and what it found**, in one legible
-place. Append-only — never delete a row; supersede it (archived campaigns stay listed). This is the first thing
-a resuming agent (or a colleague) reads. Each row's `@key` links to its knowledge-base resource.
+The project's master index: every campaign and session, what changed, and what it found, in one place.
+Append-only. Never delete a row; supersede it. Archived campaigns stay listed. A resuming agent or
+colleague reads this first. Each row's `@key` links to its knowledge-base resource.
 
 ## Campaigns
 
 `status`: active · superseded · archived(forked) · done.  `approach`: a free tag (e.g. `cnn`, `sims`, `fit`).
-A **fork** (an invalidating update — see project `CLAUDE.md`) archives the source campaign and starts a fresh
-one; both appear here, with the fork noted.
+A fork is an invalidating update, defined in the project `CLAUDE.md`. It archives the source campaign and
+starts a fresh one. Both appear here, with the fork noted.
 
 | # | Campaign | Date | Approach | Frozen metric | What changed from predecessor | Headline result | Verified discoveries | @KB-key | Status |
 |---|---|---|---|---|---|---|---|---|---|
@@ -16,9 +16,9 @@ one; both appear here, with the fork noted.
 
 ## Sessions (ad-hoc / non-campaign)
 
-One-off exploration, debugging, or analysis with **no frozen metric** (see the campaign-vs-session rule in the
-project `CLAUDE.md`). Findings are recorded at their **true rigor tier** — a session finding is NOT a verified
-DISCOVERY unless it passed `verify`.
+One-off exploration, debugging, or analysis with no frozen metric. The campaign-vs-session rule is in the
+project `CLAUDE.md`. Record findings at their true rigor tier: a session finding is not a verified DISCOVERY
+unless it passed `verify`.
 
 | Date | Session (`sessions/<date>_<slug>/`) | What it did | What it found (+ tier) | @KB-key | Promoted to |
 |---|---|---|---|---|---|
@@ -27,8 +27,8 @@ _— none yet —_
 
 ## Version bumps within a campaign
 
-A routine fix that does **not** invalidate prior findings (a data/metric correction that preserves rankings) is
-a version bump inside its campaign — logged here as a one-line change-record, not a new campaign. One line each,
-in the form `<campaign>` · `<date>` · `metric_version 1→2` · `<why>`:
+A routine fix that does not invalidate prior findings, such as a data or metric correction that preserves
+rankings, is a version bump inside its campaign. Log it here as a one-line change-record, not a new
+campaign. One line each, in the form `<campaign>` · `<date>` · `metric_version 1→2` · `<why>`:
 
 _— none yet —_

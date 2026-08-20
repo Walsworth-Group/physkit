@@ -5,130 +5,133 @@ description: Launch, monitor, and steer a scaffolded autoresearch campaign's sup
 
 # run-campaign — the loop's cockpit
 
-The first real supervised campaign exposed the operator gap: launching meant hand-typing python commands
-(false starts included), the running loop was a silent black box, and the only way to redirect it was to
-kill it. The fix is NOT to go back to executing the loop in an interactive session — that mode's failure
-record is why the driver exists (unbounded context pushing the charter out of the window, docs never
-re-read, premature stops that prompting only sometimes fixed, verification used sparingly until gates
-became code). The fix is a division of labor: **the deterministic driver executes the loop with
-fresh-context workers; this session is the cockpit around it** — launcher, monitor, and intermediary.
+The loop is executed by the deterministic driver, not by this session. An interactive session that runs
+the loop itself accumulates context until the campaign definition falls out of the window, stops re-reading the
+docs, stops prematurely in ways prompting does not reliably fix, and uses verification sparingly
+unless the gates are enforced in code. Hence the division of labor: the driver executes the loop with
+fresh-context workers, and this session is the cockpit around it — launcher, monitor, and intermediary.
 
-**Concierge, never executor.** Your write surface, exactly: (1) `results/inbox/` notes; (2) the
-launch/stop controls (`--supervise` process, `results/STOP`); (3) **launch-config repairs only**
-(`configs/loop.json` knobs, `AUTORESEARCH_AGENT_CMD`, a missing tool on PATH) — configs are user-owned,
-not ledgers. You never run a loop unit, and you never edit the ledgers (`results/queue.json`,
-scoreboard, logbook, journal, DISCOVERIES) or anything FROZEN **on your own judgment** — where a repair
-to one of those is genuinely needed (a corrupt queue, a resolved ESCALATE), you propose the exact edit
-and apply it only on the user's explicit go-ahead. The science happens in the driver's workers;
-everything you relay travels through artifacts, so this session holds no scientific state and is
-disposable by design. While the driver runs, **idle cheaply** — watch, relay, answer; manufactured
-filler work burns agent budget without buying the campaign anything.
+**Concierge, never executor.** Your write surface, in full: (1) `results/inbox/` notes; (2) the
+launch/stop controls (the `--supervise` process and `results/STOP`); (3) launch-config repairs only
+(`configs/loop.json` knobs, `AUTORESEARCH_AGENT_CMD`, a missing tool on PATH), because configs are
+user-owned and are not ledgers. Never run a loop unit. Never edit the ledgers (`results/queue.json`,
+scoreboard, logbook, journal, DISCOVERIES) or anything FROZEN on your own judgment. Where a repair to
+one of those is needed (a corrupt queue, a resolved ESCALATE), propose the exact edit and apply it only
+on the user's explicit go-ahead. The science happens in the driver's workers, and everything you relay
+travels through artifacts, so this session holds no scientific state and is disposable by design. While
+the driver runs, idle cheaply: watch, relay, answer. Manufactured filler work burns agent budget without
+buying the campaign anything.
 
-**Where this runs.** A session opened **in the campaign root** — the campaign `CLAUDE.md` and hooks bind
-only there (`new-campaign` Step 5's fresh-session rule). The Stop hook will not fight you: while the
-driver's `results/.driver_alive` sentinel is fresh, the hook stands down for attended sessions like this
-one; campaign-level loop persistence is the driver's job.
+**Where this runs.** A session opened in the campaign root. The campaign `CLAUDE.md` and hooks bind only
+there (`new-campaign` Step 5's fresh-session rule). While the driver's `results/.driver_alive` sentinel
+is fresh, the Stop hook stands down for attended sessions like this one; campaign-level loop persistence
+is the driver's job.
 
 ## When to invoke
-- Right after `new-campaign` finishes and the setup work (metric, selftest, baseline) is done — the
-  handoff's destination.
+- Right after `new-campaign` finishes and the setup work (metric, selftest, baseline) is done. This is
+  the handoff's destination.
 - "Start / launch / restart the loop", "resume the campaign."
 - Process questions mid-run: "is it still running?", "what is it doing?", "why did it stop?"
 - "Tell the loop to …" — any steering the user wants relayed without killing the run.
-- NOT for substance ("where do we stand", plateau, hygiene): compose `campaign-status` for those — it
+- Not for substance ("where do we stand", plateau, hygiene): compose `campaign-status` for those. It
   reads the ledgers; you read the process.
 
 ## Step 0 — learn the campaign
-Read `docs/charter.md` §"How the loop runs" (the contract this cockpit operates), `configs/loop.json`
-(the knobs: timeouts, retries, `driver.*` — user-owned, hot-reloaded by the driver), and the current
-state: `results/queue.json` (`next`, `shelved` — note any `kind: "operational"` entries and their
+Read the campaign's `CLAUDE.md` and follow its **§Where things live** table to the loop contract this
+cockpit operates (`roles/worker.md` §How the loop runs — supervisor mode, and `CLAUDE.md` HARD GATE 5
+for how the loop ends; no table means the campaign predates it — read `docs/charter*.md` directly), `configs/loop.json`
+(the knobs: timeouts, retries, `driver.*`, user-owned and hot-reloaded by the driver), and the current
+state: `results/queue.json` (`next`, `shelved`; note any `kind: "operational"` entries and their
 `failures`), the newest `results/diagnostics/supervise_*.log` if one exists (how the last run ended),
-and `results/ESCALATE.md` if present (a fork already awaits the user — surface it first).
+and `results/ESCALATE.md` if present. An `ESCALATE.md` means a fork already awaits the user: surface it
+first.
 
 ## Procedure
 
 ### 1. Preflight
-Run the driver's own checks and translate, never reimplement them (use the campaign's python — the same
-command the `.claude/settings.json` hooks use; e.g. `py -3` on Windows):
+Run the driver's own checks and translate them; never reimplement them. Use the campaign's python, the
+same command the `.claude/settings.json` hooks use (`py -3` on Windows, for example):
 ```
 python scripts/run_campaign.py --preflight
 ```
 Every failure line names its fix. Apply the launch-config ones yourself (an unfilled `loop.json` knob, a
-stale `AUTORESEARCH_AGENT_CMD`, an agent CLI not on PATH); surface substantive ones to the user — an
-unimplemented metric is setup work (point back at the `new-campaign` handoff list), and a missing
-`results/`/`charter.md`/`scoreboard.tsv` means you are not in a scaffolded campaign root at all (fix the
-directory, don't fabricate the tree). `--smoke` adds one real spawn when the user wants the full dress
-rehearsal (costs a model call). Green preflight → launch.
+stale `AUTORESEARCH_AGENT_CMD`, an agent CLI not on PATH). Surface substantive ones to the user: an
+unimplemented metric is setup work, so point back at the `new-campaign` handoff list, and a missing
+`results/`/`campaign.md`/`roles/worker.md`/`scoreboard.tsv` (the names the preflight itself reports — quote what it
+printed, don't translate it) means you are not in a scaffolded campaign root at all. Fix the
+directory; do not fabricate the tree. `--smoke` adds one real spawn when the user wants the full dress
+rehearsal, at the cost of a model call. Green preflight → launch.
 
 ### 2. Launch
-Start the driver as a **background shell process** from the campaign root and note its log file:
+Start the driver as a background shell process from the campaign root and note its log file:
 ```
 python scripts/run_campaign.py --supervise
 ```
-This is an OS process you background in your shell, **not a background subagent** — the charter's
-never-background-a-solve rule is about *solver/agent work losing its heartbeat*; the driver is the thing
-that *watches* heartbeats, and it keeps its own decision trace at
-`results/diagnostics/supervise_<ts>.log`. Confirm liveness (the launch banner + `results/.driver_alive`
+This is an OS process you background in your shell, not a background subagent. The worker role's
+never-background-a-solve rule covers solver and agent work losing its heartbeat; the driver is the
+process that watches heartbeats, and it keeps its own decision trace at
+`results/diagnostics/supervise_<ts>.log`. Confirm liveness (the launch banner and `results/.driver_alive`
 appearing), tell the user the loop is running and where the log lives, then go quiet.
 
 ### 3. Monitor
-On request (or a periodic check-in), read — never re-derive:
+On request, or at a periodic check-in, read; never re-derive:
 - the driver log tail: current unit, rendered worker feed, planner triggers, accepted-unit count;
 - `results/queue.json`: `accepted_units`, `last_accept_utc`, what's queued/shelved and why.
 Report process facts in plain language ("worker on exp007, third unit this run; one unit shelved
-operational overnight — spawn timeout, planner will review"). **You own the progress alarm** (CORE:
-monitor progress, not liveness — a loop can be alive, logging, and doing zero science): if
-`accepted_units` sits flat across real wall-clock (the charter's plateau knobs are the scale), raise it
-unprompted — you are the only session watching. For anything about the *science* (is the best real, has
-progress plateaued for a physics reason, journal hygiene) invoke `campaign-status` — do not answer
+operational overnight, spawn timeout, planner will review"). You own the progress alarm. CORE requires
+monitoring progress rather than liveness, because a loop can be alive, logging, and doing zero science:
+if `accepted_units` sits flat across real wall-clock (`configs/loop.json` §plateau sets the scale), raise
+it unprompted, since no other session is watching. For anything about the science (is the best real, has
+progress plateaued for a physics reason, journal hygiene) invoke `campaign-status`. Do not answer
 substance from a process log.
 
 ### 4. Relay (the inbox)
 A user request for the loop becomes a note in `results/inbox/` (any `.md` filename):
-- Steering, corrections, context, priorities → inbox (create the folder if a pre-SV campaign lacks it).
+- Steering, corrections, context, priorities → inbox (create the folder if the campaign lacks it).
   The driver injects it verbatim into the next worker/planner prompt and archives it; workers must
-  acknowledge it in the journal — check that they did, and tell the user when their note has been
-  picked up.
-- Write the user's *intent*, attributed and dated; don't editorialize. One note per topic.
-- Escalation-worthy content is different: if the user is *answering* an ESCALATE fork, relay their
-  decision — on their explicit instruction, record it and delete `results/ESCALATE.md`, then relaunch.
-  If the user wants the loop *stopped*, that is Step 6, not a note.
+  acknowledge it in the journal. Check that they did, and tell the user when their note has been picked
+  up.
+- Write the user's intent, attributed and dated. Do not editorialize. One note per topic.
+- Escalation-worthy content is different. If the user is answering an ESCALATE fork, relay their
+  decision; on their explicit instruction, record it and delete `results/ESCALATE.md`, then relaunch.
+  If the user wants the loop stopped, that is Step 6, not a note.
 
 ### 5. Halts
-The driver halts loudly and says why — classify from the log tail + queue before proposing anything:
-- **Operational shelvings** (`kind: "operational"`) did NOT halt the loop — mention them, the planner
+The driver halts loudly and says why. Classify from the log tail and the queue before proposing anything:
+- **Operational shelvings** (`kind: "operational"`) did not halt the loop. Mention them; the planner
   handles revival.
-- **SYSTEMIC halt** (N consecutive operational failures): environment problem — check the agent CLI,
-  credentials, disk, the shelved units' `failures` records; fix, then relaunch on the user's go-ahead.
-- **Disk-floor halt**: free space fell below this campaign's floor, so the driver stopped *before* a unit
+- **SYSTEMIC halt** (N consecutive operational failures): an environment problem. Check the agent CLI,
+  credentials, disk, and the shelved units' `failures` records; fix, then relaunch on the user's
+  go-ahead.
+- **Disk-floor halt**: free space fell below this campaign's floor, so the driver stopped before a unit
   could write half a save-set. Report how much is free and what one unit costs (`configs/loop.json`
-  `unit_cost.typical_disk_mb`), then offer the real options — free space, move the tree to a larger
-  volume, or apply the retention plan in `docs/protocols/artifacts.md` (dropping regenerable bulk
-  artifacts, never the permanent record, and only with the user's confirmation).
-- **Integrity halt**: `ESCALATE.md` (surface the fork verbatim — this is the user's decision, not
+  `unit_cost.typical_disk_mb`), then offer the options: free space, move the tree to a larger volume, or
+  apply the retention plan in `roles/worker.md`. That plan drops regenerable bulk artifacts,
+  never the permanent record, and only with the user's confirmation.
+- **Integrity halt**: `ESCALATE.md` (surface the fork verbatim; this is the user's decision, not
   yours), corrupt `queue.json` (diagnose, propose the exact JSON repair, apply it only on the user's
-  go-ahead — it is the loop's only memory, and never delete it), queue empty after a planner pass (a
-  stopping decision for the user — the campaign may be done or may need new directions; suggest
+  go-ahead, and never delete it, since it is the loop's only memory), queue empty after a planner pass
+  (a stopping decision for the user, since the campaign may be done or may need new directions; suggest
   `campaign-status` for the evidence).
-- A driver that died with no halt message (crash, reboot): the log just stops; `.driver_alive` goes
-  stale and the Stop hook re-arms. Relaunch is safe — the unit at the queue head resumes.
+- A driver that died with no halt message (crash, reboot): the log just stops, `.driver_alive` goes
+  stale, and the Stop hook re-arms. Relaunch is safe; the unit at the queue head resumes.
 
 ### 6. Stop
-Graceful: create `results/STOP` — the driver honours it at the campaign level and the current unit
-finishes and logs first; confirm the driver exited, then remind the user that deleting the file re-arms
-the loop for the next launch. `Ctrl-C` (or killing the process) is the immediate stop — current unit is
-killed, it stays at the queue head, relaunch resumes it. Stopping is the user's call; never stop the
-loop on your own judgment — if you believe it *should* stop, say so and ask.
+Graceful stop: create `results/STOP`. The driver honours it at the campaign level, and the current unit
+finishes and logs first. Confirm the driver exited, then remind the user that deleting the file re-arms
+the loop for the next launch. `Ctrl-C`, or killing the process, is the immediate stop: the current unit
+is killed, it stays at the queue head, and relaunch resumes it. Stopping is the user's call. Never stop
+the loop on your own judgment; if you believe it should stop, say so and ask.
 
 ## Notes
-- This skill runs no experiments and interprets no results. A mid-tier model is fine for watching and
-  relaying; halt classification and ESCALATE surfacing are judgment calls — don't push those to the
+- This skill runs no experiments and interprets no results. A mid-tier model is sufficient for watching
+  and relaying. Halt classification and ESCALATE surfacing are judgment calls; do not push those to the
   cheapest tier.
-- **If the campaign's Stop hook blocks YOUR end-of-turn** (it stands down while the driver runs, but the
-  campaign is armed and the driver may be down — before launch, after a halt, after a crash): do NOT
-  start executing loop units. The remedy is the block message's own first option — launch/relaunch the
-  driver — or make the stop official (`results/STOP`) if that is the user's intent.
+- If the campaign's Stop hook blocks your end-of-turn (it stands down while the driver runs, but the
+  campaign is armed and the driver may be down: before launch, after a halt, after a crash), do not
+  start executing loop units. The remedy is the block message's own first option: launch or relaunch
+  the driver. If the user's intent is to stop, make the stop official (`results/STOP`) instead.
 - Composition: `campaign-status` for substance (health, plateau, hygiene, consolidation);
   `campaign-review` after the loop is finished; `verify` is the workers' tool, not yours.
-- If this session dies, nothing is lost — the driver doesn't notice, and any fresh session in the
+- If this session dies, nothing is lost. The driver does not notice, and any fresh session in the
   campaign root can pick the cockpit back up with this skill.

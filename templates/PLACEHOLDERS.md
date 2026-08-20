@@ -1,44 +1,46 @@
 # Placeholder Convention — spec for the `new-campaign` setup skill
 
 How the `*.tmpl` files under `templates/campaign/` are filled into a generated campaign. This file is
-**guidance for the setup skill**, not copied into a campaign. The canonical placeholder list at the
-bottom is authoritative: every `{{NAME}}` appearing in any template MUST be listed here, and every
-name listed here MUST be used by at least one template (the Bucket-1 lint checks both directions).
+guidance for the setup skill and is not copied into a campaign. The canonical placeholder list at the
+bottom is authoritative: every `{{NAME}}` appearing in any template must be listed here, and every name
+listed here must be used by at least one template, in both directions, enforced by Tier 0.
+Scope is `kit/templates/`. Tokens in a skill's own assets (`kit/skills/*/assets/`) are
+filled by that skill and documented by it, not here.
 
 ## Syntax
 - **`{{UPPER_SNAKE_CASE}}`** — a substitution the setup skill fills. Names that are plural or end in
-  `_LIST` / `_ROWS` / `_TABLE` / `_FIELDS` / `_NOTES` may expand to **multi-line** content (a bulleted
-  list, table rows, JSON fields). Singular names are short inline phrases.
-- **`[[OPTIONAL — <condition>: … ]]`** — a block included only if `<condition>` holds. May span
-  multiple lines (the closing `]]` sits on its own line). See the delete-vs-keep rule below.
-- **`[PROPOSED]`** — an inline tag on a speculative/optional discipline. The setup skill presents these
-  to the user to **keep or cut**; surviving ones lose the tag, cut ones are deleted.
+  `_LIST` / `_ROWS` / `_TABLE` / `_FIELDS` / `_NOTES` may expand to multi-line content: a bulleted list,
+  table rows, JSON fields. Singular names are short inline phrases.
+- **`[[OPTIONAL — <condition>: … ]]`** — a block included only if `<condition>` holds. May span multiple
+  lines, with the closing `]]` on its own line. See the delete-vs-keep rule below.
+- **`[PROPOSED]`** — an inline tag on a speculative or optional discipline. The setup skill presents these
+  to the user to keep or cut; surviving ones lose the tag, and cut ones are deleted.
 - **`.tmpl` suffix** — marks a file that contains placeholders. Stripped on generation
-  (`charter.md.tmpl` → `docs/charter.md`).
-- **`<NN>`, `<slug>`, `<label>`, `<G>`** in **prose/example** text are literal illustrative
-  placeholders (how filenames look at runtime), NOT substitutions — leave them as-is. Only `{{...}}` is
-  substituted. (`{{NN}}` and `{{SLUG}}` *are* substitutions — they appear in the config templates'
-  `exp_name`.)
+  (`campaign.md.tmpl` → `campaign.md`).
+- **`<NN>`, `<slug>`, `<label>`, `<G>`** in prose or example text are literal illustrative placeholders
+  showing how filenames look at runtime. They are not substitutions; leave them as they are. Only
+  `{{...}}` is substituted. `{{NN}}` and `{{SLUG}}` are substitutions: they appear in the config
+  templates' `exp_name`.
 
 ## Delete-vs-keep rule (no half-resolved files)
-- **`[[OPTIONAL]]` blocks and OPTIONAL-marked files → DELETE when they don't apply.** A ceilings block
-  for a metric with no ceiling, or `dataset.md` for a fixed-dataset campaign, is removed entirely. This
-  keeps the slim core slim.
-- **Universal-but-momentarily-empty sections → KEEP WITH A NOTE, never delete.** A planned-but-unwired
+- **`[[OPTIONAL]]` blocks and OPTIONAL-marked files: delete when they do not apply.** A ceilings block for
+  a metric with no ceiling, or `campaign.md` §Dataset / inputs for a fixed-dataset campaign, is removed
+  entirely. This keeps the slim core slim.
+- **Universal but momentarily empty sections: keep with a note, never delete.** A planned-but-unwired
   guardrail stays in the Decision Metrics section marked `(DEFERRED — wired after <milestone>)`.
 - **Rule of thumb:** part of the universal discipline (metric integrity, verification, FROZEN rules,
-  logging) → keep-with-note; a domain feature simply not present → delete the optional block.
-- **Hard requirement:** a generated file containing any literal `{{...}}`, any unresolved `[[OPTIONAL`,
-  or any leftover `[PROPOSED]` the user didn't rule on is an **ERROR**. The setup skill must scan every
+  logging) means keep-with-note; a domain feature that is not present means delete the optional block.
+- **Hard requirement:** a generated file containing any literal `{{...}}`, any unresolved `[[OPTIONAL`, or
+  any leftover `[PROPOSED]` the user did not rule on is an error. The setup skill must scan every
   generated file and fail loudly if one remains.
 
 ## Filling guidance
-- Pick the closest archetype from `ARCHETYPE_CHEATSHEET.md` first; it tells you the typical metric,
-  levers, FROZEN set, and failure modes to slot in.
-- Fill from the **interview** (goal, metric, physics, data, constraints, compute, time). Where the user
-  defers (e.g. a parameter they'll fit later), write the placeholder's content as an explicit TODO with
-  the deferral noted, not a silent guess.
-- Keep fills clear, explicit, and concise — specific enough to act on without the interview that
+- Pick the closest archetype from `ARCHETYPE_CHEATSHEET.md` first; it names the typical metric, levers,
+  FROZEN set, and failure modes to slot in.
+- Fill from the interview: goal, metric, physics, data, constraints, compute, time. Where the user defers,
+  for example a parameter they will fit later, write the placeholder's content as an explicit TODO with
+  the deferral noted, rather than a silent guess.
+- Keep fills clear, explicit, and concise, and specific enough to act on without the interview that
   produced them.
 
 ---
@@ -65,16 +67,15 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 | `{{METRIC_DEFINITION}}` | The precise definition (in words + units). |
 | `{{FROZEN_SCORER_PATH}}` | Path to the FROZEN file that computes the metric. |
 | `{{METRIC_HARD_BOUNDS}}` | Mathematical bounds (e.g. "≤ 1 by construction; ∈ [−∞, 1]"). |
+| `{{PLAUSIBILITY_BOUNDS}}` | The same bounds as a Python literal for `scripts/metric.py`: `(low, high)` with `None` on an unbounded side (`(None, 1.0)` for the example above), or `None` if this campaign encodes none. **A literal, not prose**: a fallback string here is a syntax error in FROZEN core. Encode only what is true by construction; the range you expect is the a-priori prediction and lives in `predictions/`. |
 | `{{METRIC_PLAUSIBLE_RANGE}}` | The a-priori plausible range, with basis. |
 | `{{BASELINE_DESCRIPTION}}` | What exp 000 is and its expected value. |
 | `{{BASELINE_VALUE}}` | The baseline metric value (the floor). |
 | `{{BASELINE_COMMAND}}` | Command to run exp 000. |
 | `{{CEILING_LIST}}` | (optional) Inline list of theoretical ceilings. |
-| `{{CEILING_DEFINITIONS}}` | (optional) Fuller ceiling definitions for the metric protocol. |
 | `{{METRIC_INPUTS}}` | What feeds the metric (crop, preprocessing, normalization, …). |
 | `{{COMPARABILITY_AXES}}` | What must match exp 000 for an apples-to-apples comparison. |
 | `{{EVAL_TARGET}}` | The data/target the metric is evaluated on. |
-| `{{METRIC_VALIDATION_GATE}}` | The do-once check that the scorer is wired correctly. |
 
 ### Metrics roster & reporting
 | Placeholder | Meaning |
@@ -85,8 +86,7 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 | `{{GUARDRAIL_CHECK}}` | The concrete guardrail check run at loop step 5. |
 | `{{DIAGNOSTIC_METRICS}}` | Co-tracked diagnostic quantities. |
 | `{{SECONDARY_METRICS}}` | Metrics evaluated alongside the primary at step 4. |
-| `{{SUBGROUP_SPLIT}}` | (optional) The hard/easy subgroup split to always report. |
-| `{{CHEAP_SUBGROUP}}` | The near-trivial subgroup whose improvement is "cheap". |
+| `{{CHEAP_SUBGROUP}}` | The near-trivial subgroup whose improvement is cheap. |
 | `{{PRIMARY_REPORT_RULE}}` | How to report the primary (e.g. always with the subgroup split). |
 | `{{GENERALIZATION_AXIS}}` | The axis a real win must generalize across (frames/conditions/…). |
 
@@ -96,7 +96,7 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 | `{{RUN_STEP_NAME}}` | Loop step-3 verb (e.g. "RUN", "TRAIN", "SOLVE"). |
 | `{{RUN_COMMAND}}` | The command that runs one experiment. |
 | `{{RUN_NOUN}}` | Noun for the caps table title (e.g. "Run", "Training"). |
-| `{{IMPLEMENT_VERB}}` | What "IMPLEMENT" means here, as an action phrase only (e.g. "modify the decoder/loss"). The config path is already in the boilerplate — do NOT repeat it. |
+| `{{IMPLEMENT_VERB}}` | What "IMPLEMENT" means here, as an action phrase only (e.g. "modify the decoder/loss"). The config path is already in the boilerplate; do not repeat it. |
 | `{{SANITY_STEP}}` | Name of the loop sanity/guardrail step (e.g. "SANITY"). |
 | `{{EVAL_WRITER}}` | The script/function that writes the evaluation output. |
 | `{{VALIDATION_CHAIN}}` | The pipeline chain exp 000 validates end-to-end. |
@@ -104,8 +104,8 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 | `{{CHECKPOINT_EVERY}}` | Checkpoint cadence N. |
 | `{{COST_UNIT}}` | Unit of run cost (epochs, iterations, seconds, solves). |
 | `{{COST_NOTE}}` | (optional) Note on why experiments are cheap/fast. |
-| `{{DISK_PER_EXP}}` | Human-readable disk footprint of ONE experiment (e.g. "1.2 MB" / "~4 GB (checkpoints dominate)"). Derived in the interview from the artifact plan; the machine-readable twin is `{{UNIT_COST_DISK_MB}}`. |
-| `{{RETENTION_PLAN}}` | The keep-vs-regenerate plan for BULK artifacts when they are large (which are kept, which are regenerated on demand + the command, any pruning cadence). When experiments are small, state that no plan is needed and why — never leave it blank. The permanent record (save-set, snapshot, narrative, verdicts) is never in scope. |
+| `{{DISK_PER_EXP}}` | Human-readable disk footprint of one experiment (e.g. "1.2 MB" / "~4 GB (checkpoints dominate)"). Derived in the interview from the artifact plan; the machine-readable twin is `{{UNIT_COST_DISK_MB}}`. |
+| `{{RETENTION_PLAN}}` | The keep-vs-regenerate plan for bulk artifacts when they are large: which are kept, which are regenerated on demand and the command, and any pruning cadence. When experiments are small, state that no plan is needed and why; never leave it blank. The permanent record (save-set, snapshot, narrative, verdicts) is never in scope. |
 
 ### Caps
 | Placeholder | Meaning |
@@ -121,9 +121,9 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 | `{{PROMOTION_CONFIRM_RULE}}` | Extra confirmation needed to promote (e.g. "confirm with a 2nd seed"). |
 | `{{SPREAD_NOUN}}` | Name for the replicate spread (e.g. "seed/param", "seed-to-seed"). |
 | `{{VERIFY_SKILL}}` | The verify skill to invoke (e.g. `/physkit:verify`). |
-| `{{PHYSKIT_SPINE}}` | **Rendered by `new-campaign` Step 3 — not a simple fill.** The campaign-tailored, FROZEN snapshot of `docs/CORE.md` (provenance banner + tailored body) inlined into `CLAUDE.md`; the campaign's reproducible doctrine record. NOT `@`-imported and NOT vendored as a separate hash-checked file. See Step 3 for the tailoring + stamp procedure. |
-| `{{VERIFY_EXTRA_CHECKS}}` | Archetype-specific extra checks the verifier must do, as a clause FRAGMENT appended to "checks for metric contamination" (e.g. ", recomputes the ceilings, and checks the ceiling-vs-gap trap"). Don't repeat "metric contamination". |
-| `{{SYSTEMATIC_AXIS_NOTE}}` | A standalone sentence on the dominant systematic-error axis for this campaign. It follows "…find and fix the cause)." — don't repeat that phrase. |
+| `{{PHYSKIT_SPINE}}` | **Rendered by `new-campaign` Step 3, not a simple fill.** The campaign-tailored, FROZEN snapshot of `docs/CORE.md` (provenance banner + tailored body) written into `DOCTRINE_SNAPSHOT.md`, not into `CLAUDE.md`, which carries only what binds a turn. It is the campaign's reproducible doctrine record: referenced, never auto-loaded, not `@`-imported, and not vendored as a separate hash-checked file. See Step 3 for the tailoring and stamp procedure. |
+| `{{VERIFY_EXTRA_CHECKS}}` | Archetype-specific extra checks the verifier must do, as a clause fragment appended to "checks for metric contamination" (e.g. ", recomputes the ceilings, and checks the ceiling-vs-gap trap"). Do not repeat "metric contamination". |
+| `{{SYSTEMATIC_AXIS_NOTE}}` | A standalone sentence on the dominant systematic-error axis for this campaign. It follows "…find and fix the cause)."; do not repeat that phrase. |
 | `{{OVERFIT_MODE}}` | The campaign's characteristic overfit mode (e.g. "sim-to-real / val overfit"). |
 | `{{DECISION_EXAMPLES}}` | Example decisions that are "hypotheses, not givens". |
 | `{{MODEL_NOUNS}}` | The model components parsimony applies to (forward, decoder, …). |
@@ -151,17 +151,17 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 | `{{DATA_DISTRIBUTION}}` | (optional) The distribution that changes if the data choice moves. |
 | `{{CODE_SNAPSHOT_RULE}}` | (optional) The code-snapshot rule when code under test is mutable. |
 | `{{HARDWARE_LIMITS}}` | (optional, hardware-in-the-loop only) The specific hardware safety limits / safe ranges that are hard constraints. |
-| `{{LITERATURE_LEVEL}}` | (optional, when literature search is enabled) The intensity — "only when needed" (search when stuck) or "extensive" (proactive + periodic). |
+| `{{LITERATURE_LEVEL}}` | (optional, when literature search is enabled) The intensity: "only when needed" (search when stuck) or "extensive" (proactive + periodic). |
 
 ### Logging & scoreboard
 | Placeholder | Meaning |
 |---|---|
-| `{{SCOREBOARD_COLUMN_LIST}}` | The full scoreboard schema string (in charter.md). |
+| `{{SCOREBOARD_COLUMN_LIST}}` | The full scoreboard schema string (in campaign.md). |
 | `{{PRIMARY_METRIC_COL}}` | The scoreboard column holding the primary metric. |
 | `{{PRIMARY_SPREAD_COL}}` | The column holding the replicate spread. |
 | `{{GUARDRAIL_COL}}` | The column holding the guardrail value. |
 | `{{DIAGNOSTIC_COLUMNS}}` | Supplemental metric / sanity-score columns (tab-separated). |
-| `{{RUN_COLUMNS}}` | Experiment-type run numerics (tab-separated): epochs trained + best epoch (ML), iterations / wall-clock / n_free_params (fits), seed / n_reps. May be empty — if so, remove it and its adjacent tab. |
+| `{{RUN_COLUMNS}}` | Experiment-type run numerics (tab-separated): epochs trained + best epoch (ML), iterations / wall-clock / n_free_params (fits), seed / n_reps. May be empty; if so, remove it and its adjacent tab. |
 
 ### Protocol stubs
 | Placeholder | Meaning |
@@ -169,11 +169,6 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 | `{{BASELINE_METHODS}}` | The baseline method(s) for exp 000. |
 | `{{GATE_CRITERIA}}` | The pass/fail criteria for the baseline gate. |
 | `{{FLOOR_RECORD_RULE}}` | How the floor is recorded. |
-| `{{SCOREBOARD_REVIEW_SORTS}}` | How to sort the scoreboard at a checkpoint. |
-| `{{HYGIENE_CHECKS}}` | The checkpoint hygiene checklist. |
-| `{{REPLAN_HORIZON}}` | How many directions to queue at a checkpoint. |
-| `{{CONSOLIDATE_TRIGGER}}` | When to consolidate the journal. |
-| `{{KEEP_WINDOW}}` | What to keep live when consolidating. |
 | `{{PER_EXP_ARTIFACTS}}` | The always-saved per-experiment artifacts. |
 | `{{FIGURE_SPEC}}` | The standard per-experiment figure, panel by panel. |
 | `{{PROMOTED_BEST_ARTIFACTS}}` | The heavier artifacts saved on promotion. |
@@ -183,7 +178,6 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 | `{{SPLIT_TABLE}}` | The fixed data splits. |
 | `{{LOAD_PIPELINE}}` | How a config loads the data. |
 | `{{DISTRIBUTION_NOTE}}` | Which knobs are data-choices vs method-levers. |
-| `{{EXTRA_PROTOCOL_ROWS}}` | Extra rows for the Protocol Index (campaign-specific protocols). |
 
 ### Conventions doc
 | Placeholder | Meaning |
@@ -214,21 +208,23 @@ name listed here MUST be used by at least one template (the Bucket-1 lint checks
 | `{{NEXT_SEQUENCE}}` | The recommended next-experiment sequence. |
 
 ### Project & shared-doc references
-Every campaign lives inside a project, so these always resolve to the project's `shared/` docs — **never a
-local copy** (design §4.1; the validator rejects one). Each value is a **relative path from the file that
-contains it**, so the depth differs by file — fill each occurrence with the path that actually resolves (the
-validator checks intra-tree doc links resolve).
+Every campaign lives inside a project, so these always resolve to the project's `shared/` docs and never to
+a local copy (design §4.1; the validator rejects one). Each value is a relative path from the file that
+contains it, so the depth differs by file. Fill each occurrence with the path that resolves from that file.
+**Nothing checks this for you.** No validator or lint resolves an intra-tree doc link; the validator only
+confirms the project's `shared/` files exist. Count the directories for each occurrence rather than copying
+a path from another file: an unchecked path that is wrong stays wrong in every scaffolded campaign.
 
 | Placeholder | Meaning | Value (by file location) |
 |---|---|---|
-| `{{PHYSICS_DOC}}` | Path to the governing-physics doc. | campaign-root (charter/README/INTAKE): `../../shared/PHYSICS.md` · `results/` (INDEX/DISCOVERIES): `../../../shared/PHYSICS.md` |
-| `{{CONVENTIONS_DOC}}` | Path to the conventions doc. | campaign-root: `../../shared/CONVENTIONS.md` · `results/`: `../../../shared/CONVENTIONS.md` |
-| `{{SIBLING_FROZEN_MUTABLE}}` | (coupled sibling campaigns only — else DELETE the block) What this campaign FREEZES that a sibling treats as MUTABLE, and vice versa. | — |
-| `{{CONSUMED_ARTIFACTS}}` | (coupled sibling campaigns only) The promoted `../../shared/<artifact>_<ver>/` artifacts this campaign READS (never a sibling's working folder). | — |
+| `{{PHYSICS_DOC}}` | Path to the governing-physics doc. | Count the directories, do not copy an example. Campaign root (`campaign.md`, `README.md`, `INTAKE.md`): `../../shared/PHYSICS.md` · **one directory down** (`roles/`, `results/`, `docs/`): `../../../shared/PHYSICS.md` |
+| `{{CONVENTIONS_DOC}}` | Path to the conventions doc. | Campaign root: `../../shared/CONVENTIONS.md` · one directory down: `../../../shared/CONVENTIONS.md` |
+| `{{SIBLING_FROZEN_MUTABLE}}` | (coupled sibling campaigns only — else delete the block) What this campaign FREEZES that a sibling treats as MUTABLE, and vice versa. | — |
+| `{{CONSUMED_ARTIFACTS}}` | (coupled sibling campaigns only) The promoted `../../shared/<artifact>_<ver>/` artifacts this campaign reads, never a sibling's working folder. | — |
 
 ### Project-tree placeholders (`templates/project/`)
-Filled by `new-project` when it creates the home. A one-off project fills these from the campaign interview —
-they are not a second interview.
+Filled by `new-project` when it creates the home. A one-off project fills these from the campaign
+interview; they are not a second interview.
 
 | Placeholder | Meaning |
 |---|---|
@@ -236,14 +232,33 @@ they are not a second interview.
 | `{{PHYSICAL_SYSTEM}}` | One line naming the physical system under investigation. |
 | `{{GOAL_STATEMENT}}` / `{{DECISION_SERVED}}` / `{{DONE_CRITERIA}}` | The end goal, the decision it serves, and what "done" looks like — the same answers that fill the campaign's `PROJECT_ORIENTATION.md`. |
 | `{{SYSTEM_INVARIANTS}}` | Project-wide invariants every campaign inherits (drawn from the topic-4 physics interview). |
-| `{{DATA_LOCATION}}` / `{{DATA_PATH}}` | The canonical-data decision: a read-only copy at `data/`, or the absolute path recorded in `data/DATA_PATH.txt`. This pointer is the project's ONLY absolute path. |
+| `{{DATA_LOCATION}}` / `{{DATA_PATH}}` | The canonical-data decision: a read-only copy at `data/`, or the absolute path recorded in `data/DATA_PATH.txt`. This pointer is the project's only absolute path. |
 | `{{PROMOTED_ARTIFACTS}}` | Frozen artifacts promoted to `shared/` — `— (none yet)` in a fresh project. |
-| `{{CAMPAIGN_1_NAME}}` / `_DATE` / `_APPROACH` / `_METRIC` / `_RESULT` / `_DISCOVERIES` / `_KBKEY` | The opening `LINEAGE.md` Campaigns row for the first campaign (`_RESULT` is `pending` until exp 000; `_DISCOVERIES` and `_KBKEY` are `—`). |
+| `{{CAMPAIGN_1_NAME}}` / `{{CAMPAIGN_1_DATE}}` / `{{CAMPAIGN_1_APPROACH}}` / `{{CAMPAIGN_1_METRIC}}` / `{{CAMPAIGN_1_RESULT}}` / `{{CAMPAIGN_1_DISCOVERIES}}` / `{{CAMPAIGN_1_KBKEY}}` | The opening `LINEAGE.md` Campaigns row for the first campaign (`_RESULT` is `pending` until exp 000; `_DISCOVERIES` and `_KBKEY` are `—`). |
+| `{{TARGET_OF_STUDY}}` | `shared/PHYSICS.md` §Target of study: what is under investigation — the sample, material, plasma, star, molecule, or device — its identity and structure, and the physical quantities the project aims to determine or optimize. The rig that probes it is `INSTRUMENT.md`, not this. |
+| `{{INSTRUMENT_DESCRIPTION}}` | `shared/INSTRUMENT.md`: what measures what (e.g. NV widefield magnetometer · telescope + detector · spectrometer). |
+| `{{INSTR_PARAM_1}}` / `{{INSTR_VALUE_1}}` / `{{INSTR_UNITS_1}}` / `{{INSTR_SOURCE_1}}` | One row of `shared/INSTRUMENT.md`'s parameter table: name, value, units, and how the value is known. Provenance is part of the row, not optional. Extend with further rows as the rig is characterized. |
+| `{{MEASUREMENT_MODEL}}` | `shared/INSTRUMENT.md`: how instrument readings map to physical quantities — the forward measurement chain, so raw data is never mistaken for the quantity of interest. |
+| `{{INSTRUMENT_ARTIFACTS}}` | `shared/INSTRUMENT.md`: drifts, backgrounds, and calibration caveats — the recurring gotchas to guard against. Pairs with `{{KNOWN_GOTCHAS}}` in `CONVENTIONS.md`. |
 
-### Framing & planning docs (INTAKE · PROJECT_ORIENTATION · PHYSICS · VERIFICATION_PLAN · protocols/expensive-evaluation)
-These fill the setup/planning docs authored before the loop runs. The `*_PROPOSED` tokens hold the
-user's **pre-sign-off** proposals captured in `INTAKE.md`; once the campaign spec is signed off they are
-restated (frozen) in `charter.md` / `metric.py` under their final names — see the alias note below.
+### Session notes (`templates/project/sessions/`)
+Filled when an ad-hoc, non-campaign session is opened: exploration, debugging, or a one-off analysis with
+no frozen metric driving a loop. With such a metric it is a campaign, not a session. Not filled by
+`new-project`.
+
+| Placeholder | Meaning |
+|---|---|
+| `{{SESSION_DATE}}` / `{{SESSION_SLUG}}` | The session's date and short name. They also form its directory, `sessions/<date>_<slug>/`, and its `LINEAGE.md` Sessions row, so the two must agree. |
+| `{{SESSION_GOAL}}` | The question the session set out to answer, or the thing to debug or try. |
+| `{{SESSION_WORK}}` | The concrete steps: what was run, inspected, changed. Enough to reconstruct. |
+| `{{SESSION_FINDING}}` | One finding from the session. |
+| `{{FINDING_TIER}}` | The rigor tier of that finding, stated accurately (e.g. `exploratory (unverified)` · `verify-CONFIRMED` · `PROVISIONAL`). A session finding is not a verified project DISCOVERY unless it passed `verify`; the tag is what stops an ad-hoc conclusion being trusted like a campaign result. |
+| `{{SESSION_ARTIFACTS}}` | Files, plots, and scripts produced, with paths inside this session folder. |
+
+### Framing & planning docs (INTAKE · PROJECT_ORIENTATION · PHYSICS · VERIFICATION_PLAN)
+These fill the setup/planning docs authored before the loop runs. The `*_PROPOSED` tokens hold the user's
+pre-sign-off proposals captured in `INTAKE.md`. Once the campaign spec is signed off they are restated
+(frozen) in `campaign.md` / `metric.py` under their final names; see the alias note below.
 
 | Placeholder | Meaning |
 |---|---|
@@ -285,22 +300,39 @@ restated (frozen) in `charter.md` / `metric.py` under their final names — see 
 | `{{DOMAIN}}` | VERIFICATION_PLAN: the stated domain of applicability (never extrapolate past it unflagged). |
 | `{{APP_CHECK_1}}` / `{{APP_CHECK_2}}` | VERIFICATION_PLAN: application-specific verification checks. |
 | `{{KNOWN_ARTIFACTS}}` | VERIFICATION_PLAN: known artifacts / gotchas to watch for (see alias note). |
-| `{{CLASSICAL_BASELINE}}` | expensive-evaluation: the classical optimizer to benchmark sample-efficiency against. |
-| `{{STOP_CRITERION}}` | expensive-evaluation: the diminishing-returns stop criterion. |
-| `{{MIN_DELTA}}` | expensive-evaluation: the minimum improvement that counts as progress. |
-| `{{PATIENCE}}` | expensive-evaluation: how many non-improving evaluations to allow before stopping. |
+
+### Campaign properties (configs/loop.json `"campaign"` — what kind of campaign this is)
+Two setup-time declarations that every mechanical check branches on, plus their numeric companions. Both
+are decisions rather than defaults to accept quietly: ask them, and record the answer's reason where the
+schema asks for one. `prediction_mode` governs what the runner's SPEND gate accepts as a prediction;
+`noise_model` governs whether a win is judged against a replicate spread or a numerical tolerance. Getting
+either wrong is silent: a stochastic campaign mislabelled deterministic promotes noise,
+and a deterministic one mislabelled stochastic is held to a spread test it can never satisfy.
+
+| Placeholder | Meaning |
+|---|---|
+| `{{PREDICTION_MODE}}` | `range` (default — a falsifiable numeric `[low, high]`, the strongest control) / `direction` (which way versus a named prior experiment, and why: no number, still checkable) / `none` (no bound; requires `{{PREDICTION_MODE_REASON}}`). Never pick `none` to avoid an awkward prediction. A fabricated range is a fake control, and so is a mode chosen for convenience. |
+| `{{PREDICTION_MODE_REASON}}` | Why this campaign cannot honestly bound its answer. **Required and non-empty when `{{PREDICTION_MODE}}` is `none`** (the runner refuses to launch otherwise); empty string in the other modes. |
+| `{{NOISE_MODEL}}` | `stochastic` (default — repeated runs differ, so a win must clear the replicate spread) / `deterministic` (repeated runs are identical, so the test is a numerical tolerance). Decide it by re-running one experiment twice, not from intuition about the method. |
+| `{{NOISE_FLOOR}}` | JSON **number or `null`**: the once-estimated replicate spread for a stochastic campaign (`verify` §Clear the noise floor), re-estimated only when something that could move it changes. `null` means not yet estimated, which makes the noise-floor check report `unavailable` rather than silently pass. |
+| `{{METRIC_TOLERANCE}}` | JSON **number or `null`**: the numerical equality tolerance for a deterministic campaign. `null` means not yet set, and the check reports `unavailable`. |
+| `{{METRIC_VERSION}}` | Comparability tag for the FROZEN metric (e.g. `v1`). Stamped onto every scoreboard row and result JSON. **Bump it whenever the scoring math changes**, and re-score saved contenders before comparing: a number carried across a metric change is not a comparison. |
+| `{{DATA_VERSION}}` | Comparability tag for the dataset/version scored against (e.g. `v1`, `v2_corrected`). Same rule: bump on any change to the evaluation data. |
+
+> Both `{{NOISE_FLOOR}}` and `{{METRIC_TOLERANCE}}` are JSON **numbers**, not prose: a fallback string
+> here breaks the parse, the same hazard `{{UNIT_COST_DISK_MB}}` carries. Write `null` when unknown.
 
 ### Loop configuration (configs/loop.json — supervisor mode)
-Set from the campaign's **unit cost** during the interview; the cadence *inverts* with cost (expensive
-units → plan often, small k; cheap units → plan in strides, large k — keep planner overhead a small
-fraction of loop compute). The plateau threshold is dual-denominated (units AND wall-clock, whichever
-trips first). Rationale: `STRUCTURED_LOOP_PROPOSAL.md` §4.1 rule 4 / ADR-0008.
+Set from the campaign's unit cost during the interview. The cadence inverts with cost: expensive units
+mean planning often, with a small k; cheap units mean planning in strides, with a large k, which keeps
+planner overhead a small fraction of loop compute. The plateau threshold is dual-denominated, in units and
+in wall-clock, whichever trips first.
 
 | Placeholder | Meaning |
 |---|---|
 | `{{UNIT_COST_CLASS}}` | One word for a unit's cost scale: `seconds` / `minutes` / `hours` / `days`. |
 | `{{UNIT_COST_S}}` | Typical wall-clock seconds for one unit (number, order-of-magnitude is fine). |
-| `{{UNIT_COST_DISK_MB}}` | Megabytes one unit ADDS to `results/` (number; save-set + snapshot + bulk artifacts). Derived from the artifact plan, not asked. Arms the driver's disk floor (refuses to launch / halts below ~3 units of headroom); `0` disables it. Human-readable twin: `{{DISK_PER_EXP}}`. |
+| `{{UNIT_COST_DISK_MB}}` | Megabytes one unit adds to `results/` (number; save-set + snapshot + bulk artifacts). Derived from the artifact plan, not asked. Arms the driver's disk floor (refuses to launch / halts below ~3 units of headroom); `0` disables it. Human-readable twin: `{{DISK_PER_EXP}}`. |
 | `{{PLANNER_CADENCE_K}}` | Spawn the planner every k accepted units (also the default outstanding-units cap). |
 | `{{PLANNER_MODEL}}` | Model for the planner agent (judgment role — heavier tier; user-owned thereafter). |
 | `{{PLATEAU_M_UNITS}}` | Plateau trigger: no accepted result in m units. |
@@ -308,13 +340,15 @@ trips first). Rationale: `STRUCTURED_LOOP_PROPOSAL.md` §4.1 rule 4 / ADR-0008.
 | `{{MAX_OUTSTANDING_UNITS}}` | Max units queued beyond planner review (default = `{{PLANNER_CADENCE_K}}`). |
 | `{{WORKER_MODEL}}` | Model for iteration workers (lightest that reliably does the task; user-owned). |
 | `{{ITERATION_TIMEOUT_HOURS}}` | Hard wall-clock cap on one worker iteration (> the Extended-tier run cap). |
-| `{{VERIFY_REPRO_THRESHOLD_S}}` | ADR-0008 tier boundary: unit cost at/below → full re-execution in verify; above → judgment + cheapest discriminating spot-check. |
+| `{{VERIFY_REPRO_THRESHOLD_S}}` | The verification tier boundary: unit cost at/below → full re-execution in verify; above → judgment + cheapest discriminating spot-check. |
 
-> **Alias note (proposed → final, and near-synonyms).** Several tokens name the **same quantity at
-> different stages or in different docs**; fill them consistently. The a-priori bound/range appears as
+> **Alias note (proposed → final, and near-synonyms).** Several tokens name the same quantity at different
+> stages or in different docs; fill them consistently. The a-priori bound/range appears as
 > `{{APRIORI_BOUND}}` (INTAKE/PHYSICS), `{{APRIORI_RANGE}}` (VERIFICATION_PLAN), `{{APRIORI_BOUND_NOTES}}`
-> (charter.md), and `{{METRIC_PLAUSIBLE_RANGE}}` (program/metric); the metric's hard bounds as
-> `{{HARD_BOUNDS}}` (VERIFICATION_PLAN) and `{{METRIC_HARD_BOUNDS}}` (program/metric); the domain gotchas
-> as `{{KNOWN_ARTIFACTS}}` (VERIFICATION_PLAN) and `{{KNOWN_GOTCHAS}}` (CONVENTIONS/INTAKE). The split is
-> intentional — the planning docs are drafted before the charter freezes the final wording — but the
-> setup skill should keep the paired values in sync.
+> (campaign.md), and `{{METRIC_PLAUSIBLE_RANGE}}` (program/metric). The metric's hard bounds appear as
+> `{{HARD_BOUNDS}}` (VERIFICATION_PLAN), `{{METRIC_HARD_BOUNDS}}` (program/metric) and
+> `{{PLAUSIBILITY_BOUNDS}}` (the executable form of those same bounds, in the FROZEN scorer): fill all
+> three from one answer, and if you change one, change all three. The domain gotchas appear as
+> `{{KNOWN_ARTIFACTS}}` (VERIFICATION_PLAN) and `{{KNOWN_GOTCHAS}}` (CONVENTIONS/INTAKE). The split is
+> intentional, because the planning docs are drafted before `campaign.md` freezes the final wording, but
+> the setup skill should keep the paired values in sync.

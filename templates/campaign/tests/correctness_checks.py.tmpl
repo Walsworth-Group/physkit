@@ -4,7 +4,7 @@ Run:  python tests/correctness_checks.py       (exit 0 = green | 1 = a check FAI
 
 `verify` asks "is this *result* right?"; this suite asks "is the *machinery* still right?". Build it with
 the `correctness-suite` skill from docs/VERIFICATION_PLAN.md. A FRESH scaffold is all-skip: it reports
-EMPTY (exit 2), which does NOT green-light a promotion (EH-9) - fill in >=1 real check. No finding built on
+EMPTY (exit 2), which does NOT green-light a promotion - fill in >=1 real check. No finding built on
 a RED or EMPTY suite is trustworthy; a genuinely-no-simulator campaign records tests/CORRECTNESS_NA.md.
 
 Each check is a zero-arg function returning one of:
@@ -15,7 +15,7 @@ Each check is a zero-arg function returning one of:
 Rules of thumb (see the correctness-suite skill for depth):
   * cheap/fast checks first; seed every RNG and log the seed (deterministic)
   * fail loudly with the numbers (expected / actual / tolerance)
-  * re-run after ANY change to core/FROZEN code (docs/protocols/checkpoint.md)
+  * re-run after ANY change to core/FROZEN code (/physkit:campaign-status step 2)
   * every bug you fix earns a new regression check here - a lesson you only pay for once
 """
 from __future__ import annotations
@@ -79,7 +79,7 @@ def main() -> int:
         return 1
     if n_pass == 0:
         print("EMPTY - 0 active checks. The simulator is UNGUARDED, so this suite cannot green-light a "
-              "promotion (EH-9). Add >=1 real check (correctness-suite skill), or record an explicit N/A in "
+              "promotion. Add >=1 real check (correctness-suite skill), or record an explicit N/A in "
               "tests/CORRECTNESS_NA.md if this campaign genuinely has no simulator to check.")
         return 2
     return 0

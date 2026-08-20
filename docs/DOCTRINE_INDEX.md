@@ -13,29 +13,29 @@ review: living
 # Doctrine Index — the kit's map of itself
 
 This is the maintained, machine-readable index of every doctrine artifact in the kit: what it is, when
-it loads, which principle contexts it enforces, and its build status. It exists so the agent (and the
-maintainer) can find the right file without loading everything — the substrate for **context economy**
+it loads, which principle contexts it enforces, and its build status. It exists so that the agent and the
+maintainer can find the right file without loading everything. It is the substrate for context economy
 (Principle Context 7) and for any future self-improving meta-loop.
 
-**Two jobs:**
-1. **Define the metadata schema** (below) that every doc and skill carries in YAML frontmatter.
-2. **Hold the index table** mapping every artifact to its metadata + status. Update this table whenever an
+Two jobs:
+1. Define the metadata schema (below) that every doc and skill carries in YAML frontmatter.
+2. Hold the index table mapping every artifact to its metadata and status. Update this table whenever an
    artifact is added, ported, extended, or retired.
 
-> **Single sources of truth.** Principles live in [`PRINCIPLES.md`](PRINCIPLES.md) (canonical taxonomy).
-> The always-loaded spine is [`CORE.md`](CORE.md). This index never restates principle content — it only
-> points. Context numbers below (`addresses:`) refer to the **nine legacy contexts** in `PRINCIPLES.md`
-> (not the nine *pillars* of the v2 taxonomy — the numbering differs; the X1 migration will reconcile).
+> Single sources of truth. Principles live in [`PRINCIPLES.md`](PRINCIPLES.md) (canonical taxonomy).
+> The always-loaded spine is [`CORE.md`](CORE.md). This index never restates principle content; it only
+> points. Context numbers below (`addresses:`) refer to the nine legacy contexts in `PRINCIPLES.md`, not
+> to the nine pillars of the v2 taxonomy. The numbering differs, and a later migration will reconcile it.
 
 ---
 
 ## 1 · The metadata schema
 
-Every doctrine **doc, protocol, and scaffold template** begins with a YAML frontmatter block using these
-fields. **Skills are the exception:** a `SKILL.md` frontmatter stays loader-clean (only the `name` +
-`description` the plugin loader requires, so `claude plugin validate` passes), and its metadata lives in
-the index table below instead. The schema is therefore the contract for non-skill files in-file, and for
-skills in this index.
+Every doctrine doc, protocol, and scaffold template begins with a YAML frontmatter block using these
+fields. Skills are the exception: a `SKILL.md` frontmatter stays loader-clean, carrying only the `name`
+and `description` the plugin loader requires, so that `claude plugin validate` passes. A skill's metadata
+lives in the index table below instead. The schema is therefore the contract for non-skill files in-file,
+and for skills in this index.
 
 ```yaml
 ---
@@ -66,9 +66,9 @@ review: <flag | date | "living" | omit>
 (both). The dual-use split: general sessions never pay the context cost of campaign material,
 because campaign artifacts are `on-demand` and `layer: campaign`.
 
-**`frozen`** — `true` for the honesty/verification constitution that must never be "optimized away" under
-any self-improvement: scientific integrity (Ctx 1), independent verification (Ctx 2), metric integrity,
-context economy. Everything else is `false`.
+**`frozen`** — `true` for the honesty/verification constitution that no self-improvement may weaken:
+scientific integrity (Ctx 1), independent verification (Ctx 2), metric integrity, context economy.
+Everything else is `false`.
 
 **`status`** — build state, so this index doubles as the live build tracker:
 
@@ -78,7 +78,7 @@ context economy. Everything else is `false`.
 | `ported` | carried over from v2 with reorganization |
 | `shipped-v2` | exists in v2, not yet revised |
 | `extend` | exists in v2; planned changes not yet applied |
-| `planned` | designed (in `synthesis/`) but not yet built |
+| `planned` | designed but not yet built |
 | `deferred` | intentionally postponed |
 
 **`addresses`** — the list of `PRINCIPLES.md` context numbers the artifact primarily enforces. Lets the
@@ -88,8 +88,8 @@ maintainer audit that every principle context has a home, and that no orphan fil
 
 ## 2 · The index
 
-Status reflects the **build backlog** (`synthesis/BUILD_BACKLOG.md`). "Path" is relative to the kit root.
-Items not yet built are listed so the index is a complete map of the intended kit, not just what exists.
+Status reflects the kit's build state. "Path" is relative to the kit root. Items not yet built are listed
+so the index is a complete map of the intended kit, not just what exists.
 
 ### Shared spine (always loaded)
 
@@ -98,6 +98,7 @@ Items not yet built are listed so the index is a complete map of the intended ki
 | core | `docs/CORE.md` | core-doc | true | 1,2,7,8,9 | new |
 | principles | `docs/PRINCIPLES.md` | reference-doc | true | 1–9 | new |
 | doctrine-index | `docs/DOCTRINE_INDEX.md` | metadata | false | 7 | new |
+| migrating | `docs/MIGRATING.md` | reference-doc | false | 1,6,7 | new (per-layout migration procedures for a campaign frozen under an older kit; first section: adopting `CLAUDE.md` §Where things live. A second section carries the layout restructure's old→new map) |
 
 ### General reference docs (on-demand)
 
@@ -117,6 +118,7 @@ Items not yet built are listed so the index is a complete map of the intended ki
 | calibration-and-drift | `docs/reference/calibration-and-drift.md` | reference-doc | 4,5,7 | new |
 | ip-and-attribution | `docs/reference/ip-and-attribution.md` | reference-doc | 1,7 | new |
 | prompt-surface-audit | `docs/reference/prompt-surface-audit.md` | reference-doc | 9,1 | new |
+| expensive-evaluation | `docs/reference/expensive-evaluation.md` | reference-doc | 4,6 | moved out of the campaign template  — situational by its own first sentence ("when evaluations are cheap, ignore this"), and three skills already cited it |
 | reporting-standards | — | reference-doc | 1 | absorbed into `report` skill (§standards) |
 | latex-toolchain | — | reference-doc | 1 | absorbed into `report` assets README |
 
@@ -134,24 +136,24 @@ Items not yet built are listed so the index is a complete map of the intended ki
 | cite-check | `skills/cite-check/SKILL.md` | 1 | new (lifted from final-report) |
 | report | `skills/report/SKILL.md` | 1 | new |
 | derive | `skills/derive/SKILL.md` | 2,5 | new (analytical/symbolic theory) |
-| assess-idea | `skills/assess-idea/SKILL.md` | 8,4,9 | new (feasibility/worth triage — Wieman decision 9; front-end cluster) |
-| literature-review | `skills/literature-review/SKILL.md` | 1,8 | new (understand the field, cited — Wieman decisions 1,7; front-end cluster) |
-| attribute-mechanism | `skills/attribute-mechanism/SKILL.md` | 2,5,3 | new (mechanism attribution — "simulate before you attribute"; composes frame-problem/dimensional-analysis/signal-extraction-pitfalls/debug/verify) |
-| assumption-audit | `skills/assumption-audit/SKILL.md` | 3,4 | new (plateau → diagnosis mode-change; solve-don't-confirm + operating-point validity; lab-loop keeper) |
+| assess-idea | `skills/assess-idea/SKILL.md` | 8,4,9 | new (feasibility and worth triage; front-end cluster) |
+| literature-review | `skills/literature-review/SKILL.md` | 1,8 | new (understand the field, with verified citations; front-end cluster) |
+| attribute-mechanism | `skills/attribute-mechanism/SKILL.md` | 2,5,3 | new (mechanism attribution: simulate before attributing; composes frame-problem/dimensional-analysis/signal-extraction-pitfalls/debug/verify) |
+| assumption-audit | `skills/assumption-audit/SKILL.md` | 3,4 | new (plateau to diagnosis mode-change; solve-don't-confirm and operating-point validity) |
 
 ### Project skills (`layer: campaign`)
 
 | id | path | addresses | status |
 |---|---|---|---|
-| new-project | `skills/new-project/SKILL.md` | 7,8 | new — **default path, not on-demand**: every campaign lives in a project, so `new-campaign` Step 0.1 runs this whenever no project home exists (and it composes new-campaign for the first campaign) |
-| fork-campaign | `skills/fork-campaign/SKILL.md` | 2,1 | on-demand; new (invalidation clean break §4.4b; composes new-campaign + verify) |
+| new-project | `skills/new-project/SKILL.md` | 7,8 | new; the default path, not on-demand. Every campaign lives in a project, so `new-campaign` Step 0.1 runs this whenever no project home exists, and it composes new-campaign for the first campaign |
+| fork-campaign | `skills/fork-campaign/SKILL.md` | 2,1 | on-demand; new (clean break after invalidation; composes new-campaign + verify) |
 
 ### Campaign skills (on-demand; `layer: campaign`)
 
 | id | path | addresses | status |
 |---|---|---|---|
 | new-campaign | `skills/new-campaign/SKILL.md` | 4,8 | ported+extended (project-aware: reference shared, LINEAGE row, §5 relationship) |
-| run-campaign | `skills/run-campaign/SKILL.md` | 9,7 | new (SV-6: the concierge/cockpit around `--supervise` — preflight-translate, background launch, monitor via driver log, relay via `results/inbox/`, halt triage; never an executor) |
+| run-campaign | `skills/run-campaign/SKILL.md` | 9,7 | new: the cockpit around `--supervise` — preflight-translate, background launch, monitor via driver log, relay via `results/inbox/`, halt triage. Never an executor |
 | campaign-status | `skills/campaign-status/SKILL.md` | 3,4 | ported+extended (+ project mode: cross-campaign, FROZEN/MUTABLE) |
 | final-report | `skills/final-report/SKILL.md` | 1 | ported+extended (composes `report`) |
 | handoff | `skills/handoff/SKILL.md` | 7 | new (project-aware: resume from LINEAGE, whole-tree portability) |
@@ -179,24 +181,29 @@ Items not yet built are listed so the index is a complete map of the intended ki
 
 | id | path | kind | addresses | status |
 |---|---|---|---|---|
-| program | `templates/campaign/docs/charter.md.tmpl` | scaffold-template | 3,4 | ported+refined |
-| physics | `templates/project/shared/PHYSICS.md.tmpl` | scaffold-template | 5 | ported+refined (inventory); shared per project — the campaign-local copy was retired with standalone mode |
+| campaign-definition | `templates/campaign/campaign.md.tmpl` | scaffold-template | 3,4 | THE campaign definition, read by both roles every cycle: mission, the FROZEN metric, levers, caps, promotion, the baseline gate and the dataset. Split out of the retired single-file charter, which had fused it with the per-role procedure |
+| campaign-role-worker | `templates/campaign/roles/worker.md.tmpl` | scaffold-template | 3,5 | the per-experiment procedure: the loop, the iteration contract, the save-set and its retention plan. Assembled into every worker spawn; the planner never reads it |
+| campaign-role-planner | `templates/campaign/roles/planner.md.tmpl` | scaffold-template | 5,7 | strategy: reopening shelved directions, getting unstuck, the literature rule. Assembled into every planner spawn; the worker never reads it |
+| physics | `templates/project/shared/PHYSICS.md.tmpl` | scaffold-template | 5 | ported+refined (inventory); shared per project — the campaign-local copy is retired with standalone mode |
 | intake | `templates/campaign/INTAKE.md.tmpl` | scaffold-template | 8 | new |
 | project-orientation | `templates/campaign/docs/PROJECT_ORIENTATION.md.tmpl` | scaffold-template | 7,8 | new |
 | engineering-notes | `templates/campaign/docs/ENGINEERING_NOTES.md.tmpl` | scaffold-template | 7 | new |
 | verification-plan | `templates/campaign/docs/VERIFICATION_PLAN.md.tmpl` | scaffold-template | 2 | new |
-| expensive-evaluation | `templates/campaign/docs/protocols/expensive-evaluation.md.tmpl` | protocol | 4,6 | new |
-| artifacts-protocol | `templates/campaign/docs/protocols/artifacts.md.tmpl` | protocol | 7 | ported+refined |
-| campaign-claude | `templates/campaign/CLAUDE.md.tmpl` | scaffold-template | 1,2,7 | always-on per-campaign doctrine: a FROZEN, provenance-stamped snapshot of `CORE.md` rendered by `new-campaign` (Step 3) into `{{PHYSKIT_SPINE}}` + the campaign hard gates. Freeze-and-stamp, NOT `@`-imported or hash-checked (kit-dev `CLAUDE.md` §single-source) |
+| artifacts-protocol | — | protocol | 7 | absorbed into `templates/campaign/roles/worker.md.tmpl` — the save-set, the artifact tiers, the save discipline, and the "Retention plan" subsection |
+| campaign-doctrine-snapshot | `templates/campaign/DOCTRINE_SNAPSHOT.md.tmpl` | scaffold-template | 1,6 | the FROZEN, provenance-stamped `CORE.md` snapshot a campaign was scaffolded under (`{{PHYSKIT_SPINE}}`), rendered by `new-campaign` Step 3. Referenced from `CLAUDE.md`, never auto-loaded. Freeze-and-stamp, not `@`-imported or hash-checked, and **never re-synced against a newer CORE** — it records what governed THIS run |
+| campaign-baselines | — | scaffold-template | 2,5 | the campaign's own exp-000 fills were kept; the generic doctrine around them was deleted, the kit already stating it in `verify`, `CORE.md` and `debug`. The remainder folded into `templates/campaign/campaign.md.tmpl` §Baseline gate and deleted the file |
+| campaign-dataset | — | scaffold-template | 6,7 | the campaign's own data fills were kept; the never-overwrite-inputs rule moved to `debug`. The remainder folded into `templates/campaign/campaign.md.tmpl` §Dataset / inputs and deleted the file, repairing on the way a sentence fragment the restructure had stranded |
+| campaign-claude | `templates/campaign/CLAUDE.md.tmpl` | scaffold-template | 1,2,7,9 | always-on per-campaign doctrine: the integrity core, the research reflexes and the campaign hard gates — only what binds a turn. The `CORE.md` snapshot moved out to `DOCTRINE_SNAPSHOT.md` (referenced, never auto-loaded), cutting the worker's always-on feed by 13.6 KB. **Also carries `## Where things live`** — the campaign's map of itself, which live skills route through instead of naming a fixed campaign path; it exists in both the pre- and post-restructure layouts, so a skill that routes through it stays correct across the restructure. Because the file is frozen with its campaign, a campaign scaffolded before the table existed will never gain one — skills carry a fallback and `docs/MIGRATING.md` has the procedure |
 | discoveries-guard | `templates/campaign/scripts/guard_discoveries.py.tmpl` | scaffold-template | 2 | new (PreToolUse hook: blocks unverified DISCOVERIES write) |
 | loop-heartbeat | `templates/campaign/scripts/loop_heartbeat.py.tmpl` | scaffold-template | 9 | new (Stop hook: refuses an unearned end-of-turn; stop via `results/STOP` or a recorded `stop_request.json`; stands down for driver-spawned workers and, while `results/.driver_alive` is fresh, for attended sessions) |
 | hook-settings | `templates/campaign/.claude/settings.json.tmpl` | scaffold-template | 2,9 | new (wires the guard + heartbeat hooks; uses `{{PYTHON_CMD}}`) |
-| campaign-runner | `templates/campaign/scripts/run_campaign.py.tmpl` | scaffold-template | 9,2,4 | CS-3 + SV-1..5: per-experiment gates (prediction/save-set/selftest/correctness) + the `--supervise` driver (degrade-loud halt taxonomy per ADR-0009, liveness heartbeat + detached-runner grace, `--preflight`, driver log + rendered worker feed, `results/inbox/` relay) |
-| loop-knobs | `templates/campaign/configs/loop.json.tmpl` | scaffold-template | 9,4 | CS-3 + SV: per-campaign loop knobs (planner cadence, plateau, worker timeouts, `driver.*` — all `driver` keys code-defaulted); user-owned, hot-reloaded by the driver |
-| unit-queue | `templates/campaign/results/` `queue.json` (seeded by `new-campaign` Step 3) | ledger | 9,7 | CS-3 + SV-1: the driver's unit ledger — `next`/`shelved` (`kind: declined|operational`, `failures` records), accept counters; workers append/decline, only the planner reorders |
-| prediction-gate-dir | `predictions/` (campaign tree; enforced by the runner's spend gate) | ledger | 2,4 | CS-3: a falsifiable a-priori range per experiment, written BEFORE the solve |
-| verdicts-dir | `results/verdicts/` (campaign tree; read by `guard_discoveries`) | ledger | 2 | CS-3/F-2: verify-skill verdict artifacts — the promotion gate's evidence |
-| claude-general | ~~`templates/CLAUDE.general.md`~~ | scaffold-template | 1,2,7 | **retired 2026-07-03** — was a duplicate of the spine and drifted; `docs/CORE.md` is the single source. Users import it from their project `CLAUDE.md` (`@<kit>/docs/CORE.md`) or copy its body (see `GETTING_STARTED.md` §1) |
+| campaign-runner | `templates/campaign/scripts/run_campaign.py.tmpl` | scaffold-template | 9,2,4 | per-experiment gates (prediction/save-set/selftest/correctness) + the `--supervise` driver (degrade-loud halt taxonomy, liveness heartbeat + detached-runner grace, `--preflight`, driver log + rendered worker feed, `results/inbox/` relay) |
+| loop-knobs | `templates/campaign/configs/loop.json.tmpl` | scaffold-template | 9,4 | per-campaign loop knobs (planner cadence, plateau, worker timeouts, `driver.*` — all `driver` keys code-defaulted); user-owned, hot-reloaded by the driver. Its `campaign` block is different in kind: `prediction_mode` (what the spend gate accepts) and `noise_model` (spread vs tolerance) with their resolution knobs and the `metric_version`/`data_version` tags are SETUP-TIME declarations every mechanical check branches on — changing one mid-campaign is a real event, and every snapshot manifest stamps them so it is visible |
+| unit-queue | `templates/campaign/results/` `queue.json` (seeded by `new-campaign` Step 3) | ledger | 9,7 | the driver's unit ledger: `next`/`shelved` (`kind: declined|operational`, `failures` records), accept counters. Workers append/decline, only the planner reorders |
+| prediction-gate-dir | `predictions/` (campaign tree; enforced by the runner's spend gate) | ledger | 2,4 | an a-priori prediction per experiment, written before the solve. WHAT it must carry is the campaign's `prediction_mode` (`configs/loop.json` `campaign`): a numeric range, a direction versus a named experiment, or none with a recorded reason |
+| checks-artifact | `results/checks_<NN>.json` (campaign tree; written by the runner, read by `campaign-status`) | ledger | 2,3 | the mechanical checks for one experiment — prediction met, change vs the incumbent, comparability, correctness-suite state, save-set. Three-valued: `pass` / `fail` / `unavailable`, the last carrying a `needs` field naming what would make the check real |
+| verdicts-dir | `results/verdicts/` (campaign tree; read by `guard_discoveries`) | ledger | 2 | verify-skill verdict artifacts: the promotion gate's evidence |
+| claude-general | ~~`templates/CLAUDE.general.md`~~ | scaffold-template | 1,2,7 | retired — it duplicated the spine and drifted; `docs/CORE.md` is the single source. Users import it from their project `CLAUDE.md` (`@<kit>/docs/CORE.md`) or copy its body (see `GETTING_STARTED.md` §1) |
 
 ### Report assets
 
@@ -226,43 +233,38 @@ Every principle context should have at least one `frozen` or always-loaded home 
 |---|---|
 | 1 Integrity | CORE + PRINCIPLES (frozen); `report`, `cite-check`, reporting-standards, `ip-and-attribution`, `prompt-surface-audit` |
 | 2 Verification | CORE + PRINCIPLES (frozen); `verify`, `correctness-suite`, SIMULATION_VALIDATION, `signal-extraction-pitfalls`, `attribute-mechanism`, `uncertainty-and-error-budgets`, `systematic-errors`, `noise-and-sensitivity` |
-| 3 Problem-solving | PRINCIPLES; `debug`, `pivoting`, `assumption-audit`, charter.md, campaign-status |
-| 4 Experimental design | PRINCIPLES; charter.md, `new-campaign`, archetypes, `hardware-in-the-loop`, `systematic-errors`, `noise-and-sensitivity`, `calibration-and-drift`, `assumption-audit` |
+| 3 Problem-solving | PRINCIPLES; `debug`, `pivoting`, `assumption-audit`, roles/planner.md (Getting Unstuck), campaign-status |
+| 4 Experimental design | PRINCIPLES; campaign.md (the levers, caps, the a-priori bound), roles/worker.md (the loop), `new-campaign`, archetypes, `hardware-in-the-loop`, `systematic-errors`, `noise-and-sensitivity`, `calibration-and-drift`, `assumption-audit` |
 | 5 Physics & simulation | PRINCIPLES; `frame-problem`, `simulation-design`, SIMULATION_VALIDATION, PHYSICS, `attribute-mechanism`, `uncertainty-and-error-budgets`, `noise-and-sensitivity`, `calibration-and-drift` |
 | 6 Discovery-loop | PRINCIPLES; `discovery-loop`, archetype G (cheatsheet), expensive-evaluation |
-| 7 Records & reproducibility | CORE (context economy — doctrine, unfrozen per dec #10 2026-07-03); this index, `handoff`, `record-decision`, scaffold, `run-campaign` (the driver log + queue ledger as the run's process record) |
+| 7 Records & reproducibility | CORE (context economy: doctrine, unfrozen); this index, `handoff`, `record-decision`, scaffold, `run-campaign` (the driver log + queue ledger as the run's process record) |
 | 8 Autonomy & collaboration | CORE (frozen-adjacent: clarify-the-goal); `new-campaign`, frame-problem |
-| 9 Operating unattended | CORE (Running unattended) + PRINCIPLES §9; `charter.md` (Getting Unstuck + Ending the loop + promotion), `run-campaign` (the cockpit around `--supervise`), `campaign-status`, `expensive-evaluation`, `hardware-in-the-loop` (archetype E), ENGINEERING_NOTES (landmines), the CLAUDE.md gates + the DISCOVERIES and loop-heartbeat hooks, `prompt-surface-audit` |
+| 9 Operating unattended | CORE (Running unattended) + PRINCIPLES §9; `roles/planner.md` (Getting Unstuck), `campaign.md` (promotion), `CLAUDE.md` HARD GATE 5 (how the loop ends), `run-campaign` (the cockpit around `--supervise`), `campaign-status`, `expensive-evaluation`, `hardware-in-the-loop` (archetype E), ENGINEERING_NOTES (landmines), the CLAUDE.md gates + the DISCOVERIES and loop-heartbeat hooks, `prompt-surface-audit` |
 
-**Open gaps:** none of the backlog tiers remain — Tiers 0–5 and the deferred discovery-loop/archetype G are
-all built. Remaining work is testing/iteration, not net-new artifacts. *(Context 9 overlaps 7–8 by design;
-its organization vs those contexts is flagged for revisit.)*
+Open gaps: none. Every artifact in the index is built, so remaining work is testing and iteration rather
+than net-new artifacts. Context 9 overlaps 7–8 by design; its organization relative to those contexts is
+flagged for revisit.
 
 ## Changelog
-- **v0.7 (unreleased)** — re-classed `new-project` from an on-demand Project skill to the **default path**, and the project
-  scaffold as the home every campaign has: the standalone / bare-campaign mode is retired, so `new-campaign`
-  Step 0.1 finds the project home or runs `new-project` to create it. Sign-off: approved in-session 2026-07-18.
-- **v0.6** — added the 2026-07 lab-loop keepers: `assumption-audit` (skills-table row + Ctx 3/4 coverage —
-  the plateau → diagnosis mode-change; solve-don't-confirm + operating-point validity) and
-  `prompt-surface-audit` (reference-doc row + Ctx 9/1 coverage — rendered-context auditing for multi-agent
-  loops; PRINCIPLES Ctx 9 gained the twin bullet, v1.9; CORE's plateau line gained the second species).
-  Sign-off route: PR review, 2026-07-07.
-- **v0.5** — added `ip-and-attribution` (the cite-and-adapt-never-reproduce guardrail for capability work,
-  meeting item X3/LHF-2): reference-doc row + Ctx 1 coverage. Constraint doc for the C1–C4 capability
-  library; posture pending formal confirmation by open decision #8. Sign-off approved 2026-07-04.
-- **v0.4** — indexed the experimental **measurement-science reference cluster**
-  (`uncertainty-and-error-budgets`, `systematic-errors`, `noise-and-sensitivity`, `calibration-and-drift`):
-  added their rows + Ctx 2/4/5 coverage. Meeting-2026-07-02 items **B2** (uncertainty) and **B4**
-  (systematics) plus two net-new (noise, calibration). *(Context-numbered `addresses` remap with the X1
-  9-pillar migration.)*
-- **v0.3** — indexed the mechanism-attribution + hardware-loop additions (PRs #6/#7, merged 2026-07-03):
-  added the `attribute-mechanism` skills-table row (its SKILL.md shipped but was left unindexed), and wired
-  `attribute-mechanism` / `signal-extraction-pitfalls` / `hardware-in-the-loop` into the §3 coverage audit
-  (Ctx 2/4/5/9). The two reference docs were already row-indexed in-PR; no principle content changed —
-  provenance in `synthesis/PR6_PR7_INTEGRATION_REVIEW.md`.
-- **v0.2** — added **Context 9 · Operating unattended** to the coverage audit (home: CORE "Running
-  unattended" + PRINCIPLES §9; enforced via `charter.md` / `campaign-status` / `expensive-evaluation` /
-  ENGINEERING_NOTES landmines / the CLAUDE.md gates). Bumped CORE `addresses` to `1,2,7,8,9` and PRINCIPLES
-  to `1–9`. From the 2026-06-30 review.
-- **v0.1** — initial index + metadata schema. Enumerates the full intended kit (built + planned) from
-  `synthesis/BUILD_BACKLOG.md` and `SKILLS_AND_DOCS_OUTLINE.md`.
+- **v0.7 (unreleased)** — re-classed `new-project` from an on-demand Project skill to the default path,
+  and the project scaffold as the home every campaign has. The standalone bare-campaign mode is retired,
+  so `new-campaign` Step 0.1 finds the project home or runs `new-project` to create it.
+- **v0.6** — added `assumption-audit` (skills-table row plus Ctx 3/4 coverage: the plateau-to-diagnosis
+  mode-change, solve-don't-confirm, operating-point validity) and `prompt-surface-audit` (reference-doc
+  row plus Ctx 9/1 coverage: rendered-context auditing for multi-agent loops). PRINCIPLES Ctx 9 gained
+  the twin bullet (v1.9); CORE's plateau line gained the second species.
+- **v0.5** — added `ip-and-attribution`, the cite-and-adapt-never-reproduce guardrail for capability
+  work: reference-doc row plus Ctx 1 coverage. It is the constraint doc for the capability library;
+  its posture is provisional pending formal confirmation.
+- **v0.4** — indexed the measurement-science reference cluster (`uncertainty-and-error-budgets`,
+  `systematic-errors`, `noise-and-sensitivity`, `calibration-and-drift`): added their rows plus Ctx 2/4/5
+  coverage. Context-numbered `addresses` remap with the nine-pillar migration.
+- **v0.3** — indexed the mechanism-attribution and hardware-loop additions: added the
+  `attribute-mechanism` skills-table row, whose SKILL.md had shipped unindexed, and wired
+  `attribute-mechanism`, `signal-extraction-pitfalls`, and `hardware-in-the-loop` into the §3 coverage
+  audit (Ctx 2/4/5/9). The two reference docs were already row-indexed. No principle content changed.
+- **v0.2** — added Context 9 · Operating unattended to the coverage audit (home: CORE "Running
+  unattended" + PRINCIPLES §9; enforced via `campaign.md` + `roles/*.md` / `campaign-status` / `expensive-evaluation` /
+  ENGINEERING_NOTES landmines / the CLAUDE.md gates). Bumped CORE `addresses` to `1,2,7,8,9` and
+  PRINCIPLES to `1–9`.
+- **v0.1** — initial index + metadata schema. Enumerates the full intended kit, built and planned.

@@ -6,7 +6,7 @@ because the agent RECORDED a reason to stop — never because a turn happened to
 Reads the Stop hook JSON on stdin; blocks with `{"decision":"block","reason": ...}` where the reason is
 the campaign's OWN next action (the JOURNAL NEXT pointer + open threads + the next exp id).
 
-Why a hook and not an instruction: the charter already says `12. REPEAT` and CLAUDE.md already says don't
+Why a hook and not an instruction: roles/worker.md already says `12. REPEAT` and CLAUDE.md already says don't
 stop prematurely, yet campaigns stopped after each completed experiment anyway. A turn ends when the model
 emits no tool call, and no prose survives that moment — this is the doctrine's own "enforce, don't exhort"
 (PRINCIPLES §9). Prose sets the intent; this hook is what makes it hold.
@@ -19,7 +19,12 @@ THE THREE WAYS A LOOP MAY END (checked in this order; anything else is blocked):
      campaign-status. Honored requests are archived to results/stop_requests/ so a stale one cannot re-fire.
   3. MAX_BLOCKS consecutive blocks with NO new scoreboard row — the anti-runaway release. A loop that is
      alive and producing nothing is a dead run (CORE "monitor progress, not liveness"); blocking it harder
-     just burns tokens. Released and recorded, never silent.
+     just burns tokens. Released and recorded, never silent, and **TERMINAL for the session that earned
+     it**: that session is never blocked again and never logged again. It used to reset the counter and
+     nothing more, so blocking resumed at once and the same session was released again 26 turns later,
+     forever — 58 blocks per 60 turn-ends, with a STALL_RELEASE row each time for a campaign in which
+     nothing had stalled. Blocks are counted PER SESSION, so an attended session's refusals are not spent
+     out of a working loop's budget.
 
 ARMING: the hook is inert until the campaign is live — >=1 data row in results/scoreboard.tsv (exp 000 has
 run), or `results/.loop_armed` exists. Without this the setup/validation session that legitimately finishes
@@ -77,7 +82,16 @@ REASON_CODES = {
     "irreversible-action-confirm": "waiting on the user to confirm a hard-to-reverse action",
     "hard-blocked": "a genuine external blocker (missing data, dead hardware, expired credential)",
     "exhausted": "every named lever has been tried; the direction is genuinely finished",
+    # This session is not the loop -- an attended question, a setup/repair pass, a look at the ledger.
+    # Without it the vocabulary had no way to say "I am not the thing you are keeping alive", so such a
+    # session could only grind to the stall release, 25 refusals at a time, and each release wrote a
+    # STALL_RELEASE row that campaign-status reads as a stalled campaign. The loop's own persistence is
+    # unaffected: a driver-spawned worker never reaches here (it stands down on AUTORESEARCH_SUPERVISED),
+    # and an unattended loop that filed this would be visible in loop_stops.log as exactly that claim.
+    "not-a-loop-session": "this session is not running the loop; the campaign continues under its driver "
+                          "or its next run",
 }
+RELEASED_CAP = 20        # keep the released-session list bounded; only recency matters
 
 
 def _ts(s):
@@ -194,11 +208,12 @@ def read_state():
         return {}
 
 
-def write_state(blocks, rows):
+def write_state(session_id, blocks, rows, released):
     try:
         LOOP_STATE.parent.mkdir(parents=True, exist_ok=True)
         LOOP_STATE.write_text(json.dumps(
-            {"consecutive_blocks": blocks, "rows_at_last_block": rows, "utc": _now().isoformat()},
+            {"session_id": session_id, "consecutive_blocks": blocks, "rows_at_last_block": rows,
+             "released_sessions": list(released)[-RELEASED_CAP:], "utc": _now().isoformat()},
             indent=2), encoding="utf-8")
     except Exception:
         pass
@@ -261,7 +276,7 @@ def stop_request_verdict(now):
                            "combination was tested, not the lever. Run each recorded `disentangler` (and "
                            "name the lever in that verdict's `resolves_confounded`) before declaring the "
                            "direction finished.")
-        # The B10 clause: a campaign may not declare itself finished while holding a lever it has itself
+        # A campaign may not declare itself finished while holding a lever it has itself
         # named as untried. Making that an explicit, falsifiable field is the whole point of the code.
         levers = req.get("untried_levers")
         if not isinstance(levers, list):
@@ -297,17 +312,18 @@ def continuation_reason(exp_id, nxt, threads, blocks, rows_since):
         lines.append(
             f"STALL: {blocks} consecutive continuations with NO new scoreboard row. Producing nothing is a "
             "dead run, not progress. Diagnose it now — is a run hanging, is a script erroring, are you "
-            "re-planning instead of executing? Use /physkit:debug, or record a stop_request (below). This "
-            f"loop releases itself after {MAX_BLOCKS} blocks without a result."
+            "re-planning instead of executing? Use /physkit:debug, or record a stop_request (below). After "
+            f"{MAX_BLOCKS} blocks without a result this session is released and not blocked again — the "
+            "release is a recorded failure signature, not a way to finish."
         )
     else:
         lines.append(
             f"The campaign is not finished — an experiment completing is not a stopping cue, and no "
             "supervisor driver is currently running. PREFERRED: hand the loop to the driver — launch it "
             "(/physkit:run-campaign, or `python scripts/run_campaign.py --supervise`) and let it spawn "
-            f"fresh-context workers. Otherwise resume at step 1 of the Experiment Loop in docs/charter.md "
+            f"fresh-context workers. Otherwise resume at step 1 of the Experiment Loop in roles/worker.md "
             f"for exp {exp_id}: HYPOTHESIZE & PREDICT (write the expected value and range BEFORE running), "
-            "one lever by default, then run/evaluate/log/verify."
+            "then run/evaluate/log/verify."
         )
     if nxt:
         lines.append(f"results/JOURNAL.md NEXT: {nxt}")
@@ -347,38 +363,56 @@ def main():
         if rows == 0 and not ARMED_FLAG.exists():
             _allow()  # campaign not live yet — don't trap the session that is still building it
 
+        state = read_state()
+        released = list(state.get("released_sessions") or [])
+        sid = str(data.get("session_id") or "")
+
+        # The release is TERMINAL for the session that earned it. It used to reset the counter and
+        # nothing else, so blocking resumed immediately and the session was released again 26 turns
+        # later, indefinitely -- measured at 58 blocks in 60 turn-ends, with a STALL_RELEASE row written
+        # each time for a campaign in which nothing had stalled. A release means "this session is not
+        # producing results"; that answer does not change by asking it 25 more times.
+        if sid and sid in released:
+            _allow()
+
         sentinel = sentinel_present()
         if sentinel is not None:
             _log(LOOP_STOPS_LOG, "SENTINEL", sentinel.name, f"rows={rows}")
-            write_state(0, rows)
+            write_state(sid, 0, rows, released)
             _allow()
 
         now = _now()
         if driver_alive_fresh(now):
             # A supervisor driver owns the loop right now - attended sessions may end turns freely.
             _log(LOOP_STOPS_LOG, "DRIVER_ALIVE_STANDDOWN", f"rows={rows}")
-            write_state(0, rows)
+            write_state(sid, 0, rows, released)
             _allow()
         honored, detail = stop_request_verdict(now)
         if honored:
             _log(LOOP_STOPS_LOG, "STOP_REQUEST", detail, f"rows={rows}")
             archive_request(detail)
-            write_state(0, rows)
+            write_state(sid, 0, rows, released)
             _allow()
 
-        state = read_state()
         prior_rows = int(state.get("rows_at_last_block", -1))
-        blocks = int(state.get("consecutive_blocks", 0)) + 1 if rows == prior_rows else 1
+        # Count per SESSION. The counter used to be global, so an attended session's refusals were spent
+        # out of the loop's budget and could trip the release for a run that was working fine.
+        same_session = (sid == str(state.get("session_id") or "")) if sid else True
+        blocks = int(state.get("consecutive_blocks", 0)) + 1 if (same_session and rows == prior_rows) else 1
         rows_since = rows - prior_rows if prior_rows >= 0 else rows
 
         if blocks > MAX_BLOCKS and rows == prior_rows:
             # Anti-runaway release: blocking harder cannot produce science, and an unstoppable loop is worse
-            # than a stopped one. Recorded so campaign-status can surface it as a stall, never silent.
-            _log(LOOP_STOPS_LOG, "STALL_RELEASE", f"blocks={blocks}", f"rows={rows}")
-            write_state(0, rows)
+            # than a stopped one. Recorded ONCE per session so campaign-status sees a stall rather than a
+            # drumbeat, and never silent.
+            if sid:
+                released.append(sid)
+            _log(LOOP_STOPS_LOG, "STALL_RELEASE", f"blocks={blocks}", f"rows={rows}",
+                 f"session={sid[:8] or 'unknown'}", "terminal-for-this-session")
+            write_state(sid, 0, rows, released)
             _allow()
 
-        write_state(blocks, rows)
+        write_state(sid, blocks, rows, released)
         exp_id = next_exp_id(rows)
         nxt, threads = journal_pointer()
         reason = continuation_reason(exp_id, nxt, threads, blocks, max(rows_since, 0))

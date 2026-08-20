@@ -17,23 +17,25 @@ description: >-
 # new-project — the home for a whole investigation
 
 A **Project** is one physical system investigated over many **Campaigns** (versioned attempts) and **Sessions**
-(ad-hoc work). It exists so shared data + docs live once, referenced by relative path — never copied — and so
-"what each version changed and found" lives in one index. See `synthesis/PROJECT_STRUCTURE_DESIGN.md` for the
-full model. Read `docs/PRINCIPLES.md` §1 for the interview stance.
+(ad-hoc work). It exists so shared data and docs live once, referenced by relative path and never copied, and
+so "what each version changed and found" lives in one index. Read `docs/PRINCIPLES.md` §1 for the interview
+stance.
 
 ## Every campaign lives in a project — there is no bare-campaign mode
-So you arrive here two ways: **directly** (the user is starting a new line of research) or **called by
-`new-campaign`** (Step 0.1 found no project home). When called, the interview below is largely already
-answered — carry those answers in, fill the tree, and **return**; do not call back into `new-campaign`, which
-is mid-run and resumes on its own. A one-off pays ~5 near-empty files for the home (the physics / conventions /
-instrument docs *move* into `shared/`, they don't multiply) and in exchange grows into a sibling campaign, a
-fork, or an ad-hoc session with **zero reorganization** and no path rewrites.
+Two entry paths: directly, when the user starts a new line of research, or from `new-campaign`, whose
+Step 0.1 found no project home. When called from `new-campaign`, the interview below is largely answered
+already: carry those answers in, fill the tree, and return. Do not call back into `new-campaign`; it is
+mid-run and resumes on its own.
+
+A one-off project costs about five near-empty files; the physics, conventions, and instrument docs move into
+`shared/` rather than multiplying. A sibling campaign, a fork, or an ad-hoc session can be added later with
+no reorganization and no path rewrites.
 
 ## Interview (gather, don't assume)
 1. **Physical system & end goal** — what system, what decision the investigation serves, what "done" looks like.
-2. **Canonical data** — where the experimental/reference data lives. If it's large or already on disk, keep it
-   OUT of the tree and record a **`data_path` pointer**; else place a read-only copy at `data/`. **Data is never
-   copied per-campaign** — this is the rule that kills the duplication + broken-path problem.
+2. **Canonical data** — where the experimental/reference data lives. If it is large or already on disk, keep it
+   out of the tree and record a `data_path` pointer; else place a read-only copy at `data/`. Data is never
+   copied per-campaign; one copy referenced by relative path prevents duplication and broken paths.
 3. **Shared physics / conventions / system params** — the facts every campaign inherits (→ `shared/`).
 4. **First campaign** — the initial attempt (its goal + frozen metric); scaffolded via `new-campaign` (below).
 
@@ -53,30 +55,30 @@ Copy from `${CLAUDE_PLUGIN_ROOT}/templates/project/`, strip `.tmpl`, fill placeh
 └── reports/            # one project-level outputs location (+ README)
 ```
 - **Author the shared docs** from `${CLAUDE_PLUGIN_ROOT}/templates/project/shared/`: `PHYSICS.md` (governing
-  physics **+ a "target of study" section** describing the object under study — sample/plasma/star/…),
-  `CONVENTIONS.md` (units/signs/frames), `INSTRUMENT.md` (the measurement rig + parameters). Seed empty
-  `DISCOVERIES.md` (project-wide verified findings, promoted from campaigns) and `ENGINEERING_NOTES.md` (durable
-  decisions) from their templates.
-- **Data home (copy the README; decide copy vs pointer).** Copy `data/README.md` (the read-only +
-  referenced-never-copied rule). Then, from interview topic 2: if the canonical data is **on-tree**, place the
-  read-only files in `data/`; if it lives **off-tree** (large / already on a lab store), DON'T copy it — write
-  `data/DATA_PATH.txt` (one line: the absolute path) and record the same `data_path` in `PROJECT.md`. That pointer
-  is the project's only absolute path.
-- **Sessions & reports scaffolding.** `sessions/` starts empty — each later ad-hoc session gets its own
-  `sessions/<YYYY-MM-DD>_<slug>/NOTES.md` authored from `${CLAUDE_PLUGIN_ROOT}/templates/project/sessions/NOTES.md.tmpl`
-  (do not pre-create empty session folders). Copy `reports/README.md` (the single outputs location).
-- **Relative paths only.** Campaigns reference `../../data` and `../../shared`; the whole tree relocates as one
-  unit. The only absolute path allowed is the resolved `data_path` pointer (documented in `PROJECT.md`).
+  physics, plus a "target of study" section describing the object under study: sample/plasma/star/…),
+  `CONVENTIONS.md` (units/signs/frames), `INSTRUMENT.md` (the measurement rig and parameters). Seed empty
+  `DISCOVERIES.md` (project-wide verified findings, promoted from campaigns) and `ENGINEERING_NOTES.md`
+  (durable decisions) from their templates.
+- **Data home (copy the README; decide copy vs pointer).** Copy `data/README.md` (the read-only,
+  referenced-never-copied rule). Then, from interview topic 2: if the canonical data is on-tree, place the
+  read-only files in `data/`. If it lives off-tree (large, or already on a lab store), do not copy it: write
+  `data/DATA_PATH.txt` with one line, the absolute path, and record the same `data_path` in `PROJECT.md`.
+  That pointer is the project's only absolute path.
+- **Sessions & reports scaffolding.** `sessions/` starts empty. Each later ad-hoc session gets its own
+  `sessions/<YYYY-MM-DD>_<slug>/NOTES.md` authored from `${CLAUDE_PLUGIN_ROOT}/templates/project/sessions/NOTES.md.tmpl`;
+  do not pre-create empty session folders. Copy `reports/README.md` (the single outputs location).
+- **Relative paths only.** Campaigns reference `../../data` and `../../shared`, so the whole tree relocates as
+  one unit. The only absolute path allowed is the resolved `data_path` pointer, documented in `PROJECT.md`.
 - **Strip `.tmpl` on write.** Fill every `{{PLACEHOLDER}}`; run the validator when done.
 
 ## Then the first campaign
-If `new-campaign` called you, **return to it** — it scaffolds the campaign under `campaigns/` itself. If the user
-came here directly, invoke **`new-campaign`** to scaffold the first campaign, wired to `../../data` +
-`../../shared`, and append its opening row to `LINEAGE.md`. Either way, do not duplicate the interview — carry
-over what you gathered here.
+If `new-campaign` called you, return to it; it scaffolds the campaign under `campaigns/` itself. If the user
+came here directly, invoke `new-campaign` to scaffold the first campaign, wired to `../../data` and
+`../../shared`, and append its opening row to `LINEAGE.md`. Either way, do not duplicate the interview: carry
+over what was gathered here.
 
 ## Verify
-Run the bundled validator on the **project root** (it auto-detects project vs campaign trees) and fix anything it flags:
+Run the bundled validator on the project root (it auto-detects project vs campaign trees) and fix anything it flags:
 ```
 python "${CLAUDE_PLUGIN_ROOT}/skills/new-campaign/scripts/validate_campaign.py" <project_root>
 ```
@@ -84,11 +86,10 @@ It checks the required project files/dirs, no leftover `{{…}}` in the project 
 campaign under `campaigns/` (incl. `_archive/`) is indexed in `LINEAGE.md`, that no campaign carries a local
 copy of a shared doc (referenced-never-copied), and that no config hard-codes an absolute path (portability).
 Then also confirm:
-- `data/` is a read-only canonical copy OR a `DATA_PATH.txt` pointer — not a per-campaign copy — and carries its README.
+- `data/` is a read-only canonical copy or a `DATA_PATH.txt` pointer — not a per-campaign copy — and carries its README.
 - `shared/` holds `PHYSICS.md` · `CONVENTIONS.md` · `INSTRUMENT.md`; `campaigns/`, `sessions/`, `reports/` exist (`reports/README.md` present).
-- No stray reference to the retired `SYSTEM.md` (it is now `PHYSICS.md` target-of-study § + `INSTRUMENT.md`).
+- No stray reference to the retired `SYSTEM.md`, and none to any shared doc the tree does not hold: the object under study lives in the `PHYSICS.md` target-of-study §, the rig in `INSTRUMENT.md`.
 - Report the project root, the data decision (copy vs pointer), and the first campaign created.
 
 ## Composition
-Composes **`new-campaign`** (first + subsequent campaigns) and **`fork-campaign`** (invalidation forks).
-`LINEAGE.md` ↔ the knowledge base pair by `@key` (§8 of the design doc).
+Composes `new-campaign` (first and subsequent campaigns) and `fork-campaign` (invalidation forks).

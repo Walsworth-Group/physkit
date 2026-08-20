@@ -2,6 +2,13 @@
 
 {{ONE_PARAGRAPH_PROBLEM_STATEMENT}}
 
+> These campaign documents fold scientific-rigor best practices into each iteration:
+> a-priori bounding of expectations, uncertainty/error-type tracking, independent verification of
+> every promotion, model parsimony and tie-breaking, simulation-gap caution, and full provenance
+> logging.
+> Items tagged **[PROPOSED]** in any of them are machine-suggested additions awaiting your review —
+> keep or cut each. Everything untagged is settled campaign doctrine.
+
 ## Approach
 
 {{APPROACH_SUMMARY}} — an autonomous research campaign that optimizes the single frozen primary
@@ -16,16 +23,28 @@ experiment for full reproducibility.
 
 ## How this campaign runs
 
-This is an autonomous research loop. The agent re-reads [`docs/charter.md`](docs/charter.md) every
-iteration and: hypothesizes a change (one lever by default), predicts the metric, runs it, evaluates the frozen
-metric + guardrail, logs a scoreboard row, and graduates confirmed findings to `DISCOVERIES.md` only
-after independent verification. Experiments are numbered `exp000` (the baseline gate), `exp001` (first
-method), then `exp002`, `exp003`, … — zero-padded to three digits so they sort correctly.
+This is an autonomous research loop. The worker re-reads [`campaign.md`](campaign.md) and
+[`roles/worker.md`](roles/worker.md) every iteration and: hypothesizes a change (recording which
+levers it moves), predicts the metric, runs it, evaluates the frozen metric + guardrail, logs a scoreboard
+row, and graduates confirmed findings to `DISCOVERIES.md` only after independent verification.
+Experiments are numbered `exp000` (the baseline gate), `exp001` (first method), then `exp002`,
+`exp003`, … — zero-padded to three digits so they sort correctly.
 
-- **The loop / charter:** [`docs/charter.md`](docs/charter.md)
+- **The campaign definition (both roles, every cycle):** [`campaign.md`](campaign.md)
+- **Role procedures:** [`roles/worker.md`](roles/worker.md) · [`roles/planner.md`](roles/planner.md)
 - **Conventions & units (bug-prevention reference):** [`{{CONVENTIONS_DOC}}`]({{CONVENTIONS_DOC}})
 - **Scoreboard (ledger):** [`results/scoreboard.tsv`](results/scoreboard.tsv)
 - **Working memory / settled findings:** [`results/JOURNAL.md`](results/JOURNAL.md) · [`results/DISCOVERIES.md`](results/DISCOVERIES.md)
+
+## Attended sessions
+
+- **Attended = the cockpit, not by-hand execution.** A human-attended session in this folder is the
+  loop's **concierge** (`run-campaign` skill): it launches `--supervise`, watches the driver log, and
+  relays steering through `results/inbox/`. It never executes units itself. A by-hand `--config` run
+  is for debugging a single experiment, not a mode for running the loop. The same gates apply either way.
+- **Steering does not require stopping the loop.** Notes dropped in `results/inbox/` are relayed
+  verbatim into the next worker or planner prompt, then archived. The agent acknowledges each note in
+  [`results/JOURNAL.md`](results/JOURNAL.md): what it changed, or why nothing.
 
 ## Repository map
 
@@ -41,7 +60,8 @@ method), then `exp002`, `exp003`, … — zero-padded to three digits so they so
 
 ## Background docs
 
-- Campaign loop: [`docs/charter.md`](docs/charter.md)
+- Campaign definition: [`campaign.md`](campaign.md)
+- Role procedures: [`roles/worker.md`](roles/worker.md) · [`roles/planner.md`](roles/planner.md)
 - Conventions/units: [`{{CONVENTIONS_DOC}}`]({{CONVENTIONS_DOC}})
 - Governing physics: [`{{PHYSICS_DOC}}`]({{PHYSICS_DOC}})
 {{EXTRA_BACKGROUND_DOC_LINKS}}

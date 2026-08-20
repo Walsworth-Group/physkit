@@ -1,38 +1,37 @@
 # Engineering Notes — {{CAMPAIGN_TITLE}}
 
-The **append-only record of engineering "why" decisions** — the reasoning behind non-obvious choices, the
-conditions each rests on, and what would make you revisit it. This is distinct from:
-- **`CONVENTIONS.md`** — the *rules* themselves (sign conventions, units, naming); this holds *why* a rule
+The append-only record of engineering decisions: why each non-obvious choice was made, the conditions it
+rests on, and what would make you revisit it. This is distinct from:
+- **`CONVENTIONS.md`** — the rules themselves (sign conventions, units, naming); this holds why a rule
   was chosen.
-- **the experiment `JOURNAL` / `logbook`** — *what happened* per experiment; this holds *why a choice was
-  made*, which often spans experiments.
+- **the experiment `JOURNAL` / `logbook`** — what happened per experiment; this holds why a choice was
+  made, which often spans experiments.
 
-Where `record-decision` entries land. **Append-only:** never rewrite history — supersede an old entry with
-a new one and link them. Record a decision when it is non-obvious and consequential and a future reader
+Where `record-decision` entries land. Append-only: never rewrite history. Supersede an old entry with a
+new one and link them. Record a decision when it is non-obvious and consequential and a future reader
 would otherwise have to reverse-engineer it (a method/library/parameterization choice, an approximation a
-result rests on, a non-obvious convention, an accepted trade-off, the *why* of a non-obvious verification
-check). Skip the obvious.
+result rests on, a non-obvious convention, an accepted trade-off, the reason for a non-obvious
+verification check). Skip the obvious.
 
 > Each entry uses six fields: **decision · alternatives · why · provenance · conditions · revisit-if.**
-> *Provenance* is **mandatory** — the source the decision is pinned to + confidence (PINNED / REPORTED /
-> INFERRED / RECALLED, or REASONED for a pure-judgment call with no external fact). (Template + guidance:
-> the `record-decision` skill.) **The source-authority ledger from campaign setup (`new-campaign` Step 0.6)
-> seeds the first EDs here** — one per load-bearing fact resolved from a source.
+> Provenance is mandatory: the source the decision is pinned to + confidence (PINNED / REPORTED /
+> INFERRED / RECALLED, or REASONED for a pure-judgment call with no external fact). Template and
+> guidance: the `record-decision` skill. The source-authority ledger from campaign setup
+> (`new-campaign` Step 0.6) seeds the first EDs here, one per load-bearing fact resolved from a source.
 
 ---
 
 ## Known landmines / Do-not-repeat
-A short, scannable list of hard-won "never do this again" hazards — the things that broke the machine,
-corrupted a run, or cost hours. Distinct from the ED rationale below: this is the fast **pre-flight
-checklist**. **Re-check it before any action matching a listed trigger** (GPU use, launching a
-detached/long process, overwriting inputs, …), and **proactively surface the relevant landmine to the user
-before complying** with a request that would hit one — don't silently walk into it. A landmine that lives
-only in a chat message or a memory file will not be re-checked (a real campaign re-triggered a
-machine-freezing GPU path twice because the warning wasn't captured here).
+A short, scannable list of hazards: the things that broke the machine, corrupted a run, or cost
+hours. Distinct from the ED rationale below, this is the fast pre-flight checklist. Re-check it before any
+action matching a listed trigger (GPU use, launching a detached/long process, overwriting inputs, …).
+Before complying with a request that would hit a listed landmine, surface that landmine to the user; do
+not walk into it silently. A landmine recorded only in a chat message or a memory file is not re-checked,
+and the hazard recurs. Record it in this table.
 
 | trigger (when about to…) | landmine (what went wrong) | do instead |
 |---|---|---|
-| <e.g. use the GPU for the dictionary build> | <froze the whole machine twice; hard reboot> | <use the CPU-parallel path; do NOT re-enable the GPU build> |
+| <e.g. use the GPU for the dictionary build> | <froze the machine; hard reboot> | <use the CPU-parallel path; do not re-enable the GPU build> |
 
 ---
 
@@ -54,8 +53,8 @@ INFERRED / RECALLED, or REASONED for a pure-judgment call); note any quarantined
 **Conditions it depends on.** <the assumptions/regime that make this right — a parameter range, a data
 property, a compute budget, a deadline>
 
-**Revisit-if.** <the concrete trigger that should reopen this — e.g. "if we leave the dilute regime", "if
-the mesh exceeds 1e6 cells", "if validation data arrives">
+**Revisit-if.** <the concrete trigger that reopens this — e.g. "if we leave the dilute regime", "if the
+mesh exceeds 1e6 cells", "if validation data arrives">
 
 <!-- Related: see PHYSICS inventory entry / JOURNAL exp<NN> / [[other ED-###]] -->
 
