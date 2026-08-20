@@ -35,13 +35,14 @@ ARTIFACT GATES (enforced here, in code - hard gates are gates, not reminders):
 Gate violations refuse loudly. The PROMOTE-path gates fail closed; the record-path helpers fail open
 (a liveness or logging bug must never lose an experiment) - except the prediction gate, which is fail-
 CLOSED throughout, including on an unreadable file: a spend gate cannot certify a prediction it could
-not read, and proceeding would spend the evaluation the gate exists to protect. Promotion (DISCOVERIES) is
-gated separately by scripts/guard_discoveries.py on verdict artifacts in results/verdicts/.
+not read, and proceeding would spend the evaluation the gate exists to protect. Promotion (current-best,
+scoreboard verdict tokens, the project ledger) is gated separately by scripts/guard_promotion.py on
+verdict artifacts in results/verdicts/.
 
 Before the experiment runs, two FROZEN-infrastructure gates fire automatically: the metric self-test
 (hard-fails if the scorer is unimplemented or fails its scrambled-input null control) and the correctness
 suite (its status is recorded to results/correctness_state.json; a RED suite blocks promotion via the
-DISCOVERIES gate).
+promotion gate).
 """
 from __future__ import annotations
 
@@ -74,6 +75,11 @@ PREDICTIONS = ROOT / "predictions"       # a-priori predictions, one JSON per ex
 VERDICTS = RESULTS / "verdicts"          # verify-skill verdict artifacts (promotion gate reads these)
 CORRECTNESS_STATE = RESULTS / "correctness_state.json"
 CHECKS = RESULTS                         # results/checks_<NN>.json - one mechanical verdict per experiment
+# Every campaign lives at <project>/campaigns/<slug>/ (no bare-campaign mode), so the project's ONE
+# background document is two levels up. Its §Standing constraints is delivered into every spawned
+# prompt (see build_prompt). The campaign's own landmines need no injection: they live in campaign.md,
+# which both roles are contractually required to re-read every cycle.
+ORIENTATION = ROOT.parent.parent / "PROJECT_ORIENTATION.md"
 
 
 class _Tee:
@@ -231,9 +237,17 @@ def snapshot_experiment(cfg: dict, config_path: Path | None = None, props: dict 
     prop_lines = "".join(f"{k}: {props.get(k)}\n" for k in
                          ("prediction_mode", "noise_model", "noise_floor", "tolerance",
                           "metric_version", "data_version") if k in props)
+    # The delivered context (PROJECT_ORIENTATION.md Standing constraints + the landmines table) is a
+    # LIVING document pulled into every spawned prompt, so two experiments in one campaign can run
+    # under different constraints. Hashing the assembled worker prompt here answers "what did this
+    # experiment run under" from the frozen record. Recomputed at snapshot time (inbox notes, which
+    # vary per spawn and steer rather than constrain, are not part of the hash).
+    spawn_hash = _hashlib.sha256(
+        build_prompt("worker", config=str(config_path or "<config path>")).encode("utf-8")).hexdigest()
     (dst / "manifest.txt").write_text(
         f"argv: {' '.join(sys.argv)}\npython: {sys.version.split()[0]}\nnumpy: {np.__version__}\n"
         f"core_hash: {frozen_core.core_hash(ROOT)}\n"   # WHICH FROZEN/core code this experiment ran against
+        f"spawn_prompt_sha256: {spawn_hash}\n"
         f"utc: {_utc_stamp()}\n" + prop_lines,
         encoding="utf-8",
     )
@@ -934,6 +948,36 @@ def metric_selftest_message() -> str | None:
     return None
 
 
+def unimplemented_hooks() -> list[str]:
+    """Which campaign hooks are still the generated `raise NotImplementedError` stub.
+
+    Detected from SOURCE, never by calling them: `run_experiment()` runs an experiment, so probing by
+    invocation would spend (or corrupt) a unit to answer a question about setup. A hook whose source
+    cannot be read is reported as implemented -- silence is better than a false accusation that sends
+    someone editing code that is already fine.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    out = []
+    for name in ("validate_method", "run_experiment", "load_target"):
+        fn = globals().get(name)
+        if not callable(fn):
+            continue
+        try:
+            body = ast.parse(textwrap.dedent(inspect.getsource(fn))).body[0].body
+        except (OSError, TypeError, SyntaxError, IndexError):
+            continue
+        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+            body = body[1:]                                    # drop the docstring
+        if len(body) == 1 and isinstance(body[0], ast.Raise):
+            exc = body[0].exc
+            if getattr(getattr(exc, "func", exc), "id", None) == "NotImplementedError":
+                out.append(name)
+    return out
+
+
 def require_metric_selftest() -> None:
     """HARD-FAIL unless the FROZEN scorer passes its self-test. Runs automatically before every experiment
     (was opt-in via --selftest). Doctrine: don't trust a ranking until the self-test passes - it gates
@@ -951,12 +995,12 @@ def check_correctness_suite() -> str:
     every experiment.
 
     Non-blocking for the run itself (so you can still iterate mid-fix) - but only an AFFIRMATIVE GREEN
-    green-lights a promotion. guard_discoveries refuses a promotion unless the suite is green: RED (a
+    green-lights a promotion. guard_promotion refuses a promotion unless the suite is green: RED (a
     check failed), EMPTY (zero active checks - the freshly-scaffolded all-skip suite), ERROR, and ABSENT all
     block, because none of them is evidence the machinery is right; a genuinely-no-simulator campaign records
     an explicit tests/CORRECTNESS_NA.md instead (doctrine: no finding built on an unguarded machine is
     trustworthy). The state also records a hash of the FROZEN/core files
-    (scripts/frozen_core.py); guard_discoveries rejects a promotion whose green was recorded against a
+    (scripts/frozen_core.py); guard_promotion rejects a promotion whose green was recorded against a
     DIFFERENT core than the code on disk now - a green does not survive an edit to the code it
     certified. The suite runs on every experiment, so the recorded green is fresh at experiment time; the
     hash closes the promote-without-a-new-experiment path (edit the scorer, then promote an old result).
@@ -978,8 +1022,8 @@ def check_correctness_suite() -> str:
             status = {0: "green", 1: "red", 2: "empty"}.get(rc, "error")   # 2 = zero active checks
             if status == "red":
                 print("WARNING: correctness suite is RED - a check FAILED. This result is recorded, but a RED "
-                      "suite BLOCKS PROMOTION (guard_discoveries refuses the DISCOVERIES write until it is "
-                      "green). Fix the suite before promoting anything built on this code.")
+                      "suite BLOCKS PROMOTION (guard_promotion refuses the current-best/verdict write until "
+                      "it is green). Fix the suite before promoting anything built on this code.")
             elif status == "empty":
                 print("WARNING: correctness suite has 0 ACTIVE checks (EMPTY) - the machinery is unguarded, so "
                       "it BLOCKS PROMOTION, same as RED. Add >=1 real check (correctness-suite skill), "
@@ -1085,23 +1129,83 @@ PLANNER_PROMPT = """You are the strategy planner for the autoresearch campaign i
 spawned because: {reasons}. CLAUDE.md auto-loads; these two do NOT, so read them first: campaign.md (the
 campaign definition - mission, the FROZEN metric, the levers, the caps, promotion) and roles/planner.md
 (your role - reopening shelved directions, getting unstuck, and the literature rule where this campaign
-enabled one). The queue rules are in this prompt, below. Then docs/PROJECT_ORIENTATION.md,
-results/JOURNAL.md, results/scoreboard.tsv (aggregates), results/DISCOVERIES.md, and results/queue.json. Your mandate is
+enabled one). The queue rules are in this prompt, below. Then results/JOURNAL.md (its Findings
+section is the settled record), results/scoreboard.tsv (aggregates), results/queue.json, and
+LITERATURE.md where the campaign keeps one (its idea roadmap feeds the queue). Your mandate is
 READ-MOSTLY and strategy-only: rewrite results/queue.json "next" (ordered units with rationales -
 check lever/topology coverage against campaign.md's lever list; after a promotion, re-open shelved
-directions), review "shelved" (revive what a promotion or frame change has re-opened; consolidate
+directions). Group RELATED units into a block - give each a shared "block": "<short-id>" and a
+"hypothesis" stating what the batch tests together - and the driver verifies the block ONCE when its
+last unit lands, so cheap experiments batch their verification cost while an expensive one stands
+alone. Review "shelved" (revive what a promotion or frame change has re-opened; consolidate
 accumulated EVIDENCE AGAINST kills into a prune recommendation, recorded), and append a strategy note
 to results/JOURNAL.md. A reprioritization that rests on a claimed invalidation requires its verdict
 artifact in results/verdicts/ - do not steer on an unverified major-problem claim. You never launch
-solves, never edit the scoreboard, results, DISCOVERIES, or anything FROZEN. If the campaign faces a
+solves, never edit the scoreboard, results, the journal's Findings, or anything FROZEN. If the campaign faces a
 genuine fork only the user can weigh, write results/ESCALATE.md. Review any shelved units with
 "kind": "operational" (shelved by the driver after repeated worker failures, reasons in "failures") -
 revive, reorder, or prune them with a recorded rationale. If a USER NOTES section follows this prompt,
 weigh it as user input when reordering the queue and acknowledge it in your strategy note."""
 
 
+VERIFIER_PROMPT = """You are the verification agent for the autoresearch campaign in this directory,
+spawned by the driver because completed experiment(s) await independent verification: {exps}.{hyp}
+CLAUDE.md auto-loads; read campaign.md first (its Verification section - this campaign's own checks -
+and The ONE metric). Your ONE job: for EACH experiment above, run {{VERIFY_SKILL}} in campaign mode -
+it spawns an independent refuter that never saw the generating reasoning and writes the verdict
+artifact results/verdicts/<exp_id>.json with every field filled and the refuter's id named. Judge the
+claim AS RECORDED (the scoreboard row, results/result_<NN>.json, its prediction artifact and
+checks_<NN>.json); verify steering-negatives and kill-claims with the same rigor as wins. Do NOT edit
+the scoreboard or configs/RECOMMENDED.json - the driver stamps the verified column from your
+artifacts, and promotion is the worker's and planner's call, never yours. If a verdict is REFUTED or
+INCONCLUSIVE, append the named control or fix-and-rerun as a proposed unit to results/queue.json
+"next" (one concrete runnable config each, rationale citing the verdict file). Add one line per
+verdict to results/JOURNAL.md. Your turn ends when every verdict artifact above exists on disk."""
+
+
+def _md_section(path: Path, heading: str) -> str | None:
+    """The body of one `## <heading>` section of a Markdown file, or None if file/section is absent."""
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except OSError:
+        return None
+    lines, keep = [], False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            if keep:
+                break
+            keep = heading.lower() in line.lower()
+            continue
+        if keep:
+            lines.append(line)
+    return "\n".join(lines).strip() if lines else None
+
+
+def _delivered_context() -> str:
+    """The living context every spawned agent carries: the project's §Standing constraints
+    (PROJECT_ORIENTATION.md) - the one document OUTSIDE the per-cycle read set that must still be
+    guaranteed present.
+
+    Delivered by VALUE, not by pointer: a pointed-at constraint is read only when an agent chooses
+    to look, and these are the constraints that must not depend on that choice. (The campaign's own
+    landmines and checks need no injection: they live in campaign.md, which the spawn prompt requires
+    both roles to re-read every cycle.) The doc is living, so what was delivered can differ between
+    experiments - which is why the per-experiment snapshot stamps the spawn prompt's hash (see
+    snapshot_experiment).
+
+    A missing section is named LOUDLY in the prompt rather than silently absent, because a constraint
+    delivery that degrades to nothing recreates the recorded-but-unread failure this mechanism
+    exists to close. Preflight refuses to launch without the constraints section at all.
+    """
+    constraints = _md_section(ORIENTATION, "Standing constraints")
+    return ("\n\n== STANDING CONSTRAINTS (../../PROJECT_ORIENTATION.md - project background; "
+            "equations, methods, instrument and durable decisions live below this section) ==\n"
+            + (constraints or "[MISSING: ../../PROJECT_ORIENTATION.md has no '## Standing "
+               "constraints' section. Report this in the journal; do not guess the constraints.]"))
+
+
 def build_prompt(role: str, *, config: str = "<config path>", reasons: str = "<trigger reasons>",
-                 notes: str = "") -> str:
+                 notes: str = "", exps: str = "<exp ids>", hypothesis: str = "") -> str:
     """The ONE assembly path for a spawned agent's prompt.
 
     Both spawn sites AND `--show-prompt` come through here, so what a reviewer inspects is what an
@@ -1109,18 +1213,24 @@ def build_prompt(role: str, *, config: str = "<config path>", reasons: str = "<t
     which is exactly the shape that lets a preview drift from the real thing — and a setup review
     gate is only worth having if it cannot lie about what it is showing.
 
-    Notes are appended by CONCATENATION after .format(), never through it, so braces in user-written
-    note text cannot crash the driver (see _drain_inbox).
+    The delivered context and the notes are appended by CONCATENATION after .format(), never through
+    it, so braces in doc text or user-written note text cannot crash the driver (see _drain_inbox).
 
     NOT included: the campaign `CLAUDE.md`, which the agent harness auto-loads on top of this, and
     the files this prompt tells the agent to read (`campaign.md`, the role file). This returns the
     literal spawn string, nothing more — see --show-prompt's own output for that distinction.
     """
     if role == "worker":
-        return WORKER_PROMPT.format(config=config) + notes
+        return WORKER_PROMPT.format(config=config) + _delivered_context() + notes
     if role == "planner":
-        return PLANNER_PROMPT.format(reasons=reasons) + notes
-    raise ValueError(f"unknown role {role!r} (expected 'worker' or 'planner')")
+        return PLANNER_PROMPT.format(reasons=reasons) + _delivered_context() + notes
+    if role == "verifier":
+        # The hypothesis rides in as a format VALUE (never through the template string), so braces in
+        # planner-authored text cannot crash the driver - same contract as notes. No inbox notes: user
+        # steering goes to judgment agents (worker/planner); the verifier stays isolated from it.
+        hyp = ("\nBlock hypothesis (what this batch tests): " + hypothesis) if hypothesis else ""
+        return VERIFIER_PROMPT.format(exps=exps, hyp=hyp) + _delivered_context()
+    raise ValueError(f"unknown role {role!r} (expected 'worker', 'planner' or 'verifier')")
 
 
 def _read_json(path: Path, default):
@@ -1137,6 +1247,11 @@ def _read_json(path: Path, default):
 
 PREDICTION_MODES = ("range", "direction", "none")
 NOISE_MODELS = ("stochastic", "deterministic")
+# 'per-block' (default): the driver spawns an independent verification agent after every completed
+# unit/block, and a promotion needs that experiment's own verdict. 'promotion-only': verification runs
+# only when something is promoted (the pre-verify-after behavior) - requires a recorded reason, the
+# same owned-control contract as prediction_mode 'none'.
+VERIFICATION_MODES = ("per-block", "promotion-only")
 
 
 def _campaign_props(loop_cfg: dict | None = None) -> dict:
@@ -1199,6 +1314,8 @@ def _campaign_props(loop_cfg: dict | None = None) -> dict:
         "tolerance": _num("tolerance"),
         "metric_version": str(c.get("metric_version") or "").strip(),
         "data_version": str(c.get("data_version") or "").strip(),
+        "verification": str(c.get("verification") or "per-block").strip().lower(),
+        "verification_reason": str(c.get("verification_reason") or "").strip(),
         "_bad_nums": bad_nums,
     }
 
@@ -1239,6 +1356,17 @@ def campaign_props_problems(props: dict) -> list[str]:
                    "its answer (exploratory discovery, first-of-kind measurement, unknown landscape). "
                    "Running with no a-priori bound is a real choice; making it without a recorded reason "
                    "is how the control quietly becomes nobody's decision.")
+    if props["verification"] not in VERIFICATION_MODES:
+        bad.append(f"configs/loop.json campaign.verification is {props['verification']!r}; expected one "
+                   f"of {' | '.join(VERIFICATION_MODES)}. Fix: 'per-block' (the default - the driver "
+                   "spawns independent verification after every completed unit/block), or "
+                   "'promotion-only' with a recorded reason.")
+    if props["verification"] == "promotion-only" and not props["verification_reason"]:
+        bad.append("configs/loop.json sets campaign.verification='promotion-only' with an empty "
+                   "campaign.verification_reason. Fix: record WHY per-block verification is not "
+                   "affordable or applicable here. Turning routine verification down is a real choice; "
+                   "making it without a recorded reason is how the control quietly becomes nobody's "
+                   "decision.")
     return bad
 
 
@@ -1328,6 +1456,12 @@ def _render_stream_event(raw_line: str, label: str, max_chars: int) -> str | Non
         return f"[{label}] {s}"[:max_chars]
     etype = ev.get("type")
     if etype == "system":
+        # ONLY `init` is a session start. A session emits many other `system` events, and labelling them
+        # all identically buried the thing the feed exists to show: one real worker unit produced 253 of
+        # these against 7 lines of agent text. The tell was that they printed `model=?` -- an init event
+        # carries a model. A feed nobody can read is not a feed.
+        if ev.get("subtype") != "init":
+            return None
         return f"[{label}] session start (model={ev.get('model', '?')})"[:max_chars]
     if etype == "assistant":
         bits = []
@@ -1502,7 +1636,7 @@ def _read_queue() -> dict:
     mistaken for an empty one (that would silently erase every queued direction and the accept counters).
     """
     default = {"next": [], "shelved": [], "accepted_units": 0,
-               "last_accept_utc": None, "units_since_planner": 0}
+               "last_accept_utc": None, "units_since_planner": 0, "pending_verification": []}
     if not QUEUE.is_file():
         return default
     try:
@@ -1644,7 +1778,8 @@ def preflight(smoke: bool = False) -> list[str]:
                 bad(problem)
             if not prop_problems:
                 note = (f"campaign: prediction_mode={props['prediction_mode']} "
-                        f"noise_model={props['noise_model']}")
+                        f"noise_model={props['noise_model']} "
+                        f"verification={props['verification']}")
                 if props["noise_model"] == "stochastic" and props["noise_floor"] is None:
                     note += " (noise_floor unset - the noise-floor check reports 'unavailable')"
                 if props["noise_model"] == "deterministic" and props["tolerance"] is None:
@@ -1685,6 +1820,14 @@ def preflight(smoke: bool = False) -> list[str]:
             bad(f"{rel} is missing ({why}). Fix: launch from the campaign root of a scaffolded campaign "
                 "(new-campaign generates this tree).")
 
+    # 4a. the delivered context: every spawn carries the project's Standing constraints by value, so a
+    # launch without them would run the whole night on prompts missing the constraints the project
+    # recorded - the recorded-but-unread failure, mechanized. Refuse instead.
+    if _md_section(ORIENTATION, "Standing constraints") is None:
+        bad("../../PROJECT_ORIENTATION.md is missing or has no '## Standing constraints' section - "
+            "that section is delivered into every spawned worker/planner prompt. Fix: author it "
+            "(new-project generates it; a pre-merge project migrates via the kit's docs/MIGRATING.md).")
+
     # 4b. disk budget: a launch that cannot hold a few units of artifacts will fail mid-night
     free_mb = _free_disk_mb()
     per_unit = _unit_disk_mb(_read_json(LOOPCFG, {}) or {})
@@ -1715,6 +1858,20 @@ def preflight(smoke: bool = False) -> list[str]:
         bad(msg.replace("\n", " "))
     else:
         ok("metric selftest passes")
+
+    # 5b. the campaign's OWN experiment code. The scorer above is probed; these three were not, so a
+    # freshly scaffolded campaign passed preflight and was told it was "ready for --supervise" while every
+    # unit was guaranteed to fail. Worse than the wasted launch: N identical failures halt the loop as
+    # SYSTEMIC, which blames the environment for code that was simply never written.
+    stubs = unimplemented_hooks()
+    if stubs:
+        bad("campaign hooks are still the generated stubs: "
+            + ", ".join(f"{n}()" for n in stubs)
+            + ". Fix: implement them in scripts/run_campaign.py - they are this campaign's physics "
+              "(the experiment dispatcher, the lever contract, the target loader) - then re-run. "
+              "Until they are written every experiment fails identically.")
+    else:
+        ok("campaign hooks implemented (validate_method, run_experiment, load_target)")
 
     # 6. correctness suite - informational only (a non-green blocks promotion, not the run)
     if (not (ROOT / "tests" / "correctness_checks.py").is_file()
@@ -1769,8 +1926,10 @@ def supervise(smoke: bool = False):
     w, p, plat = loop_cfg["worker"], loop_cfg["planner"], loop_cfg["plateau"]
     k = _driver_knobs(loop_cfg)
     k["absolute_s"] = float(w["iteration_timeout_hours"]) * 3600
+    props = _campaign_props(loop_cfg)
     cfg_mtime = LOOPCFG.stat().st_mtime
     consec_fail = 0
+    consec_vfail = 0
 
     try:
         while True:
@@ -1807,6 +1966,7 @@ def supervise(smoke: bool = False):
                 w, p, plat = loop_cfg["worker"], loop_cfg["planner"], loop_cfg["plateau"]
                 k = _driver_knobs(loop_cfg)
                 k["absolute_s"] = float(w["iteration_timeout_hours"]) * 3600
+                props = _campaign_props(loop_cfg)
                 cfg_mtime = LOOPCFG.stat().st_mtime
                 print("[supervise] configs/loop.json changed - reloaded (logged): " + json.dumps(k))
 
@@ -1903,6 +2063,19 @@ def supervise(smoke: bool = False):
                 q["last_accept_utc"] = _dt.datetime.now(_dt.timezone.utc).isoformat()
                 consec_fail = 0
                 print(f"[supervise] accepted unit #{q['accepted_units']}: {unit['config']}")
+                if props["verification"] == "per-block":
+                    # Queue the accepted unit for driver-spawned verification. Its block (a batch of
+                    # related units sharing a "block" id) is verified once, when its last unit lands;
+                    # a block-less unit is a block of one. Persisted in the queue ledger, so
+                    # verification owed by an interrupted run is serviced on relaunch.
+                    try:
+                        stem = json.loads((ROOT / cfg_path).read_text(encoding="utf-8"))["exp_name"]
+                    except Exception:
+                        stem = ""
+                    if stem:
+                        q.setdefault("pending_verification", []).append(
+                            {"config": unit["config"], "exp": stem,
+                             "block": unit.get("block"), "hypothesis": unit.get("hypothesis")})
             elif declined:
                 consec_fail = 0
                 print(f"[supervise] unit declined -> planner will review: {unit['config']}")
@@ -1925,6 +2098,10 @@ def supervise(smoke: bool = False):
             q["units_since_planner"] = int(q.get("units_since_planner", 0)) + 1
             q["consecutive_operational_failures"] = consec_fail
             QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
+
+            # ---- verify-after: service completed blocks (also drains backlog left by a mode flip) ----
+            if props["verification"] == "per-block" or (q.get("pending_verification") or []):
+                consec_vfail = _service_verification(k, p.get("model", ""), consec_vfail)
     except KeyboardInterrupt:
         proc = _LIVE_PROC.get("proc")
         if proc is not None and proc.poll() is None:
@@ -1951,6 +2128,148 @@ def _unit_saved(config_path: Path) -> bool:
             and stem in LOGBOOK.read_text(encoding="utf-8", errors="replace"))
 
 
+# ---- per-block verification (the driver spawns the verifier; the worker never grades its own work) ----
+
+def _find_verdict_file(stem: str) -> Path | None:
+    """The verdict artifact for one experiment, matched by SUBJECT: the file is named for the exp id or
+    slug, or its JSON carries the matching exp_id. Filename first (cheap), content second."""
+    eid = exp_id_for(stem)
+    if not VERDICTS.is_dir():
+        return None
+    for p in sorted(VERDICTS.glob("*.json")):
+        if p.stem == stem or (eid and exp_id_for(p.stem) == eid):
+            return p
+    for p in sorted(VERDICTS.glob("*.json")):
+        try:
+            v = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if eid and exp_id_for(str(v.get("exp_id", "")).strip()) == eid:
+            return p
+    return None
+
+
+def _stamp_verified(stem: str) -> None:
+    """Fill the scoreboard row's `verified` cell from the verdict artifact - mechanical consumption.
+
+    The artifact is the evidence; the column is the view of it, and leaving the stamp to agent
+    diligence is how rows acted as current-best with a blank `verified` (the hygiene failure
+    campaign-status flags). Fills a BLANK cell only: an already-recorded value is never overwritten -
+    a mismatch between column and artifact is campaign-status's audit to surface, not this function's
+    to hide. The `verified` column is the one cell of the append-only ledger DESIGNED to be filled
+    after its row ("blank until run"), so this is completion, not history-editing."""
+    vf = _find_verdict_file(stem)
+    if vf is None:
+        return
+    try:
+        verdict = str(json.loads(vf.read_text(encoding="utf-8")).get("verdict", "")).strip().upper()
+    except Exception:
+        return
+    if not verdict:
+        return
+    eid = exp_id_for(stem)
+    try:
+        lines = SCOREBOARD.read_text(encoding="utf-8").splitlines()
+        header_i = next(i for i, L in enumerate(lines) if L and not L.startswith("#"))
+        cols = lines[header_i].split("\t")
+        vcol = next((i for i, c in enumerate(cols) if c.strip().lower() == "verified"), None)
+        if vcol is None:
+            return
+        for i in range(header_i + 1, len(lines)):
+            cells = lines[i].split("\t")
+            if cells and cells[0].strip() == eid:
+                while len(cells) < len(cols):
+                    cells.append("")
+                if not cells[vcol].strip():
+                    cells[vcol] = verdict
+                    lines[i] = "\t".join(cells)
+                    SCOREBOARD.write_text("\n".join(lines) + "\n", encoding="utf-8")
+                    print(f"[supervise] stamped scoreboard verified={verdict} for exp {eid} "
+                          f"(from {vf.name})")
+                return
+    except Exception as exc:
+        print(f"[supervise] note: could not stamp verified for {stem} ({exc}) - the verdict artifact "
+              "is the record either way")
+
+
+def _verification_backlog(q: dict) -> list[list[dict]]:
+    """Groups from queue.json's pending_verification whose block is COMPLETE - no queued unit still
+    shares the block id. Unblocked (block-less) entries are singleton groups, ready immediately."""
+    queued_blocks = {u.get("block") for u in q.get("next", []) if u.get("block")}
+    groups: dict[str, list] = {}
+    ready: list[list[dict]] = []
+    for e in q.get("pending_verification") or []:
+        b = e.get("block")
+        if not b:
+            ready.append([e])
+        elif b not in queued_blocks:
+            groups.setdefault(str(b), []).append(e)
+    ready.extend(groups.values())
+    return ready
+
+
+def _service_verification(k: dict, model: str, vfail: int) -> int:
+    """Spawn the verifier for every completed block awaiting verification; stamp and clear on success.
+
+    Runs every loop iteration (pending_verification is queue-persisted, so verification owed by a
+    crashed or interrupted run is serviced on relaunch - never lost). Verification is control flow,
+    not agent virtue: a block is not cleared until every experiment's verdict artifact exists.
+    Failures degrade LOUD like worker failures - the entries stay pending and are retried next
+    iteration - and N in a row is SYSTEMIC: a campaign that declared per-block verification
+    (configs/loop.json campaign.verification) must not keep accumulating unverified science.
+    Returns the updated consecutive-verification-failure count."""
+    q = _read_queue()
+    for group in _verification_backlog(q):
+        exps = [e.get("exp", "") for e in group if e.get("exp")]
+        if not exps:                                   # unnameable entries cannot be verified; drop them
+            bad_cfgs = {e.get("config") for e in group}
+            q2 = _read_queue()
+            q2["pending_verification"] = [e for e in (q2.get("pending_verification") or [])
+                                          if e.get("config") not in bad_cfgs]
+            QUEUE.write_text(json.dumps(q2, indent=2), encoding="utf-8")
+            continue
+        missing = [s for s in exps if _find_verdict_file(s) is None]
+        if missing:
+            hyp = next((e.get("hypothesis") for e in group if e.get("hypothesis")), "")
+            label = "block " + str(group[0].get("block")) if group[0].get("block") else exps[0]
+            print(f"[supervise] verification due for {label}: {', '.join(missing)}")
+            prompt = build_prompt("verifier", exps=", ".join(missing), hypothesis=str(hyp or ""))
+
+            def _verdicts_probe(ms=tuple(missing)) -> bool:
+                return all(_find_verdict_file(s) is not None for s in ms)
+
+            for attempt in range(1 + k["planner_retries"]):
+                st = _spawn_agent(prompt, model, f"verifier[{label}]", k, saved_probe=_verdicts_probe)
+                missing = [s for s in exps if _find_verdict_file(s) is None]
+                if not missing:
+                    break
+                print(f"[supervise] verifier attempt {attempt + 1} left verdicts missing for "
+                      f"{', '.join(missing)} (status={st})"
+                      + (" - retrying" if attempt < k["planner_retries"] else ""))
+        if missing:
+            vfail += 1
+            print(f"[supervise] VERIFICATION failure #{vfail}/{k['max_consecutive_failures']}: "
+                  f"{', '.join(missing)} still unverified - entries stay in pending_verification and "
+                  "are retried next iteration (degrade-loud)")
+            if vfail >= k["max_consecutive_failures"]:
+                _halt(f"supervise: HALT - {vfail} consecutive verification failures is SYSTEMIC. This "
+                      "campaign runs verification per block (configs/loop.json campaign.verification), "
+                      "so the loop must not keep producing science nothing verifies: check the agent "
+                      "CLI and the driver log, then relaunch - pending verification resumes first.")
+            continue
+        vfail = 0
+        for s in exps:
+            _stamp_verified(s)
+        done_cfgs = {e.get("config") for e in group}
+        q2 = _read_queue()                             # re-read: the verifier may have queued follow-ups
+        q2["pending_verification"] = [e for e in (q2.get("pending_verification") or [])
+                                      if e.get("config") not in done_cfgs]
+        QUEUE.write_text(json.dumps(q2, indent=2), encoding="utf-8")
+        print(f"[supervise] verification complete: {', '.join(exps)} - verdict(s) on record and "
+              "stamped; REFUTED/INCONCLUSIVE follow-ups, if any, were queued by the verifier")
+    return vfail
+
+
 def main():
     _make_console_lenient()   # before ANY print: a model-authored glyph must never end a run
     ap = argparse.ArgumentParser(description="Experiment runner for {{CAMPAIGN_TITLE}}")
@@ -1962,7 +2281,7 @@ def main():
     g.add_argument("--preflight", action="store_true",
                    help="run the supervisor launch checks (agent CLI, loop.json, queue.json, metric "
                         "selftest) and exit - no spend")
-    g.add_argument("--show-prompt", choices=("worker", "planner"), metavar="ROLE",
+    g.add_argument("--show-prompt", choices=("worker", "planner", "verifier"), metavar="ROLE",
                    help="print the literal prompt this driver would spawn ROLE with, plus its size "
                         "and hash, then exit. Reads nothing, spends nothing, changes nothing")
     ap.add_argument("--smoke", action="store_true",

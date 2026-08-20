@@ -1,5 +1,9 @@
 # Logbook — {{CAMPAIGN_TITLE}} (append-only; the full narrative record)
 
+**Scaffolded by physkit {{PHYSKIT_VERSION}}.** This pin is the campaign's doctrine and tooling
+provenance: every kit release is tagged, so the exact skills, docs, and templates that governed this
+run are recoverable from it. Never update this line to a newer version.
+
 The complete, permanent history of the campaign: one entry per experiment, in order, verbatim and never
 trimmed. The runner (`scripts/run_campaign.py`) auto-appends the facts of each entry. The agent completes
 that entry's narrative slots right after: Analysis, Expected-vs-found, Verification, Excluded-data, NEXT.
@@ -19,7 +23,7 @@ Rules — read these once, then do not read the rest of this file:
   `- **Artifacts**: …`, `- **NEXT**: …`. Keep each field on its own bullet line; never collapse them into
   one paragraph. A single newline renders as a space in Markdown, so separate bullets make the entry
   readable.
-- The numbers live in `scoreboard.tsv`, settled findings in `DISCOVERIES.md`, the navigation map in
+- The numbers live in `scoreboard.tsv`, settled findings in `JOURNAL.md` §Findings, the navigation map in
   This file is the full narrative.
 
 Completing the current entry — fill the slots the runner left blank, before moving on:

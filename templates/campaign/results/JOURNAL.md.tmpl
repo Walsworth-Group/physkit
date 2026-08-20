@@ -1,15 +1,38 @@
-# JOURNAL — {{CAMPAIGN_TITLE}} (working window — steering only)
+# JOURNAL — {{CAMPAIGN_TITLE}} (working window + the findings record)
 
-The lean view the agent reads each iteration: the NEXT pointer, open threads, and a one-line summary of
-recent experiments. Do not re-copy full narratives here. The runner auto-logs each experiment's full entry
-to `results/logbook.md`; complete its Analysis, Verification, and NEXT there. Read a slice of its recent
-tail when detail is needed. Keep this file short and drop the oldest one-liners when it grows; see
-the `campaign-status` skill (step 3).
+The lean view the agent reads each iteration: the NEXT pointer, open threads, the settled findings,
+and a one-line summary of recent experiments. Do not re-copy full narratives here. The runner
+auto-logs each experiment's full entry to `results/logbook.md`; complete its Analysis, Verification,
+and NEXT there. Read a slice of its recent tail when detail is needed. Keep the working sections
+short — §Recent experiments drops its oldest one-liners when it grows (see the `campaign-status`
+skill, step 3); **§Findings is append-only and survives every consolidation.**
 
 **NEXT:** {{FIRST_NEXT_STEP}}
 
 ## Open threads
 - (PROVISIONAL / QUESTIONABLE-ASSUMPTION findings, unresolved disputes, directions to revisit)
+
+## Findings (settled — positive and negative; append-only, never trimmed)
+
+The campaign's accumulated knowledge. An entry lands here only after multiple consistent experiments
+AND a CONFIRMED verdict from `{{VERIFY_SKILL}}`'s independent refuter — **every entry cites its
+`results/verdicts/<id>.json` by name; a claim with no verdict citation is an open thread, not a
+finding, and steers nothing.** A single good run is a Recent-experiments line, not a finding.
+Steering-negatives are findings too (number them N1, N2, …): record the **kill tier** from the
+verdict — REFUTED (mechanism understood → prunes) or EVIDENCE AGAINST (clean single negative →
+shelved in `results/queue.json`, revivable; entries accumulate toward a prune). An INCONCLUSIVE kill
+never lands here; queue a fix-and-rerun unit. Narrative depth stays in the logbook — one to three
+lines per entry, citing exp ids.
+
+Disputes and retractions are appended, never resolved by deletion: challenge an entry with a dated
+**DISPUTES Fn** line (what is contested, on what evidence); overturn or narrow one with a dated
+**REVISES Fn** entry and edit Fn's first line to begin `[SUPERSEDED — see REVISES below]`, keeping
+its original text, then amend the stale claim wherever it was copied (scoreboard `notes`,
+`../../../PROJECT_ORIENTATION.md`). A finding that is a fact about the **system** — not a config
+that scored well — is additionally promoted to the project ledger `../../../DISCOVERIES.md`, citing
+the same verdict artifact (that write is hook-gated).
+
+- F1 · <the settled claim, one line> · exp <ids> · `verdicts/<id>.json` · <mechanism/scope, one line>
 
 ## Recent experiments (one line each — full record in `results/logbook.md`)
 `tier` = Scout / Confirmation / Extended, the run-length tier from `campaign.md` §{{RUN_NOUN}} Caps.

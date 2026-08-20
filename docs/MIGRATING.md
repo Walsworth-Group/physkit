@@ -14,6 +14,98 @@ versions behind, work upward from the oldest section that matches your tree.
 > `python` is correct on macOS and Linux. Every command in this file works either way with that
 > substitution.
 
+## To the consolidated layout — one background document, seven campaign docs, one promotion gate (kit ≥ v0.10.0, 2026-08-20)
+
+**Symptom.** The validator reports *"the project home predates the one-background-document merge: it
+has shared/PHYSICS.md and no PROJECT_ORIENTATION.md"*, flags a campaign-level
+`docs/PROJECT_ORIENTATION.md`, or reports *"README.md has no 'Setup status' section"*; a newly
+scaffolded driver's `--preflight` refuses with *"../../PROJECT_ORIENTATION.md is missing or has no
+'## Standing constraints' section"*.
+
+**What changed — project level.** The background became ONE document: `shared/PHYSICS.md`,
+`shared/CONVENTIONS.md`, `shared/INSTRUMENT.md`, and the project-root `ENGINEERING_NOTES.md` merged
+into `<project>/PROJECT_ORIENTATION.md`, one section each; `shared/` now holds only promoted frozen
+artifacts. The driver delivers the doc's `## Standing constraints` into every spawned prompt **by
+value** and stamps the spawn prompt's hash into each experiment snapshot's manifest.
+
+**What changed — campaign level.** `campaign.md` is now the whole signed-off contract, absorbing what
+were separate files: the goal block and expectations (from the dissolved `docs/PROJECT_ORIENTATION.md`;
+tasks go to the queue + JOURNAL NEXT), the campaign-specific verification checks (§Verification, from
+`docs/VERIFICATION_PLAN.md` — the generic checklist was the `verify`/`correctness-suite` procedure
+restated), and the landmines table + append-only decision record (§Known landmines + §Decision record,
+from `docs/ENGINEERING_NOTES.md`). `README.md` is the cold-reader front door; `SETUP_TODO.md` is
+retired without a replacement table — setup state is computed live by `--preflight` and the gates,
+and README's §Setup status just points there. `DOCTRINE_SNAPSHOT.md` is retired for a kit-**version stamp** in
+`campaign.md`'s header and atop `results/logbook.md` — the snapshot recorded only the doctrine spine
+while skills, reference docs, and the driver also govern behavior; the version pin recovers the whole
+tagged kit (ADR-0012). `INTAKE.md` and `tests/README.md` are retired outright; `docs/` no longer
+exists. **`results/DISCOVERIES.md` dissolved into the journal's append-only `## Findings` section**
+(V6): settled findings — positive, negative, disputes, REVISES retractions — live there, each citing
+its verdict artifact, and consolidation never trims that section. The promotion hook narrowed to the
+mechanical surfaces and was renamed `guard_promotion.py`: it gates `configs/RECOMMENDED.json` writes,
+scoreboard `CONFIRMED`/`NEW BEST` tokens, and — newly, fail-closed — the **project** ledger
+`<project>/DISCOVERIES.md`, whose entries must cite the source campaign's verdict by path
+(`campaigns/<slug>/results/verdicts/<id>.json`) with that campaign's suite green. The journal's
+Findings section is deliberately not hook-gated (it is working memory); `campaign-status` audits that
+every entry's citation resolves.
+
+**What breaks.** Nothing in an un-migrated tree that keeps its own driver — the old campaign's files
+still point at paths it still has. The costs are the scattered reading surface and pointer-only
+constraint delivery. Migrate a project you are still working in; leave finished campaigns frozen.
+
+**The procedure** (per project; the validator's errors double as the checklist):
+
+1. Create `<project>/PROJECT_ORIENTATION.md` from the kit template
+   (`templates/project/PROJECT_ORIENTATION.md.tmpl`) and **move** — do not rewrite — the content:
+   the physics inventory, a-priori bound, domain of validity, all unit/sign/frame/ordering
+   conventions, known gotchas, and run-constraining rig parameters into `## Standing constraints`
+   (keep it lean; it is delivered every cycle); target-of-study, predictive framework, system
+   behavior into `## The system under study`; the rig characterization into `## The instrument`;
+   equations, simulation methods, common techniques into `## Equations and methods`; the project
+   `ENGINEERING_NOTES.md` ED entries into `## Durable decisions`; references into `## References`.
+   Then delete the four merged project files.
+2. For each **active** campaign, fold into `campaign.md`: the goal / decision-served / done-criteria /
+   out-of-scope from `docs/PROJECT_ORIENTATION.md` (§Mission + §FROZEN), its expectations as a
+   `## Loosely-held expectations` section, live tasks into `results/queue.json` "next" (with
+   rationales) + the JOURNAL NEXT, field-positioning into the project document; the
+   campaign-specific checks from `docs/VERIFICATION_PLAN.md` as a `## Verification` section (drop
+   the generic checklist rows — they are the skills' procedure — and the bounds rows, which
+   §The ONE metric already carries); the landmines table and ED entries from
+   `docs/ENGINEERING_NOTES.md` as `## Known landmines` and a `## Decision record` tail. Delete the
+   three files and the now-empty `docs/`.
+3. Delete `SETUP_TODO.md` — its content is computed live by `--preflight` and the gates — and add a
+   short `## Setup status` section to `README.md` pointing there (copy it from the current template);
+   move any campaign-specific rows still open into the JOURNAL NEXT list. Delete `tests/README.md`
+   too. Stamp the version: copy the kit version from
+   `DOCTRINE_SNAPSHOT.md`'s banner (`generated: physkit vX.Y.Z …`) into a
+   `> **Scaffolded by physkit vX.Y.Z (…)**` line in `campaign.md`'s header and at the top of
+   `results/logbook.md`, then delete `DOCTRINE_SNAPSHOT.md`. Delete `INTAKE.md` after checking it
+   holds no proposal the signed-off spec never resolved.
+4. Move `results/DISCOVERIES.md`'s entries — D/N findings, REVISES retractions, dispute notes — into a
+   `## Findings (settled — positive and negative; append-only, never trimmed)` section of
+   `results/JOURNAL.md`, keeping every verdict citation verbatim, then delete the file. Swap the hook:
+   copy the new `guard_promotion.py` template into `scripts/`, delete `guard_discoveries.py`, and
+   repoint the command in `.claude/settings.json`. The guard is not in the frozen-core file set
+   (`CORE_FILES_DEFAULT` is the scorer + the correctness suite), so the swap does not invalidate a
+   recorded correctness green.
+5. Fix the campaign `CLAUDE.md`: hard gate 1's promotion definition (current-best · scoreboard tokens ·
+   the project ledger; findings recorded in the journal), the project-context block, and the §Where
+   things live rows — the background doc row points at `../../PROJECT_ORIENTATION.md`, the verification
+   / landmines / decision-record rows at their `campaign.md` sections, the settled-findings row at
+   `results/JOURNAL.md` §Findings, the setup row at `README.md` §Setup status (the validator enforces
+   that table; compare against a freshly scaffolded `CLAUDE.md`).
+6. Decide the driver per campaign. By-value constraint delivery, the snapshot prompt-hash, and
+   **per-block verification** (the driver spawns an independent verification agent after every
+   completed unit or block, stamps the scoreboard's `verified` column from the verdict, and will not
+   clear the block without it — `configs/loop.json` `campaign.verification`, default `per-block`)
+   all live in `scripts/run_campaign.py`; a migrated campaign keeps the old behavior until you
+   re-copy the new driver template and add the `verification` keys to its `campaign` block. Check
+   `frozen_core` before swapping mid-campaign: if the driver is in the core file set, the swap
+   changes the core hash and the recorded correctness green no longer applies.
+7. Re-run the validator on the project root; it must PASS with zero issues.
+
+---
+
 ## To the `campaign` block in `configs/loop.json` (kit ≥ V0/V1, 2026-08-18)
 
 **Symptom.** Every experiment ends with `checks: N not runnable for this campaign`, and each

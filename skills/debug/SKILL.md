@@ -120,7 +120,7 @@ After the fix, leave the code safer than it was: assert physical invariants and 
 boundaries; guard against NaN/inf; check matrix conditioning before solving; confirm optimizers converged
 (report iterations and final residual). Promote the bug two ways so it cannot cost twice. Add the minimal
 failing case to `correctness-suite` as a regression check, so it can never silently return. Append a
-one-line **`symptom → check`** entry to `CONVENTIONS.md` → *Known gotchas*, so the failure is recognized at
+one-line **`symptom → check`** entry to `PROJECT_ORIENTATION.md` §Standing constraints → *Known gotchas*, so the failure is recognized at
 a glance instead of re-debugged.
 
 **Never regenerate or overwrite the campaign's INPUTS on a diagnosis you have not confirmed.** CORE already

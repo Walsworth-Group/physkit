@@ -12,8 +12,8 @@ index of everything: what each campaign changed and found. Read it first to orie
 ## The physical system (project-wide invariants)
 Facts true across every campaign. No campaign may silently contradict them.
 {{SYSTEM_INVARIANTS}}
-Full physics and target of study: `shared/PHYSICS.md`. Units, sign, and frame conventions:
-`shared/CONVENTIONS.md`. Measurement rig and apparatus parameters: `shared/INSTRUMENT.md`.
+Everything we know about the system — the full physics, the conventions, the instrument, and the
+durable decisions — is `PROJECT_ORIENTATION.md`, beside this file.
 
 ## Canonical data — referenced, never copied
 - **Location:** {{DATA_LOCATION}} — a read-only `data/` copy, or the resolved `data_path` pointer below.
@@ -27,7 +27,8 @@ a generated training set. Each is versioned. Downstream campaigns reference `../
 never a sibling's working folder. Current promoted artifacts: {{PROMOTED_ARTIFACTS}}
 
 ## Layout
-`PROJECT.md` (this) · `LINEAGE.md` (index) · `DISCOVERIES.md` (promoted verified findings) ·
-`ENGINEERING_NOTES.md` (durable "why"s) · `CLAUDE.md` (always-on rules) · `data/` · `shared/` ·
-`campaigns/<name>/` · `sessions/<date>_<slug>/` · `reports/`. All internal references are relative, so the
-whole tree relocates as one unit.
+`PROJECT.md` (this — what we are trying to achieve) · `PROJECT_ORIENTATION.md` (what we know about
+the system, durable decisions included) · `LINEAGE.md` (what has been done) · `DISCOVERIES.md`
+(promoted verified findings) · `CLAUDE.md` (always-on rules) · `data/` · `shared/` (promoted frozen
+artifacts) · `campaigns/<name>/` · `sessions/<date>_<slug>/` · `reports/`. All internal references
+are relative, so the whole tree relocates as one unit.

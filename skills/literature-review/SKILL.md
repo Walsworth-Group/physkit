@@ -10,7 +10,7 @@ description: >-
   the closest prior art, and the methods that TRANSFER to your problem, organizes an established/contested/open
   brief with a priority-ranked reading list, and — critically — verifies every reference with cite-check so no
   fabricated or misattributed citation survives. In a campaign it writes/refreshes LITERATURE.md and seeds
-  PHYSICS.md. Distinct from cite-check (verifies references you already have), report (writes up finished
+  PROJECT_ORIENTATION.md. Distinct from cite-check (verifies references you already have), report (writes up finished
   work), and assess-idea (judges whether an idea is worth doing — this gathers the field it reasons over).
 ---
 
@@ -79,19 +79,19 @@ not detectable by the reader.
 6. **Deliver honestly.** Label each part of the brief as established in the literature, your synthesis, or
    uncertain / not found. State the field's open disagreements and the limits of the search, including what
    was not covered. In a campaign, write or refresh `LITERATURE.md` (summaries + the ranked roadmap) and seed
-   `../../shared/PHYSICS.md` (governing physics + references), and keep the two in sync.
+   `../../PROJECT_ORIENTATION.md` (governing physics + references), and keep the two in sync.
 
 ## Output
 A scannable, cited brief: established / contested / open · a methods table · the closest prior art and what
 transfers · a priority-ranked reading list · explicitly flagged uncertainties and search limits. Every
 reference is clickable and cite-check-verified. Standalone: a message or a short doc. Campaign:
-`LITERATURE.md` (+ `PHYSICS.md` references).
+`LITERATURE.md` (+ `PROJECT_ORIENTATION.md` references).
 
 ## Composition
 - **`cite-check`** — the mandatory final gate. Never deliver an unverified reference.
 - **`assess-idea`** — consumes this skill's prior-art + closest-solved-problem output (its step 4).
 - **`frame-problem`** — a field-informed physics inventory and predictive framework build on this.
-- **`new-campaign`** — seeds `LITERATURE.md` / `PHYSICS.md` from a review at setup.
+- **`new-campaign`** — seeds `LITERATURE.md` / `PROJECT_ORIENTATION.md` from a review at setup.
 - **`report`** — if the review itself is a deliverable, `report` formats and re-verifies it.
 - **sub-agents** (context economy) — parallel search and read threads for a large review, synthesized
   centrally; match the model to the task (light for fetch and scan, escalate for synthesis).
@@ -117,4 +117,4 @@ reference is clickable and cite-check-verified. Standalone: a message or a short
 - [ ] Brief organized established / contested / open, with a methods table + priority-ranked reading list.
 - [ ] Every citation cite-check-verified (title/authors/year/venue/id + claim-support from full text, not the abstract); abstract-only support carried as provisional, unconfirmed ones flagged, none invented.
 - [ ] Honesty labels applied (established vs synthesis vs uncertain); field disagreements and search limits stated.
-- [ ] Campaign: `LITERATURE.md` written/refreshed and `PHYSICS.md` references seeded (kept in sync).
+- [ ] Campaign: `LITERATURE.md` written/refreshed and `PROJECT_ORIENTATION.md` references seeded (kept in sync).

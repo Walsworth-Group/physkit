@@ -63,13 +63,13 @@ still-valid, not the reverse.
   `<date>`, the invalidation reason, and "read-only — do not resume; superseded by `campaigns/<new>/`."
 - Filesystem read-only permissions are unreliable on a shared drive. The `FROZEN.md` marker and the
   `LINEAGE.md` status are the enforcement, not permissions.
-- Its `results/`, `JOURNAL.md`, `scoreboard.tsv`, and `DISCOVERIES.md` do not become working documents of the
-  new effort. They are read-only history. The new campaign starts from a clean ledger, never by copying these
-  forward.
+- Its `results/` — `JOURNAL.md` (Findings included), `scoreboard.tsv`, the logbook — do not become working
+  documents of the new effort. They are read-only history. The new campaign starts from a clean ledger,
+  never by copying these forward.
 
 ### 3. Scaffold the fresh-ledger campaign (compose `new-campaign`)
-Invoke `new-campaign` in the project to create a new sibling `campaigns/<NN>_<slug>/` with a clean scoreboard,
-JOURNAL, and DISCOVERIES. Carry over, deliberately and explicitly:
+Invoke `new-campaign` in the project to create a new sibling `campaigns/<NN>_<slug>/` with a clean scoreboard
+and JOURNAL (an empty Findings section included). Carry over, deliberately and explicitly:
 - the corrected infrastructure (the fixed forward model, metric, or dataset), validated before it is re-frozen.
   Run `correctness-suite`: the sign and convention round-trip plus the symmetry self-tests that would have
   caught the original bug. Add the check that failed as a standing regression gate.
@@ -84,8 +84,9 @@ For each prior finding the user wants to keep, re-verify it from scratch under t
 `verify`, which spawns an independent refuter, recompute every number on the fixed infrastructure, and grade it
 again. Then:
 - A finding that returns CONFIRMED under the corrected setup carries forward into the new campaign's
-  `DISCOVERIES.md`, tagged with its provenance: "carried from `<src>` and re-verified after the fork on
-  `<date>`, verdict CONFIRMED". A finding never carries forward on the strength of the old verdict.
+  journal Findings section, tagged with its provenance: "carried from `<src>` and re-verified after the
+  fork on `<date>`, verdict CONFIRMED" and citing the NEW verdict artifact. A finding never carries
+  forward on the strength of the old verdict.
 - A finding that does not survive is left in the archive, not carried. If it had been promoted, note in
   `LINEAGE.md` that the fork retracted it.
 - No claim-splitting, no silent inheritance. A number is inseparable from the infrastructure it was scored

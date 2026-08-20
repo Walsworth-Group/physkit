@@ -2,16 +2,18 @@
 
 This folder is a **Project**: one investigation into {{PHYSICAL_SYSTEM}}, hosting many **campaigns** (versioned
 attempts) and **sessions** (ad-hoc work). These rules bind every agent working anywhere under this tree. Read
-`PROJECT.md` for the goal and `LINEAGE.md` for what has been done. (Each campaign also has its own `CLAUDE.md`
-with the loop spine; this file adds the project-level rules on top.)
+`PROJECT.md` for the goal, `PROJECT_ORIENTATION.md` for what we know about the system, and `LINEAGE.md` for
+what has been done. (Each campaign also has its own `CLAUDE.md` with the loop spine; this file adds the
+project-level rules on top.)
 
 ## Structure
 `Project → Campaign → Experiment` (+ ad-hoc `sessions/`). Campaigns live in `campaigns/<name>/`; ad-hoc work in
 `sessions/<YYYY-MM-DD>_<slug>/`; shared data/docs at the project root; one `reports/`.
 
 ## Non-negotiable rules
-1. **Shared data is referenced, never copied.** Use `../../data` and `../../shared` (relative). **Never copy the
-   data into a campaign, never write into `data/`.** Copied data is what breaks paths — don't create it.
+1. **Shared data and docs are referenced, never copied.** Use `../../data`, `../../PROJECT_ORIENTATION.md`,
+   and `../../shared` (relative). **Never copy the data or any part of the orientation document into a
+   campaign, never write into `data/`.** Copies are what break paths and fork the record — don't create them.
 2. **Everything is indexed in `LINEAGE.md`.** A campaign gets a row; a session gets a row; a within-campaign
    version bump gets a one-line change-record. Nothing significant happens off the ledger.
 3. **Campaign vs session.** One optimizable **frozen metric driving a loop** → a **campaign** (`new-campaign`).

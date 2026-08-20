@@ -124,7 +124,7 @@ generator. Compose `verify` and add the discovery-specific gates:
 - **Ablate the machinery and test multi-LLM robustness.** Prove the search and reflection beat a direct-LLM
   baseline and attribute gains to components. Test across more than one model backbone. Report run
   variance, and the outcome distribution and stability over repeats, not the best run alone.
-- **Credit explanatory over descriptive discovery.** A recovered mechanism (`PHYSICS.md`-level
+- **Credit explanatory over descriptive discovery.** A recovered mechanism (`PROJECT_ORIENTATION.md`-level
   understanding) counts for more than a metric move. Evaluate the process, not only the outcome.
 - **State the limit of the warrant.** Physical-science claims rarely have a proof-checker, so warrant is
   bounded by the strength of the independent re-derivation, higher-fidelity simulation, or experiment. Name
@@ -135,7 +135,7 @@ An LLM is used instead of a black-box optimizer because its artifact is human-re
 value:
 - **Move the black box to design-time.** Use the LLM to synthesize an interpretable program, then deploy
   and verify the artifact, not the model.
-- **Extract the design rule** into `PHYSICS.md` / the report: the recovered principle, not only the code.
+- **Extract the design rule** into `PROJECT_ORIENTATION.md` / the report: the recovered principle, not only the code.
 - **Human-in-the-loop edit-and-re-evolve.** An interpretable artifact can be read, improved by a domain
   expert, and fed back. A/B the human edit; support this as a first-class flow, not a fallback.
 
@@ -180,4 +180,4 @@ value:
 - [ ] The discovery was certified independently (certificate where possible; certified-vs-conjectured stated).
 - [ ] Re-discovers known SOTA; generalizes/extrapolates across regimes; passes anti-memorization + novelty checks.
 - [ ] Machinery ablated vs a direct-LLM baseline; tested across ≥2 model backbones; stability reported.
-- [ ] The artifact is interpretable; its design rule is extracted into `PHYSICS.md` / the report.
+- [ ] The artifact is interpretable; its design rule is extracted into `PROJECT_ORIENTATION.md` / the report.

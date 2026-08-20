@@ -78,7 +78,7 @@ Label, do not blend. Pick the scheme that fits the artifact and keep it consiste
 
 0. **Set parameters and gather sources.** Fix the three mode dials. Collect the material: for a general
    task, the analysis/computations/data the user points to; for a campaign (via `final-report`), harvest
-   the ledger / logbook / discoveries / configs + `PHYSICS.md` + the `frame-problem` artifact. Build an
+   the ledger / logbook / discoveries / configs + `PROJECT_ORIENTATION.md` + the `frame-problem` artifact. Build an
    accurate map of what plays each role first; downstream quality depends on it.
 1. **Map material to roles:** the thesis/result · supporting evidence (numbers + their sources) ·
    parameters · the physics model + assumptions · methods/pipeline · figures · references.

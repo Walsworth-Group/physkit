@@ -86,7 +86,7 @@ true evaluator first. Use a diminishing-returns / decision-theoretic stop.
 
 ## Composition
 - **`new-campaign`** scaffolds archetype H; the FROZEN evaluator/measurement + the objective are the
-  campaign's metric; the candidate model set + parameterization come from `frame-problem` / `PHYSICS.md`.
+  campaign's metric; the candidate model set + parameterization come from `frame-problem` / `PROJECT_ORIENTATION.md`.
 - **`verify`** certifies the recommended optimum / parameter estimate / winning model — re-evaluate at the
   recommendation, confirm it generalizes, and (for discrimination) confirm the margin is real, not a prior
   artifact.

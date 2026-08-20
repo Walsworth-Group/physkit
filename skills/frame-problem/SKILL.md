@@ -65,7 +65,7 @@ Rules that make the inventory honest:
   a parked or missing effect here (model-form error), or at a bug in the FROZEN reference code or forward
   model, where a sign or convention error upstream presents as missing physics. Re-verify that
   infrastructure; do not only add terms. Update the inventory as understanding changes; in a campaign it
-  graduates into `PHYSICS.md`.
+  graduates into the project's `PROJECT_ORIENTATION.md` §Standing constraints.
 
 ### The predictive framework — the model you predict *with* (and revise)
 The inventory records which effects are in play. The **predictive framework** is the model that ties them
@@ -83,7 +83,7 @@ into predictions: the model an expert physicist reasons from. Name it explicitly
   structured residual, an out-of-envelope result), decide whether the anomaly fits the framework's stated
   domain or the framework itself must change, then record what changed and why. The revised laser-cooling
   model adds the AC Stark shift and its spatial variation across the beam. In a campaign this revision log
-  lives in `PHYSICS.md`, in its "Updates from discoveries" section.
+  lives in `PROJECT_ORIENTATION.md`, in its "Updates from discoveries" section.
 
 ## 2 · Verification plan — how you'll know the answer is right (decided up front)
 
@@ -106,8 +106,8 @@ Draw from the following. Not all apply to every problem.
   is not validation.
 - **Application-specific checks and known gotchas.** The field-standard comparisons, known artifacts, and
   the checks everyone in the subfield runs on this class of problem. Record them at framing time; they are
-  easy to omit later and expensive to miss. In a campaign they land in the verification plan
-  (`VERIFICATION_PLAN.md`) and feed `correctness-suite`, which promotes each check to a standing
+  easy to omit later and expensive to miss. In a campaign they land in `campaign.md` §Verification
+  and feed `correctness-suite`, which promotes each check to a standing
   regression gate.
 
 For each check, name the arbiter: a coded gate, or the model's judgment. Prefer a coded gate that emits the
@@ -140,9 +140,10 @@ what it depends on, and, for the steps that matter, its check.
 How much to persist (do not create a document for a small job):
 - **Trivial / short:** keep the steps in your head or a scratch list and do them.
 - **General session, non-trivial:** a maintained checklist (steps, status, which were checked). It
-  graduates into a campaign's orientation doc if the work grows into one.
-- **Campaign:** the numbered, goal-linked task hierarchy in `PROJECT_ORIENTATION.md` (status plus per-step
-  verification). `new-campaign` owns that; `frame-problem` feeds it.
+  graduates into a campaign if the work grows into one.
+- **Campaign:** the decomposition becomes the opening units in `results/queue.json` (each with its
+  rationale — how it serves the goal) and the JOURNAL NEXT pointer. `new-campaign` owns that seeding;
+  `frame-problem` feeds it.
 
 ---
 
@@ -156,7 +157,8 @@ step order that buries risk. Then execute the steps, running each planned check 
 
 For anything beyond a quick question, write the frame to a durable **framing artifact** (template:
 `assets/framing_template.md`) so it survives the session and seeds what comes next. Its content graduates:
-the inventory to `PHYSICS.md`, the goal and steps to `PROJECT_ORIENTATION.md` in a campaign, the
+the inventory to `PROJECT_ORIENTATION.md` §Standing constraints, the goal to `campaign.md` and the steps
+to the queue + JOURNAL NEXT in a campaign, the
 verification plan to the verification gate. Keep one artifact, and update it as the frame changes.
 
 ## Composition & boundaries

@@ -73,8 +73,8 @@ Campaigns differ in how they store things, so start by reading the campaign's ow
 than assuming filenames. You are looking for a handful of roles; find whatever file plays each role.
 Campaigns scaffolded by this kit answer that from one place: read the campaign's `CLAUDE.md` and follow
 its **§Where things live** table, which names the campaign definition, `results/scoreboard.tsv`,
-`results/JOURNAL.md`, `results/DISCOVERIES.md`, the governing physics/conventions/instrument docs under
-`../../shared/`, and the verdict artifacts. The per-experiment configs (`configs/`, `configs*/exp*.json`)
+`results/JOURNAL.md` (whose §Findings is the settled record), the project background doc, and the
+verdict artifacts. The per-experiment configs (`configs/`, `configs*/exp*.json`)
 and the figures (`results*/images/`) are not table rows — read them from the tree. Confirm each exists;
 `LITERATURE.md` and the figures are optional. A campaign scaffolded before that table existed has none:
 fall back to `docs/charter*.md` (or `docs/program.md` in the oldest trees — lint-ok: naming the retired
@@ -90,9 +90,9 @@ spelling is the point of a fallback). So do non-kit campaigns.
   `result_*.json`.)
 - **The journal / narrative** holds the reasoning behind each experiment: hypotheses, what was expected,
   what happened. Mine it for why a lever was tried and how a choice was reached. (Often a `JOURNAL*.md`.)
-- **The discoveries / verified findings** are results that survived verification and graduated to
-  established. These are the selected, high-confidence claims; cite their verification status.
-  (Often a `DISCOVERIES*.md`.)
+- **The verified findings** are results that survived verification and graduated to established. These
+  are the selected, high-confidence claims; cite their verification status. (The journal's Findings
+  section in current campaigns; often a `DISCOVERIES*.md` in older or non-kit ones.)
 - **The configs** are the exact knob settings per experiment, including the selected configuration.
   (Often `configs*/exp*.json` or similar.)
 - **The literature / citations file** holds the campaign's curated references, usually already mapped to
@@ -100,10 +100,10 @@ spelling is the point of a fallback). So do non-kit campaigns.
   `LITERATURE.md`.)
 - **The figures** are outputs from the runs, especially the most refined ones. (Often a `results*/images/`
   or per-experiment output dirs.)
-- **Reference docs** are the governing physics (`PHYSICS.md`: equations, methods, system behavior),
-  conventions (`CONVENTIONS.md`), and the measurement rig, apparatus, and sample parameters
-  (`INSTRUMENT.md`), shared at `../../shared/` and referenced, never copied. Pull definitions and
-  derivations from these rather than reconstructing them.
+- **The reference doc** is the project's `../../PROJECT_ORIENTATION.md`: the governing physics
+  (equations, methods, system behavior), the conventions, and the measurement rig, apparatus, and
+  sample parameters — one document, referenced, never copied. Pull definitions and derivations from
+  it rather than reconstructing them.
 
 If a role has no obvious home, search for it (grep for the metric name, for "best", for citation URLs)
 before concluding it does not exist. Build an accurate map before writing anything; the quality of
@@ -180,7 +180,7 @@ step → the forward model → the fit/decoder → the metric out. Make the flow
 what, in what order, with which parameters.
 
 Include the governing equations, pulling them and any campaign-specific derivations from
-`../../shared/PHYSICS.md` where it exists rather than reconstructing them. Derive the relations specific
+`../../PROJECT_ORIENTATION.md` where it exists rather than reconstructing them. Derive the relations specific
 to this campaign (the forward map, the metric definition, any effective-parameter or correction
 derivations the campaign relied on) at a level that lets a reader follow and reproduce them. Cite
 standard textbook results rather than re-deriving them: derive what is novel, reference what is known.

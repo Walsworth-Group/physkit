@@ -3,7 +3,7 @@
 Run:  python tests/correctness_checks.py       (exit 0 = green | 1 = a check FAILED | 2 = no active checks)
 
 `verify` asks "is this *result* right?"; this suite asks "is the *machinery* still right?". Build it with
-the `correctness-suite` skill from docs/VERIFICATION_PLAN.md. A FRESH scaffold is all-skip: it reports
+the `correctness-suite` skill from campaign.md's Verification section. A FRESH scaffold is all-skip: it reports
 EMPTY (exit 2), which does NOT green-light a promotion - fill in >=1 real check. No finding built on
 a RED or EMPTY suite is trustworthy; a genuinely-no-simulator campaign records tests/CORRECTNESS_NA.md.
 

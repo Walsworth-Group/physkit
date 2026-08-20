@@ -250,8 +250,12 @@ missed an error in the part not re-run, lower the threshold.
 ## Campaign mode — promoting a finding (the full adversarial apparatus)
 
 When the claim is a candidate result in an autoresearch campaign, verification is the gate between "looks
-like a win" and writing it into `results/DISCOVERIES.md`. A promotion is not real until this returns
-CONFIRMED.
+like a win" and recording it as settled — a journal Findings entry, a current-best, a scoreboard
+verdict token. A promotion is not real until this returns CONFIRMED. In supervised loops this mode
+runs on the driver's schedule, not the worker's judgment: after every completed unit or block the
+driver spawns a verification agent that invokes this skill per experiment (the block is not cleared
+until every verdict artifact exists, and the driver stamps the scoreboard from it). Attended
+sessions, and mid-unit suspicions, invoke it directly.
 
 **Step 0 — learn the campaign (parametrize the check).** Read the campaign's `CLAUDE.md` and follow its
 **§Where things live** table to the campaign definition and each document below — it is that campaign's own
@@ -276,7 +280,7 @@ adds mechanism diversity. Never use a weaker model, which yields false CONFIRMs.
 
 **On return — write the verdict ARTIFACT, then record it append-only.** First write
 `results/verdicts/<exp_id_or_slug>.json`, the machine-checkable artifact consumed by the promotion gate
-(BOTH the DISCOVERIES surface and the current-best/scoreboard surface) and by the loop driver. Copy this
+(the current-best/scoreboard surface and the project-ledger surface) and by the loop driver. Copy this
 stub and fill every `<…>`; all fields are REQUIRED. Do not hand-improvise a subset:
 ```json
 {"claim": "<one line>", "exp_id": "<id>", "verdict": "CONFIRMED",
@@ -289,8 +293,9 @@ it here; it is never this session's id. The gate rejects a verdict with an empty
 BOTH promotion paths, so a refuterless CONFIRMED does not graduate and a dropped field blocks your own
 promotion. Fill the stub literally rather than reconstructing the schema from memory. `kill_tier` is set
 only for a negative or kill-claim, per *Verifying a kill-claim* below. `confounded_levers` and
-`disentangler` are set whenever more than one lever moved, per *Confounded attribution* below. A DISCOVERIES
-entry must cite this file by name or the hook denies the write.
+`disentangler` are set whenever more than one lever moved, per *Confounded attribution* below. A journal
+Findings entry must cite this file by name (the rule `campaign-status` audits), and a project-ledger
+entry must cite it by path or the hook denies the write.
 
 Then put the verdict on the experiment's `**Verification**:` line. Log every concern the verifier raised,
 including on a CONFIRMED, under `**Disputes & responses**:`, each with your response. Never delete a raised
@@ -299,7 +304,7 @@ rather than settling it yourself, because your rebuttal of the checker inherits 
 was called to test. Do the same for any concern the user raises.
 
 Then gate. CONFIRMED → may promote. PROVISIONAL / QUESTIONABLE ASSUMPTION → working result only: it must
-not graduate to DISCOVERIES, and must not be reported as "current-best" or "best" without its caveat
+not graduate to the Findings section, and must not be reported as "current-best" or "best" without its caveat
 carried inline, until the adaptation or assumption is reviewed. REFUTED → do not promote; add the refuting
 control as its own experiment. INCONCLUSIVE → run the named control before deciding. No claim-splitting: a
 headline number is inseparable from the config that produced it, so you may not promote "the number" while
@@ -361,8 +366,8 @@ So a multi-lever negative refutes the combination, not its members.
 
 ### Verifying a kill-claim (steering-negatives and invalidations)
 A negative finding that will steer the campaign — it kills a lever or topology branch, declares a ceiling
-or plateau, shelves a direction, or invalidates prior results — is promoted to DISCOVERIES and verified
-exactly like a win. The failed-experiment population is more bug-contaminated than the winning one: most
+or plateau, shelves a direction, or invalidates prior results — is recorded in the journal's Findings
+section and verified exactly like a win. The failed-experiment population is more bug-contaminated than the winning one: most
 implementation errors degrade performance, so bugs masquerade as "this approach doesn't work," and an
 unexamined negative kills a branch permanently. A claimed invalidation ("the scoreboard is tainted", "the
 metric is broken") gets this check before the campaign reprioritizes or forks on it; the false alarm is the
@@ -388,7 +393,7 @@ itself still grades whether the *claim as stated* is CONFIRMED):
   its evidence and is revivable by the planner. Independent EVIDENCE_AGAINST entries may accumulate toward
   a prune, recorded with the entries cited.
 - **INCONCLUSIVE** — cause not attributed; the implementation, not the idea, may be at fault. Does not
-  steer and never graduates. Queue a fix-and-rerun unit instead; the DISCOVERIES hook denies an
+  steer and never graduates. Queue a fix-and-rerun unit instead; the promotion hook denies an
   INCONCLUSIVE kill.
 
 ### Adversarial prompt to give the spawned agent
@@ -453,7 +458,7 @@ reproduce mode by run cost.
 >    PROVISIONAL) vs LENIENT (relaxed the bar → REFUTED). The FROZEN metric, data, and known ground truth must
 >    not have been touched — if they were, REFUTED outright.
 > [CODE / FORWARD-MUTATING ONLY:
-> 10. **Code soundness.** Sign/convention slip (check this first — see `../../shared/CONVENTIONS.md`), units
+> 10. **Code soundness.** Sign/convention slip (check this first — see `../../PROJECT_ORIENTATION.md` §Standing constraints), units
 >    error, geometry mismatch. `--selftest` still passes; no stale cache reused after a core change; no
 >    silently-added free parameters (must be no freer). Upstream preprocessing: the load-bearing transform
 >    feeding the metric (registration / pose / normalization) is non-degenerate on the data it is applied
@@ -494,7 +499,7 @@ reproduce mode by run cost.
 - [ ] Substantial claim → an independent / mechanism-diverse route (often a fresh agent) agreed.
 - [ ] Any disputed verdict escalated to a blinded third party required to run a check neither side ran (§4b), not settled by argument between the claimant and the refuter.
 - [ ] Campaign mode: the correctness suite (`tests/correctness_checks.py`) is green, or explicitly N/A — a red suite blocks promotion.
-- [ ] Campaign mode: the verdict artifact `results/verdicts/<id>.json` written (with a named refuter) — the DISCOVERIES hook and the loop driver consume it, and the entry must cite it.
+- [ ] Campaign mode: the verdict artifact `results/verdicts/<id>.json` written (with a named refuter) — the promotion hook and the loop driver consume it, and the Findings entry must cite it.
 - [ ] A kill-claim got the negative-refuter checklist (implementation error / strawman / insufficient search / mechanism) and a `kill_tier` — INCONCLUSIVE kills queue a fix-and-rerun, never graduate.
 - [ ] Counted the levers that moved. More than one → `confounded_levers` + a `disentangler` recorded; the causal claim graded QUESTIONABLE ASSUMPTION (the empirical one may still promote); a negative kills only the combination — every member INCONCLUSIVE, still untried, checked for masking (one lever helping while another hurts more).
 - [ ] Reproduction mode chosen per the cost tier (threshold from `configs/loop.json` when present); above-threshold verification still ran the cheapest discriminating spot-check — never zero re-execution.

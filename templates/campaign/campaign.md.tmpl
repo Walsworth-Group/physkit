@@ -4,11 +4,24 @@ The definition of this {{CAMPAIGN_KIND}} campaign: the mission, the FROZEN metri
 constraints both roles work under. Per-role procedure is in `roles/worker.md` and `roles/planner.md`;
 the hard gates are in `CLAUDE.md`. Run continuously until manually stopped.
 
+> **Scaffolded by physkit {{PHYSKIT_VERSION}}** (also stamped at the top of `results/logbook.md`).
+> That version pin recovers the exact kit — skills, reference docs, templates — this campaign was
+> generated under and runs with; a later kit does not retroactively govern this run. Everything above
+> §Decision record is the signed-off contract; that section is the campaign's append-only record.
+
 ## Mission
 {{MISSION_STATEMENT}} — by optimizing {{LEVER_SUMMARY}}, maximizing the single FROZEN metric
 `{{PRIMARY_METRIC}}` ({{PRIMARY_DIRECTION}} = better) on {{EVAL_TARGET}}, with
 {{GUARDRAIL_SUMMARY}} co-tracked as a guardrail (necessary-but-not-sufficient). Run continuously until
 stopped; the loop ends only in the ways HARD GATE 5 in `CLAUDE.md` sets out.
+- **The decision/outcome this campaign serves:** {{DECISION_SERVED}}
+- **Done looks like:** {{DONE_CRITERIA}}
+
+## Loosely-held expectations (hypotheses to test, not commitments)
+These are what the campaign tests. Updating them as evidence arrives is success, not failure;
+`campaign-status` re-checks them at every checkpoint against what the scoreboard actually shows.
+- <what we expect / suspect — and how a result would confirm or kill it>
+- <the first-instinct answer, recorded so it can be checked against what actually worked>
 
 ## The ONE metric (FROZEN — never edited mid-campaign)
 `{{PRIMARY_METRIC}}` = {{METRIC_DEFINITION}}. {{PRIMARY_DIRECTION}} = better. Computed by
@@ -125,6 +138,7 @@ analogy and what transfers: the closest prior art's approach, not just its citat
 worked on a nearby problem is often the fastest lever to try.
 
 ## FROZEN / out of scope (NEVER change; NEVER ask for)
+- **Out of scope / explicitly not claimed:** {{OUT_OF_SCOPE}}
 - **FROZEN** (no edit without re-validation + user sign-off): the scoring math `{{FROZEN_SCORER_PATH}}`;
   {{FROZEN_LIST}}; the experimental data (read-only).
 - **READ-ONLY** (use, don't edit): {{READONLY_LIST}}.
@@ -133,6 +147,18 @@ worked on a nearby problem is often the fastest lever to try.
 - **{{DATA_CHOICE_WARNING}}** — changing {{DATA_DISTRIBUTION}} changes the target; hold it fixed unless
   the change is the object of study; log the change loudly, at most a couple of early experiments.
 ]]
+
+## Known landmines / Do-not-repeat
+The hazards already paid for: what broke the machine, corrupted a run, or cost hours. Re-check this
+table before any action matching a listed trigger (GPU use, launching a detached process, overwriting
+inputs, …). Before complying with a request that would hit one, surface it — never walk into a listed
+landmine silently. A hazard recorded only in a chat message or a memory file is not re-checked, and
+recurs: record it here. A landmine leaves this table only when the *condition* that made it dangerous
+changes, never to save space.
+
+| trigger (when about to…) | landmine (what went wrong) | do instead |
+|---|---|---|
+| <e.g. use the GPU for the dictionary build> | <froze the machine; hard reboot> | <use the CPU-parallel path; do not re-enable the GPU build> |
 
 ## {{RUN_NOUN}} Caps (HARD, never exceed)
 | Tier | Target | HARD MAX | When |
@@ -191,7 +217,7 @@ scored a decoder on wrong test data. See the project `CLAUDE.md` fork-and-archiv
 - Anchor facts to the authoritative source; tag their provenance. A spec value from a paper, leftover
   code, or memory is a description of the system, not the system. Pin every load-bearing fact
   (architecture, recipe, units, conventions) to the highest-authority artifact you can parse or run:
-  the source-authority ledger in `docs/ENGINEERING_NOTES.md`. Treat a fact you can only mark
+  the source-authority ledger in §Decision record below. Treat a fact you can only mark
   INFERRED/RECALLED as a gap to resolve before building an expensive run on it. When a faithful repro
   disagrees with a published number, find out why: your bug, the target's quirk, or a wrong spec. Never
   reverse-engineer the original's bug just to match its table (`debug`, the compare-to-a-reference
@@ -203,7 +229,7 @@ scored a decoder on wrong test data. See the project `CLAUDE.md` fork-and-archiv
   physically/theoretically motivated, and generalizes. Near-universal: apply by default.
 - Use precise notation and units everywhere. Name the quantity, its units, and its scale.
   {{UNITS_EXAMPLE_LINE}}. Ambiguous notation is how sign/convention bugs survive (see
-  `{{CONVENTIONS_DOC}}`).
+  `../../PROJECT_ORIENTATION.md` §Standing constraints).
 
 ## Decision / promotion
 - **PRIMARY** (cross-experiment ranking, "current best"): `{{PRIMARY_METRIC}}`. {{PRIMARY_REPORT_RULE}}
@@ -227,7 +253,8 @@ successive best so the progression is inspectable.
 
 **Steering-negatives are promotions too.** A negative result the campaign will act on (killing a
 lever/topology branch, declaring a ceiling, shelving a direction, or contradicting its a-priori
-prediction) goes to DISCOVERIES under the same gate, graded on the kill tiers: **REFUTED** (mechanism
+prediction) is recorded in `results/JOURNAL.md` §Findings under the same verdict rule, graded on the
+kill tiers: **REFUTED** (mechanism
 understood, so it prunes) / **EVIDENCE AGAINST** (clean single negative, shelved, revivable,
 accumulates) / **INCONCLUSIVE** (cause unattributed, never graduates; queue a fix-and-rerun unit).
 
@@ -244,6 +271,28 @@ may act as working current-best only with its caveat recorded beside it. And **n
 promoted config may not shed the unphysical part it rests on. A headline number is inseparable from its
 config, and a fitted parameter outside its physical range blocks promotion until it is explained. Report
 each number with its **metric path**: the frozen PRIMARY vs any relaxed/auxiliary score.
+
+## Verification — this campaign's own checks (captured at setup, kept living)
+The *procedure* is the kit's and is not restated here: `{{VERIFY_SKILL}}` adjudicates every finding
+through an independent refuter (assume-wrong; recompute every number; residual-nature analysis), and
+`correctness-suite` maintains the standing regression gates in `tests/correctness_checks.py`, green-gated
+on every run. In supervised mode the driver runs verification **per block**: after each completed
+unit — or the last unit of a batch of related units sharing a queue `block` id — it spawns a
+verification agent, and the block is not cleared until every verdict artifact exists
+(`configs/loop.json` `campaign.verification`; turning this down requires a recorded reason). Bounds live in §The ONE metric; the physics inventory and domain of validity in
+`../../PROJECT_ORIENTATION.md` §Standing constraints. For a simulation-heavy campaign the V&V&UQ method
+is the physkit plugin's `docs/SIMULATION_VALIDATION.md`. What belongs here is only what generic doctrine
+cannot supply — the checks specific to this campaign. Append new ones as the work uncovers them; when a
+bug is found, add the check that would have caught it and promote it to a regression gate.
+
+- **Analytic / closed-form limits the result must reproduce:** {{ANALYTIC_LIMITS}}
+- **Conservation / symmetry invariants that must hold:** {{INVARIANTS}}
+- **Numerical convergence (where anything is discretized):** {{CONVERGENCE_PLAN}}
+- **Independent-method parity — the mechanism-diverse second route:** {{PARITY_METHOD}}
+- **Validation data (held out — validation, never calibration):** {{VALIDATION_DATA}}
+- **Field-standard checks for this problem:** {{APP_CHECK_1}} · {{APP_CHECK_2}}
+- **Known artifacts / failure modes to guard against:** {{KNOWN_ARTIFACTS}}
+- **Generalization a promoted finding must survive (not a lucky subset):** {{GENERALIZATION_AXIS}}
 
 ## Mind the simulation-to-experiment gap
 {{SIM_GAP_NOTE}} Treat any guardrail resting on simulation/synthetic data as necessary-not-sufficient.
@@ -267,3 +316,23 @@ dataset this row was scored under: a "current best" or ranking is valid only wit
 silent landmine. When either changes, bump the tag and re-score saved contenders under the new version
 before comparing; every row must carry both tags. The full per-experiment breakdown is also saved to
 `results/result_<NN>.json`.
+
+---
+
+## Decision record (append-only — record, not contract)
+Campaign-scoped decisions: why each non-obvious choice was made, the alternatives considered, the
+conditions it rests on, and the trigger that would reopen it (`record-decision` writes here; skip the
+obvious). The source-authority ledger from setup seeds the first entries — one per load-bearing fact
+resolved from a source, with its value, the artifact it is PINNED to, its provenance tag
+(PINNED / REPORTED / INFERRED / RECALLED, or REASONED), and the lower-authority sources quarantined and
+why. Append-only: never rewrite a closed entry; supersede it and link the two. A decision that outlives
+this campaign is promoted to `../../PROJECT_ORIENTATION.md` §Durable decisions.
+
+<!-- ### ED-001 — <one-line title>  (YYYY-MM-DD · active · <method / model / convention / tooling>)
+**Decision.** …
+**Alternatives considered.** …
+**Why this one.** …
+**Provenance.** …
+**Conditions it depends on.** …
+**Revisit-if.** … -->
+

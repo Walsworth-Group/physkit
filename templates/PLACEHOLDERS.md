@@ -121,7 +121,7 @@ filled by that skill and documented by it, not here.
 | `{{PROMOTION_CONFIRM_RULE}}` | Extra confirmation needed to promote (e.g. "confirm with a 2nd seed"). |
 | `{{SPREAD_NOUN}}` | Name for the replicate spread (e.g. "seed/param", "seed-to-seed"). |
 | `{{VERIFY_SKILL}}` | The verify skill to invoke (e.g. `/physkit:verify`). |
-| `{{PHYSKIT_SPINE}}` | **Rendered by `new-campaign` Step 3, not a simple fill.** The campaign-tailored, FROZEN snapshot of `docs/CORE.md` (provenance banner + tailored body) written into `DOCTRINE_SNAPSHOT.md`, not into `CLAUDE.md`, which carries only what binds a turn. It is the campaign's reproducible doctrine record: referenced, never auto-loaded, not `@`-imported, and not vendored as a separate hash-checked file. See Step 3 for the tailoring and stamp procedure. |
+| `{{PHYSKIT_VERSION}}` | The kit-version pin, `vX.Y.Z (<ref>, YYYY-MM-DD)`: version from `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json`, `<ref>` from `git -C "${CLAUDE_PLUGIN_ROOT}" rev-parse --short HEAD` where the plugin is a git checkout (omit otherwise), plus the scaffold date. Appears in `campaign.md`'s header and atop `results/logbook.md` — the campaign's doctrine and tooling provenance (every release is tagged, so the pin recovers the whole kit). A record: never updated to a newer version. |
 | `{{VERIFY_EXTRA_CHECKS}}` | Archetype-specific extra checks the verifier must do, as a clause fragment appended to "checks for metric contamination" (e.g. ", recomputes the ceilings, and checks the ceiling-vs-gap trap"). Do not repeat "metric contamination". |
 | `{{SYSTEMATIC_AXIS_NOTE}}` | A standalone sentence on the dominant systematic-error axis for this campaign. It follows "…find and fix the cause)."; do not repeat that phrase. |
 | `{{OVERFIT_MODE}}` | The campaign's characteristic overfit mode (e.g. "sim-to-real / val overfit"). |
@@ -179,7 +179,7 @@ filled by that skill and documented by it, not here.
 | `{{LOAD_PIPELINE}}` | How a config loads the data. |
 | `{{DISTRIBUTION_NOTE}}` | Which knobs are data-choices vs method-levers. |
 
-### Conventions doc
+### Conventions (fill `PROJECT_ORIENTATION.md` §Standing constraints)
 | Placeholder | Meaning |
 |---|---|
 | `{{UNITS_TABLE}}` | Quantity · symbol · unit · plausible range table. |
@@ -191,8 +191,6 @@ filled by that skill and documented by it, not here.
 ### README, config & literature
 | Placeholder | Meaning |
 |---|---|
-| `{{STAGE_TABLE_ROWS}}` | README status-table rows. |
-| `{{REPO_MAP}}` | README repository map. |
 | `{{ENVIRONMENT_NOTES}}` | Environment/dependency notes. |
 | `{{PYTHON_CMD}}` | The python invocation for hook commands, from Step 0.5 detection (e.g. `py -3` on Windows, `python3` on macOS/Linux). Used in `.claude/settings.json`. |
 | `{{QUICKSTART_COMMANDS}}` | Quick-start commands. |
@@ -207,18 +205,15 @@ filled by that skill and documented by it, not here.
 | `{{TOPIC}}` | A literature topic heading. |
 | `{{NEXT_SEQUENCE}}` | The recommended next-experiment sequence. |
 
-### Project & shared-doc references
-Every campaign lives inside a project, so these always resolve to the project's `shared/` docs and never to
-a local copy (design §4.1; the validator rejects one). Each value is a relative path from the file that
-contains it, so the depth differs by file. Fill each occurrence with the path that resolves from that file.
-**Nothing checks this for you.** No validator or lint resolves an intra-tree doc link; the validator only
-confirms the project's `shared/` files exist. Count the directories for each occurrence rather than copying
-a path from another file: an unchecked path that is wrong stays wrong in every scaffolded campaign.
+### Project & shared-artifact references
+The project's ONE background document, `PROJECT_ORIENTATION.md`, lives at a fixed place (the project
+root), so the campaign templates carry its path as a literal — `../../PROJECT_ORIENTATION.md` from the
+campaign root, `../../../PROJECT_ORIENTATION.md` one directory down (`roles/`, `results/`, `docs/`) —
+and there is no placeholder to fill. Never replace a literal with a campaign-local copy (the validator
+rejects one). `shared/` holds only promoted frozen artifacts:
 
 | Placeholder | Meaning | Value (by file location) |
 |---|---|---|
-| `{{PHYSICS_DOC}}` | Path to the governing-physics doc. | Count the directories, do not copy an example. Campaign root (`campaign.md`, `README.md`, `INTAKE.md`): `../../shared/PHYSICS.md` · **one directory down** (`roles/`, `results/`, `docs/`): `../../../shared/PHYSICS.md` |
-| `{{CONVENTIONS_DOC}}` | Path to the conventions doc. | Campaign root: `../../shared/CONVENTIONS.md` · one directory down: `../../../shared/CONVENTIONS.md` |
 | `{{SIBLING_FROZEN_MUTABLE}}` | (coupled sibling campaigns only — else delete the block) What this campaign FREEZES that a sibling treats as MUTABLE, and vice versa. | — |
 | `{{CONSUMED_ARTIFACTS}}` | (coupled sibling campaigns only) The promoted `../../shared/<artifact>_<ver>/` artifacts this campaign reads, never a sibling's working folder. | — |
 
@@ -230,16 +225,16 @@ interview; they are not a second interview.
 |---|---|
 | `{{PROJECT_TITLE}}` | The project/investigation name (the `PROJECT.md`, `LINEAGE.md`, and project `CLAUDE.md` H1). |
 | `{{PHYSICAL_SYSTEM}}` | One line naming the physical system under investigation. |
-| `{{GOAL_STATEMENT}}` / `{{DECISION_SERVED}}` / `{{DONE_CRITERIA}}` | The end goal, the decision it serves, and what "done" looks like — the same answers that fill the campaign's `PROJECT_ORIENTATION.md`. |
+| `{{GOAL_STATEMENT}}` / `{{DECISION_SERVED}}` / `{{DONE_CRITERIA}}` | The end goal, the decision it serves, and what "done" looks like. `{{GOAL_STATEMENT}}` fills `PROJECT.md`; the other two also fill the campaign's `campaign.md` §Mission (the campaign-scoped answers). |
 | `{{SYSTEM_INVARIANTS}}` | Project-wide invariants every campaign inherits (drawn from the topic-4 physics interview). |
 | `{{DATA_LOCATION}}` / `{{DATA_PATH}}` | The canonical-data decision: a read-only copy at `data/`, or the absolute path recorded in `data/DATA_PATH.txt`. This pointer is the project's only absolute path. |
 | `{{PROMOTED_ARTIFACTS}}` | Frozen artifacts promoted to `shared/` — `— (none yet)` in a fresh project. |
 | `{{CAMPAIGN_1_NAME}}` / `{{CAMPAIGN_1_DATE}}` / `{{CAMPAIGN_1_APPROACH}}` / `{{CAMPAIGN_1_METRIC}}` / `{{CAMPAIGN_1_RESULT}}` / `{{CAMPAIGN_1_DISCOVERIES}}` / `{{CAMPAIGN_1_KBKEY}}` | The opening `LINEAGE.md` Campaigns row for the first campaign (`_RESULT` is `pending` until exp 000; `_DISCOVERIES` and `_KBKEY` are `—`). |
-| `{{TARGET_OF_STUDY}}` | `shared/PHYSICS.md` §Target of study: what is under investigation — the sample, material, plasma, star, molecule, or device — its identity and structure, and the physical quantities the project aims to determine or optimize. The rig that probes it is `INSTRUMENT.md`, not this. |
-| `{{INSTRUMENT_DESCRIPTION}}` | `shared/INSTRUMENT.md`: what measures what (e.g. NV widefield magnetometer · telescope + detector · spectrometer). |
-| `{{INSTR_PARAM_1}}` / `{{INSTR_VALUE_1}}` / `{{INSTR_UNITS_1}}` / `{{INSTR_SOURCE_1}}` | One row of `shared/INSTRUMENT.md`'s parameter table: name, value, units, and how the value is known. Provenance is part of the row, not optional. Extend with further rows as the rig is characterized. |
-| `{{MEASUREMENT_MODEL}}` | `shared/INSTRUMENT.md`: how instrument readings map to physical quantities — the forward measurement chain, so raw data is never mistaken for the quantity of interest. |
-| `{{INSTRUMENT_ARTIFACTS}}` | `shared/INSTRUMENT.md`: drifts, backgrounds, and calibration caveats — the recurring gotchas to guard against. Pairs with `{{KNOWN_GOTCHAS}}` in `CONVENTIONS.md`. |
+| `{{TARGET_OF_STUDY}}` | `PROJECT_ORIENTATION.md` §The system under study: what is under investigation — the sample, material, plasma, star, molecule, or device — its identity and structure, and the physical quantities the project aims to determine or optimize. The rig that probes it is §The instrument, not this. |
+| `{{INSTRUMENT_DESCRIPTION}}` | `PROJECT_ORIENTATION.md` §The instrument: what measures what (e.g. NV widefield magnetometer · telescope + detector · spectrometer). |
+| `{{INSTR_PARAM_1}}` / `{{INSTR_VALUE_1}}` / `{{INSTR_UNITS_1}}` / `{{INSTR_SOURCE_1}}` | One row of §The instrument's parameter table: name, value, units, and how the value is known. Provenance is part of the row, not optional. Extend with further rows as the rig is characterized. |
+| `{{MEASUREMENT_MODEL}}` | §The instrument: how instrument readings map to physical quantities — the forward measurement chain, so raw data is never mistaken for the quantity of interest. |
+| `{{INSTRUMENT_ARTIFACTS}}` | §The instrument: drifts, backgrounds, and calibration caveats — the recurring gotchas to guard against. Pairs with `{{KNOWN_GOTCHAS}}` in §Standing constraints. |
 
 ### Session notes (`templates/project/sessions/`)
 Filled when an ad-hoc, non-campaign session is opened: exploration, debugging, or a one-off analysis with
@@ -255,51 +250,26 @@ no frozen metric driving a loop. With such a metric it is a campaign, not a sess
 | `{{FINDING_TIER}}` | The rigor tier of that finding, stated accurately (e.g. `exploratory (unverified)` · `verify-CONFIRMED` · `PROVISIONAL`). A session finding is not a verified project DISCOVERY unless it passed `verify`; the tag is what stops an ad-hoc conclusion being trusted like a campaign result. |
 | `{{SESSION_ARTIFACTS}}` | Files, plots, and scripts produced, with paths inside this session folder. |
 
-### Framing & planning docs (INTAKE · PROJECT_ORIENTATION · PHYSICS · VERIFICATION_PLAN)
-These fill the setup/planning docs authored before the loop runs. The `*_PROPOSED` tokens hold the user's
-pre-sign-off proposals captured in `INTAKE.md`. Once the campaign spec is signed off they are restated
-(frozen) in `campaign.md` / `metric.py` under their final names; see the alias note below.
+### Goal & verification (campaign.md §Mission / §Verification · the project's PROJECT_ORIENTATION.md)
+The campaign's orienting answers and its own verification checks, filled directly into the signed-off
+contract. There is no separate planning doc: `campaign.md` is drafted, user-edited where preferred
+(draft-document mode), and frozen at sign-off.
 
 | Placeholder | Meaning |
 |---|---|
-| `{{GOAL_PROPOSED}}` | INTAKE: the proposed campaign goal (pre-sign-off). |
-| `{{DECISION_PROPOSED}}` | INTAKE: the decision the result is proposed to drive. |
-| `{{OUT_OF_SCOPE}}` | What is explicitly out of scope (INTAKE + PROJECT_ORIENTATION). |
-| `{{LIT_POSITIONING}}` | INTAKE: how the work is positioned against the literature. |
-| `{{PRIMARY_METRIC_PROPOSED}}` | INTAKE: proposed primary metric (→ `{{PRIMARY_METRIC}}` once frozen). |
-| `{{SCORER_PROPOSED}}` | INTAKE: proposed scorer/definition (→ `{{METRIC_DEFINITION}}` / `{{FROZEN_SCORER_PATH}}`). |
-| `{{GUARDRAIL_PROPOSED}}` | INTAKE: proposed guardrail metric (→ `{{GUARDRAIL_METRIC}}`). |
-| `{{BOUNDS_PROPOSED}}` | INTAKE: proposed bounds/plausible range (→ `{{METRIC_HARD_BOUNDS}}` / `{{METRIC_PLAUSIBLE_RANGE}}`). |
-| `{{LEVERS_PROPOSED}}` | INTAKE: proposed levers (→ `{{LEVERS_LIST}}`). |
-| `{{FROZEN_PROPOSED}}` | INTAKE: proposed FROZEN set (→ `{{FROZEN_LIST}}`). |
-| `{{TIERS_PROPOSED}}` | INTAKE: proposed evaluation tiers/caps (→ the Caps table). |
-| `{{DATA_PROPOSED}}` | INTAKE: proposed data / eval target (→ `{{DATA_SOURCE}}` / `{{EVAL_TARGET}}`). |
-| `{{EVAL_COST}}` | INTAKE: the cost of one evaluation (time/compute). |
-| `{{EXPENSIVE_EVAL_FLAG}}` | INTAKE: whether evaluations are expensive (gates the expensive-evaluation protocol). |
-| `{{APP_VERIFICATION_TASKS}}` | INTAKE: domain/application-specific verification tasks identified at setup. |
-| `{{GIT_CHOICE}}` | INTAKE: whether to use git for this campaign, and why. |
-| `{{GOAL_STATEMENT}}` | PROJECT_ORIENTATION: the end goal, stated plainly. |
-| `{{DECISION_SERVED}}` | PROJECT_ORIENTATION: the decision the goal serves. |
-| `{{DONE_CRITERIA}}` | PROJECT_ORIENTATION: what "done" looks like. |
-| `{{TASK_1}}` … | PROJECT_ORIENTATION: a numbered task (one per task: `{{TASK_1}}`, `{{TASK_2}}`, …). |
-| `{{TASK_1_RATIONALE}}` … | PROJECT_ORIENTATION: how task N serves the goal (paired with each `{{TASK_N}}`). |
-| `{{NEXT_POINTER}}` | PROJECT_ORIENTATION: the current NEXT pointer. |
-| `{{EFFECT_1}}`, `{{EFFECT_2}}`, `{{EFFECT_3}}`, `{{EFFECT_4}}`, `{{EFFECT_5}}` | PHYSICS / INTAKE: rows of the physical-effect inventory (extend/trim to fit). |
-| `{{TAG_1}}` … | INTAKE: the in/out tag for effect N (accounted / negligible-by-scale / deferred / unknown). |
-| `{{WHY_1}}` … | INTAKE: why effect N carries that tag (paired with each `{{EFFECT_N}}`). |
-| `{{APRIORI_BOUND}}` | INTAKE / PHYSICS: the a-priori order-of-magnitude bound on the answer (see alias note). |
-| `{{DOMAIN_ASSUMPTIONS}}` | INTAKE / PHYSICS: assumptions that define the model's domain of applicability. |
-| `{{APRIORI_RANGE}}` | VERIFICATION_PLAN: the a-priori plausible range for the metric (see alias note). |
-| `{{HARD_BOUNDS}}` | VERIFICATION_PLAN: the mathematical hard bounds on the metric (see alias note). |
-| `{{ANALYTIC_LIMITS}}` | VERIFICATION_PLAN: closed-form / limiting cases the result must match. |
-| `{{INVARIANTS}}` | VERIFICATION_PLAN: conservation / symmetry invariants to check. |
-| `{{CONVERGENCE_PLAN}}` | VERIFICATION_PLAN: how numerical convergence will be demonstrated. |
-| `{{PARITY_METHOD}}` | VERIFICATION_PLAN: the independent / mechanism-diverse method used for parity checks. |
-| `{{VALIDATION_DATA}}` | INTAKE / VERIFICATION_PLAN: the held-out / independent data used to validate. |
-| `{{VALIDATION_HIERARCHY}}` | VERIFICATION_PLAN: the unit → subsystem → full-system validation ladder. |
-| `{{DOMAIN}}` | VERIFICATION_PLAN: the stated domain of applicability (never extrapolate past it unflagged). |
-| `{{APP_CHECK_1}}` / `{{APP_CHECK_2}}` | VERIFICATION_PLAN: application-specific verification checks. |
-| `{{KNOWN_ARTIFACTS}}` | VERIFICATION_PLAN: known artifacts / gotchas to watch for (see alias note). |
+| `{{OUT_OF_SCOPE}}` | `campaign.md` §FROZEN / out of scope: what is explicitly out of scope / not claimed. |
+| `{{DECISION_SERVED}}` | `campaign.md` §Mission: the decision this campaign's result serves. |
+| `{{DONE_CRITERIA}}` | `campaign.md` §Mission: what "done" looks like for this campaign. |
+| `{{EFFECT_1}}`, `{{EFFECT_2}}`, `{{EFFECT_3}}`, `{{EFFECT_4}}`, `{{EFFECT_5}}` | PROJECT_ORIENTATION §Standing constraints: rows of the physical-effect inventory (extend/trim to fit). |
+| `{{APRIORI_BOUND}}` | PROJECT_ORIENTATION §Standing constraints: the a-priori order-of-magnitude bound on the answer (see alias note). |
+| `{{DOMAIN_ASSUMPTIONS}}` | PROJECT_ORIENTATION §Standing constraints: assumptions that define the model's domain of applicability. |
+| `{{ANALYTIC_LIMITS}}` | campaign.md §Verification: closed-form / limiting cases the result must match. |
+| `{{INVARIANTS}}` | campaign.md §Verification: conservation / symmetry invariants to check. |
+| `{{CONVERGENCE_PLAN}}` | campaign.md §Verification: how numerical convergence will be demonstrated. |
+| `{{PARITY_METHOD}}` | campaign.md §Verification: the independent / mechanism-diverse method used for parity checks. |
+| `{{VALIDATION_DATA}}` | campaign.md §Verification: the held-out / independent data used to validate (calibration is not validation). |
+| `{{APP_CHECK_1}}` / `{{APP_CHECK_2}}` | campaign.md §Verification: the field-standard, application-specific checks generic doctrine cannot supply. |
+| `{{KNOWN_ARTIFACTS}}` | campaign.md §Verification: known artifacts / failure modes to guard against (see alias note). |
 
 ### Campaign properties (configs/loop.json `"campaign"` — what kind of campaign this is)
 Two setup-time declarations that every mechanical check branches on, plus their numeric companions. Both
@@ -342,13 +312,11 @@ in wall-clock, whichever trips first.
 | `{{ITERATION_TIMEOUT_HOURS}}` | Hard wall-clock cap on one worker iteration (> the Extended-tier run cap). |
 | `{{VERIFY_REPRO_THRESHOLD_S}}` | The verification tier boundary: unit cost at/below → full re-execution in verify; above → judgment + cheapest discriminating spot-check. |
 
-> **Alias note (proposed → final, and near-synonyms).** Several tokens name the same quantity at different
-> stages or in different docs; fill them consistently. The a-priori bound/range appears as
-> `{{APRIORI_BOUND}}` (INTAKE/PHYSICS), `{{APRIORI_RANGE}}` (VERIFICATION_PLAN), `{{APRIORI_BOUND_NOTES}}`
-> (campaign.md), and `{{METRIC_PLAUSIBLE_RANGE}}` (program/metric). The metric's hard bounds appear as
-> `{{HARD_BOUNDS}}` (VERIFICATION_PLAN), `{{METRIC_HARD_BOUNDS}}` (program/metric) and
-> `{{PLAUSIBILITY_BOUNDS}}` (the executable form of those same bounds, in the FROZEN scorer): fill all
-> three from one answer, and if you change one, change all three. The domain gotchas appear as
-> `{{KNOWN_ARTIFACTS}}` (VERIFICATION_PLAN) and `{{KNOWN_GOTCHAS}}` (CONVENTIONS/INTAKE). The split is
-> intentional, because the planning docs are drafted before `campaign.md` freezes the final wording, but
-> the setup skill should keep the paired values in sync.
+> **Alias note (near-synonyms across docs).** A few tokens name the same quantity in different docs; fill
+> them consistently. The a-priori bound appears as `{{APRIORI_BOUND}}` (PROJECT_ORIENTATION),
+> `{{APRIORI_BOUND_NOTES}}` (campaign.md), and `{{METRIC_PLAUSIBLE_RANGE}}` (campaign.md §The ONE metric).
+> The metric's hard bounds appear as `{{METRIC_HARD_BOUNDS}}` (campaign.md) and `{{PLAUSIBILITY_BOUNDS}}`
+> (the executable form of those same bounds, in the FROZEN scorer): fill both from one answer, and if you
+> change one, change both. The domain gotchas appear as `{{KNOWN_ARTIFACTS}}` (campaign.md §Verification —
+> what a *check* must guard against) and `{{KNOWN_GOTCHAS}}` (PROJECT_ORIENTATION §Standing constraints —
+> the project-wide symptom → check catalog). The split is intentional; keep the paired values in sync.

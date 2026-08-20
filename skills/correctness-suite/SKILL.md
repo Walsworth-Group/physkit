@@ -24,11 +24,11 @@ suite is not proof of a finding, but no finding built on a red suite is trustwor
 Bring software-testing discipline, specialized to physical-simulation correctness: a layered suite, cheap
 checks first, regression on every fixed bug.
 
-**Where it lives (campaign).** The scaffold ships at `tests/correctness_checks.py` (+ `tests/README.md`):
+**Where it lives (campaign).** The scaffold ships at `tests/correctness_checks.py`:
 five skip-stubs (analytic-limit, invariants, parity, convergence, regression) filled from
-`docs/VERIFICATION_PLAN.md`. `run_campaign.py` runs it on every experiment and records the status. Only an
+`campaign.md` §Verification. `run_campaign.py` runs it on every experiment and records the status. Only an
 affirmative GREEN green-lights a promotion. RED, EMPTY (zero active checks, the all-skip scaffold), ERROR,
-and ABSENT each block it via `guard_discoveries`. Deleting or never finishing the suite is not a way past
+and ABSENT each block it via `guard_promotion`. Deleting or never finishing the suite is not a way past
 the gate. A campaign with no simulator records an explicit `tests/CORRECTNESS_NA.md` (a reviewable N/A
 decision) to proceed. `verify` treats a non-green suite as a promotion blocker; re-run after any core/FROZEN
 change (a stale green is rejected too; `campaign-status` §2). Run:

@@ -6,11 +6,180 @@ All notable changes to the kit are recorded here. Format follows
 Dates are UTC. Each entry cites the run/finding that motivated it (the kit's own
 `campaign-review → improve-kit` loop) so a future reviewer can trace the "why".
 
-## [Unreleased]
+## [0.10.0] - 2026-08-20
+
+The document consolidation and the verification rework, in one clean break. A campaign is now **7
+documents on 2 levels** against 15 across 3 in v0.9.0 — one background document per project
+(`PROJECT_ORIENTATION.md`, its §Standing constraints delivered into every spawned prompt by value),
+one signed-off contract per campaign (`campaign.md`), one cold-reader front door (`README.md`),
+findings in the journal — and **verification is driver control flow**: an independent verification
+agent runs after every completed unit or block, with a subject-matched promotion gate behind it.
+**This is a clean break**: a campaign scaffolded by v0.9.0 keeps working under v0.9.0, and
+`kit/docs/MIGRATING.md` §"To the consolidated layout" carries the combined v0.9.0 → v0.10.0
+procedure. Provenance changes shape: campaigns pin the kit **version** (`campaign.md` header + the
+logbook top) instead of carrying a doctrine-spine snapshot — every release is tagged, and the tag
+recovers the whole kit (ADR-0012).
+
+Everything below this heading and above `[0.9.0]` shipped in this release.
+
+### Added — the driver verifies every block; the promotion gate goes subject-matched (Phase C: V2's queue blocks + V3's verify-after + V4's structural guarantee)
+
+Verification stops being agent virtue and becomes control flow. Until now, the independent refuter
+ran only when a worker decided something was promotion-worthy — an ordinary experiment was never
+independently verified, and nothing ensured the verdict's consumption beyond prose rules and audits.
+
+- **Per-block verification, driver-spawned.** After every accepted unit — or the last unit of a
+  **block**, a batch of related queue entries sharing a `"block"` id and a `"hypothesis"` — the
+  driver spawns a dedicated verification agent (a third role beside worker and planner;
+  `--show-prompt verifier` previews its prompt) that runs the verify skill per experiment. The block
+  is not cleared until every verdict artifact exists. The worker never grades its own work, and
+  skipping is structurally impossible in supervised mode. Verification cost follows unit cost by
+  construction: batch cheap experiments into blocks; an expensive experiment is a block of one.
+- **Owed verification survives anything.** `pending_verification` lives in the queue ledger, so
+  verification owed by a crashed or interrupted run is serviced first on relaunch. Verifier failures
+  degrade loud like worker failures; N in a row halts as SYSTEMIC — the loop must not keep producing
+  science nothing verifies. `campaign-status` and `run-campaign` watch the backlog.
+- **Consumption goes mechanical.** The driver stamps the scoreboard's `verified` column from the
+  verdict artifact (blank cells only — never overwriting a recorded value); the verifier queues the
+  named control for a REFUTED and the fix-and-rerun for an INCONCLUSIVE as concrete units.
+- **The control is owned.** `configs/loop.json` `campaign.verification`: `per-block` (default) or
+  `promotion-only` **with a required recorded reason** — the same contract as
+  `prediction_mode: 'none'`, honoring the plan's affordability concern (C3) without an unrecorded
+  off-switch. Preflight and the validator both refuse an out-of-enum mode or a reasonless downgrade.
+- **The promotion gate is subject-matched.** With every experiment carrying its own verdict,
+  `guard_promotion` now demands the verdict **for the experiment being promoted** — matched from the
+  exp id the written content carries — instead of accepting any CONFIRMED verdict within a 60-minute
+  window (a residual the old gate's own docstring flagged; the `AUTORESEARCH_VERIFY_WINDOW_MIN` knob
+  is gone). A write that names no experiment is denied with the fix stated.
+
+The design-before review (V3's other half, with refusal power) is deliberately not included — it is
+a separate decision with its own rubber-stamp risks, still open in the plan.
+
+### Changed — findings live in the journal; the promotion gate narrows to its mechanical surfaces (Phase C, V6)
+
+`results/DISCOVERIES.md` dissolved into the journal's append-only **`## Findings`** section: settled
+findings — positive, steering-negative with their kill tiers, DISPUTES notes, REVISES retractions —
+live in the campaign's working memory, each citing its `results/verdicts/<id>.json`, and
+consolidation never trims that section. One less file, and one less prose ledger to guard.
+
+The promotion hook narrowed accordingly and is renamed **`guard_promotion.py`**:
+
+- It gates the **mechanical** surfaces downstream consumers actually trust: `configs/RECOMMENDED.json`
+  writes and scoreboard edits that introduce a `CONFIRMED` / `NEW BEST` token (recency-checked
+  verdict + named refuter + affirmative non-stale green suite, as before).
+- It **newly gates the project ledger** `<project>/DISCOVERIES.md`, fail-closed — closing a gap the
+  old guard documented but could not fix: its campaign-root resolution failed above a campaign, so
+  every project-ledger write hit an unsatisfiable deny. An entry must cite the source campaign's
+  verdict by path (`campaigns/<slug>/results/verdicts/<id>.json`); the gate resolves the verdict
+  across campaigns (archived ones included) and requires the source campaign's suite green.
+- The campaign DISCOVERIES surface is gone with the file. The journal's Findings section is
+  deliberately **not** a hook surface — it is working memory, edited every cycle, and guarding prose
+  patterns is the bug-prone shape the old surface's own history showed (the substring-match defect) —
+  the rule binds by convention and `campaign-status` audits that every entry's citation resolves.
+
+Hard gate 1's promotion definition, the roles, the planner prompt, verify's campaign mode,
+fork-campaign's carry-forward, and the validator's required files all follow. `kit/docs/MIGRATING.md`
+carries the move procedure; the hook swap is frozen-core-hash-safe (the guard is not in
+`CORE_FILES_DEFAULT`).
+
+### Changed — the campaign folds to seven core documents; provenance becomes a version pin (V1c)
+
+The campaign doc set is redesigned around three reader contexts — loop agents get the assembled
+prompt, cold readers get the front door, the human signs one contract:
+
+- **`campaign.md` is the whole signed-off contract.** It absorbs the campaign-specific verification
+  checks (§Verification — the retired `docs/VERIFICATION_PLAN.md`'s generic checklist was the
+  `verify`/`correctness-suite` procedure restated, and its bounds rows were aliases of §The ONE
+  metric's), the landmines table and the append-only decision ledger (§Known landmines + §Decision
+  record, from the retired `docs/ENGINEERING_NOTES.md`). `docs/` no longer exists. Landmines need no
+  prompt injection anymore: both roles are contractually required to re-read `campaign.md` every
+  cycle, so the driver injects only the project's §Standing constraints — the one delivered document
+  outside the per-cycle read set.
+- **`README.md` is rewritten as the cold-reader front door**: purpose, how the two roles run, a
+  who-reads-what-when file map, and §Setup status. `SETUP_TODO.md` is retired **without a
+  replacement table**: setup state is mechanical and already enforced plugin-side — preflight
+  refuses to launch and names each stub with its fix, the gates hold the rest — so the section is a
+  pointer to `--preflight`, the one source that cannot go stale, and campaign-specific setup tasks
+  seed the JOURNAL NEXT list. `campaign-status` reports a no-rows-yet campaign by running preflight
+  rather than reconstructing state from docs.
+- **`DOCTRINE_SNAPSHOT.md` is retired for a kit-version stamp** (`campaign.md` header + the top of
+  `results/logbook.md`). The snapshot recorded only the doctrine spine while skills, reference docs,
+  and the driver equally govern behavior — a partial record that read as a complete one. Every
+  release is tagged, so the version pin recovers the *whole* kit; it is still a frozen record, never
+  updated to a newer version. (ADR-0012 — a deliberate reversal of the freeze-and-stamp file.)
+- **`INTAKE.md` is retired.** Form-mode users now edit a pre-filled **draft `campaign.md`** directly —
+  the document they craft is the campaign definition, not a form transcribed into one — finalized at
+  sign-off, where the validator refuses any surviving `[PROPOSED]` tag. `tests/README.md` is retired
+  (its policy text lived in the gates and the skill; the run command lives in the suite's docstring).
+- **`LITERATURE.md` gains a guaranteed read path** when present: a conditional routing row in
+  `CLAUDE.md`, and the planner prompt names it.
+
+With V6 (above) landing in the same release, a scaffolded campaign carries **7 documents on 2
+levels** (plus conditional `LITERATURE.md`), against 15 across 3 levels in v0.9.0: `README.md` ·
+`campaign.md` · `CLAUDE.md` · `roles/worker.md` · `roles/planner.md` · `results/JOURNAL.md` ·
+`results/logbook.md`.
+
+### Changed — one project background document, delivered by value (Phase C, V1b)
+
+Four project docs that each opened by distinguishing themselves from the other three —
+`shared/PHYSICS.md`, `shared/CONVENTIONS.md`, `shared/INSTRUMENT.md`, `ENGINEERING_NOTES.md` — are
+now ONE `PROJECT_ORIENTATION.md` at the project root, one section each; `shared/` holds only promoted
+frozen artifacts. The campaign-level `docs/PROJECT_ORIENTATION.md` dissolved into `campaign.md`
+(goal, done-criteria, expectations, out-of-scope), the queue + JOURNAL NEXT (task hierarchy), and the
+project document (field positioning). A fresh scaffold now produces 3 project background+charter docs
+and a flatter campaign tree instead of 10 documents across three levels.
+
+Two mechanisms ride on the merge, closing the recorded-but-unread gap for constraints:
+
+- **The driver delivers `## Standing constraints` (project) and `## Known landmines` (campaign) into
+  every spawned worker/planner prompt by VALUE** — guaranteed present, never merely pointed at —
+  through `build_prompt()`, the one assembly path, so `--show-prompt` previews exactly what ships.
+  Preflight refuses to launch when the constraints section is absent.
+- **Each experiment snapshot stamps the spawn prompt's sha256** into its manifest: the background doc
+  is living, so two experiments in one campaign can run under different delivered context, and "what
+  did this run under" must be answerable from the frozen record.
+
+The validator gates the new layout (`PROJECT_REQUIRED_FILES`, the constraints-section check, the
+widened no-local-copy rule) and names a pre-merge project with the migration pointer instead of
+reporting generic damage. `kit/docs/MIGRATING.md` carries the old -> new map. The
+`{{PHYSICS_DOC}}`/`{{CONVENTIONS_DOC}}` path placeholders retire — the background doc has a fixed
+location, so templates carry literal relative paths and there is no per-campaign depth-counting to
+get wrong.
+
+### Fixed — a scaffold that cannot run no longer reports itself ready to launch
+
+`new-campaign` generates a valid tree but deliberately does not write the physics: `validate_method()`,
+`run_experiment()` and `load_target()` ship as `raise NotImplementedError` stubs, because only the
+campaign knows what an experiment is. Preflight probed the FROZEN scorer and never these three, so a
+freshly scaffolded campaign passed every check and was told **"ready for --supervise"** while every unit
+was guaranteed to fail. The failures then look identical to each other, so the consecutive-failure halt
+classified them as SYSTEMIC — blaming the environment for code that had simply never been written.
+
+- **Preflight now refuses while any hook is still the generated stub**, naming which one and where to
+  fix it. Detected from source, never by calling them: `run_experiment()` runs an experiment, so probing
+  by invocation would spend a unit to answer a question about setup. A hook whose source cannot be read
+  is reported as implemented — silence beats a false accusation that sends someone editing correct code.
+- **What is unbuilt is now stated where the researcher will look**, rather than only in a stub's
+  traceback: `README.md` §Setup status says the scaffold is deliberately not runnable and points at
+  `--preflight` as the authoritative live list; the CLAUDE.md routing table carries the row. (First
+  built as a standalone `SETUP_TODO.md` consequence table; the table was dropped as duplicated state
+  — preflight and the gates already compute it live — see the V1c entry above.)
+
+### Fixed — the live feed no longer buries the agent under its own session events
+
+Every stream event of type `system` rendered as `session start`. A session emits many of them: one real
+worker unit produced **253 such lines against 7 lines of agent text**, burying the only part that says
+what the agent is doing — in the log the driver's own docs call the way an unattended run is diagnosed.
+The tell was that they printed `model=?`, since a real init event carries a model. Only `subtype: init`
+is a session start now; the rest render nothing.
+
 
 ## [0.9.0] - 2026-08-20
 
-The campaign-structure redesign (Phases A-C). A campaign is now organized by **who reads what, and
+The campaign-structure redesign — Phases A-B complete, Phase C through V0-V1 (the a-priori
+prediction gate and the per-experiment checks artifact). Phase C's remaining rows (V1b-V6: the
+one-background-document merge, the block model, the two reviews) had not shipped as of this
+release. A campaign is now organized by **who reads what, and
 when**: `docs/charter.md` is split into `campaign.md` + `roles/worker.md` + `roles/planner.md`, the
 doctrine spine leaves the always-on file, and `docs/protocols/`, `results/INDEX.md`,
 `docs/baselines.md` and `docs/dataset.md` are gone. **This is a clean break** — a campaign scaffolded

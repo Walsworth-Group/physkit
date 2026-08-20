@@ -47,7 +47,7 @@ SCOPE (gaps this hook does NOT close — campaign-status backstops them):
     campaign-status' plateau/verified-column checks are the real backstop. The block reason therefore always
     points at the ledger's own NEXT pointer — never "do something".
   * Only fires if THIS tree wired it (.claude/settings.json registers it under "Stop"). campaign-status
-    asserts that, exactly as it does for guard_discoveries.
+    asserts that, exactly as it does for guard_promotion.
   * Main-session stops only. A Stop hook becomes SubagentStop inside a subagent, and blocking THAT would
     trap the independent refuter that hard gate #1 depends on — so a non-"Stop" event is allowed immediately.
 """

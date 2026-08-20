@@ -8,8 +8,8 @@ description: >-
   you were doing and why), a concrete "run this to confirm state" command that verifies the environment and
   reproduces where things stand, and a prioritized roadmap of next steps. Prior handoffs are archived, never
   overwritten, so the trail of reasoning is preserved. It resumes from LINEAGE.md (the cross-campaign index)
-  and checks whole-tree portability. Pairs with campaign-status (health) and the PROJECT_ORIENTATION.md doc
-  (goal/tasks).
+  and checks whole-tree portability. Pairs with campaign-status (health) and campaign.md §Mission
+  (goal/done-criteria).
 ---
 
 # handoff — make the work cold-resumable
@@ -31,8 +31,8 @@ converges. The handoff distills durable artifacts; it is not where they first ap
 ## The four parts
 
 1. **Vision & goal — where this is headed and why.** The end goal and the decision it drives, pulled from
-   `PROJECT_ORIENTATION.md` where it exists, and the one-paragraph statement of why the work matters. Enough
-   that the resumer understands the purpose, not only the next task.
+   `campaign.md` §Mission (project-wide: `PROJECT.md`) where they exist, and the one-paragraph statement of
+   why the work matters. Enough that the resumer understands the purpose, not only the next task.
 
 2. **Current state — including the in-flight reasoning.** What is done, what is in-flight, the current best
    result and its verification status, and the open threads. Capture the reasoning that was mid-stream: the
@@ -56,8 +56,8 @@ converges. The handoff distills durable artifacts; it is not where they first ap
 
 4. **Roadmap / NEXT — prioritized, goal-linked.** The next steps in priority order, each tied to how it
    serves the goal, with enough specificity to act on. "Improve the model" is not actionable; "test the
-   canting term on the coercive-band subset, experiment queue in JOURNAL NEXT" is. Keep it in sync with the
-   `PROJECT_ORIENTATION` tasks and the JOURNAL NEXT pointer.
+   canting term on the coercive-band subset, experiment queue in JOURNAL NEXT" is. Keep it in sync with
+   `results/queue.json` and the JOURNAL NEXT pointer.
 
 ## Resume from `LINEAGE.md`, check whole-tree portability
 The campaign sits in a project (`PROJECT.md` and `LINEAGE.md` above it), so the handoff is project-aware:
@@ -83,8 +83,8 @@ prevents re-litigating settled decisions. The newest handoff is the live one; th
 direction was abandoned. `record-decision` holds the durable why, the handoff holds the moment.
 
 ## Composition
-- `PROJECT_ORIENTATION.md` — source of the vision/goal and the task roadmap. The handoff references it
-  rather than duplicating the full hierarchy.
+- `campaign.md` §Mission + `results/queue.json` — source of the vision/goal and the task roadmap. The
+  handoff references them rather than duplicating the full queue.
 - `LINEAGE.md` and `PROJECT.md` — the cross-campaign index a resumer reads first, and the
   investigation-wide goal. The handoff points at the active campaign's row rather than duplicating the index.
 - `campaign-status` — its latest checkpoint feeds "current state". Run it before a handoff if stale.

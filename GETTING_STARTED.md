@@ -64,11 +64,12 @@ over a long session. Put the spine in your project's `CLAUDE.md`, which Claude C
 turn: either add the import line `@<path-to-kit>/docs/CORE.md`, or copy the body of `docs/CORE.md`
 into a `CLAUDE.md` in your project folder. The import stays current automatically; the copy is the
 fallback when imports do not resolve on your setup. `CORE.md` is the single source for this spine.
-Campaigns work the other way round: `new-campaign` writes a frozen, provenance-stamped snapshot of the
-spine into the campaign's `DOCTRINE_SNAPSHOT.md` — its reproducible doctrine record, not a live import
-(see §4). The campaign's own `CLAUDE.md` stays light and references it: always-on carries what binds a
-turn (the integrity core, the reflexes, the hard gates, the file map), and the reasoning behind those
-rules is one file away rather than in every turn's context.
+Campaigns work the other way round: `new-campaign` stamps the kit **version** into the campaign
+(`campaign.md`'s header and the top of `results/logbook.md`) — its doctrine and tooling provenance,
+since every release is tagged and the pin recovers the whole kit, not a live import (see §4). The
+campaign's own `CLAUDE.md` stays light: always-on carries what binds a turn (the integrity core, the
+reflexes, the hard gates, the file map), and the reasoning behind those rules is the plugin's
+`docs/CORE.md` at the stamped version rather than in every turn's context.
 
 ## 2. Start a campaign — the interview
 
@@ -123,31 +124,31 @@ blank:
 
 ```
 your-project/
-  PROJECT.md            the system, the end goal, project-wide invariants, the data/shared pointers
-  LINEAGE.md            the index — every campaign and session, what it changed, what it found
+  PROJECT.md            what we are trying to achieve — the system, the end goal, project-wide invariants
+  PROJECT_ORIENTATION.md  what we know about the system — the ONE background document (a living doc):
+                        governing physics + effect inventory · units/signs/frames · the instrument ·
+                        durable decisions. Its §Standing constraints is delivered into every
+                        spawned worker/planner prompt, every cycle
+  LINEAGE.md            what has been done — every campaign and session, what it changed, what it found
   DISCOVERIES.md        project-wide verified findings, promoted from campaigns (survive a fork)
-  ENGINEERING_NOTES.md  durable project-wide decisions and their "why"
   CLAUDE.md             the project's always-on rules, auto-loaded anywhere in the tree
   data/                 the canonical data, read-only — or a DATA_PATH.txt pointer to where it lives
-  shared/               referenced by every campaign, never copied
-    PHYSICS.md          governing equations, methods, the effect inventory (a living doc)
-    CONVENTIONS.md      units, signs, ordering — the bug-prevention reference
-    INSTRUMENT.md       the measurement rig / apparatus + sample parameters (when relevant)
+  shared/               promoted frozen artifacts a campaign froze for its siblings
   sessions/             ad-hoc work — one <date>_<slug>/NOTES.md each, no frozen metric
   reports/              the single home for project-level outputs
   campaigns/01_<slug>/  the campaign the interview generates (siblings get 02_, 03_, …)
+    README.md             the front door for anyone new to the tree: purpose, how the loop runs,
+                          who reads what when, and §Setup status — what is not built yet
     CLAUDE.md             always-on: integrity core + reflexes + the hard gates + §Where things live,
                           this campaign's map of itself
-    DOCTRINE_SNAPSHOT.md  the frozen doctrine this campaign runs under — referenced, never auto-loaded
-    campaign.md           THE campaign definition — mission, metric, levers, FROZEN, caps, promotion.
-                          Both roles re-read it every cycle
+    campaign.md           THE campaign definition and the ONE human sign-off surface — mission +
+                          done-criteria + expectations, metric, levers, FROZEN, §Known landmines, caps,
+                          §Verification (this campaign's own checks), promotion, and the append-only
+                          §Decision record tail. Both roles re-read it every cycle; its header stamps
+                          the physkit version the campaign runs under
     roles/
       worker.md           the per-experiment procedure: the loop, the iteration contract, the save-set
       planner.md          strategy: getting unstuck, reopening shelved directions
-    docs/
-      VERIFICATION_PLAN.md  how you'll know the answer is right — drafted before the work
-      PROJECT_ORIENTATION.md  the goal, done-criteria, and the goal-linked task list
-      ENGINEERING_NOTES.md  the decision / "why" record (conditions + revisit-if triggers)
     configs/
       _template.json      copy this per experiment
       exp000_*.json …     one config per experiment   ·   RECOMMENDED.json  the current-best config
@@ -157,7 +158,7 @@ your-project/
                           an experiment without it
     results/
       scoreboard.tsv      the numbers (one row per experiment)
-      JOURNAL.md          the working window + NEXT pointer   ·   DISCOVERIES.md  settled, verified findings
+      JOURNAL.md          the working window + NEXT pointer + §Findings, the settled verdict-cited record
       logbook.md          the full narrative record (append-only; never read whole)
       result_<NN>.json    what one experiment produced   ·   checks_<NN>.json  its mechanical checks,
                           each pass / fail / unavailable, and what an unavailable one would need
@@ -167,11 +168,11 @@ your-project/
       snapshots/ images/ data/ diagnostics/    per-experiment artifacts
     scripts/
       metric.py           the FROZEN scorer (+ --selftest)   ·   run_campaign.py  the experiment runner
-      guard_discoveries.py  the hook that blocks a DISCOVERIES write with no recent verification
+      guard_promotion.py    the hook that blocks a promotion write with no recent verification
       loop_heartbeat.py     the Stop hook guarding attended sessions (stands down while the driver runs)
     tests/                correctness_checks.py — the standing checks, green before a result is trusted
-    CLAUDE.md   .claude/settings.json     the campaign's always-on doctrine + the hook wiring
-    INTAKE.md   README.md   LITERATURE.md   (LITERATURE.md only if you enabled literature search or provided sources)
+    .claude/settings.json   the hook wiring
+    LITERATURE.md         only if you enabled literature search or provided sources
 ```
 
 ## 3. Get ready to run
@@ -256,7 +257,7 @@ the driver log, so why a campaign ended is always answerable from the ledger.
 What to expect while it runs. Every experiment is logged to `results/scoreboard.tsv`, with a
 narrative in `results/JOURNAL.md`. A basic figure is saved for every experiment, and more for notable
 ones. Promising findings are independently verified before being promoted, and settled conclusions
-graduate to `results/DISCOVERIES.md`. The ledger and journal are the full record, readable at any time.
+graduate to the journal's Findings section. The ledger and journal are the full record, readable at any time.
 `/physkit:campaign-status` answers where the campaign stands; the concierge answers what the loop is
 doing now.
 

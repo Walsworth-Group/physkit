@@ -1,6 +1,6 @@
 """frozen_core.py — the single source of truth for WHICH files are this campaign's FROZEN/core code, and a
 content hash over them. Imported by BOTH scripts/run_campaign.py (records the hash with the correctness-suite
-state and stamps it into each snapshot) and scripts/guard_discoveries.py (recomputes it at promotion time to
+state and stamps it into each snapshot) and scripts/guard_promotion.py (recomputes it at promotion time to
 reject a STALE green — a correctness suite that was green against a DIFFERENT version of the core than the one
 being promoted). Dependency-free and side-effect-free so the hook can import it cheaply and safely.
 

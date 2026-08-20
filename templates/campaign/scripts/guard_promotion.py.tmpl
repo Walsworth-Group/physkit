@@ -1,36 +1,46 @@
 #!/usr/bin/env python3
-"""guard_discoveries.py - PreToolUse hook: a PROMOTION write must be independently CONFIRMED.
+"""guard_promotion.py - PreToolUse hook: a PROMOTION write must be independently CONFIRMED.
 
 Enforces the campaign's #1 hard gate on every promotion surface. A finding - POSITIVE or NEGATIVE
-(steering-negatives are discoveries too) - may not be promoted unless the verify skill's independent
+(steering-negatives promote too) - may not be promoted unless the verify skill's independent
 refuter recorded a promotable verdict artifact in results/verdicts/<id>.json:
     {"claim": "...", "exp_id": "...", "verdict": "CONFIRMED", "kill_tier": null,
      "refuter": "<agent/session id>", "utc": "...", "summary": "..."}
 For a NEGATIVE (kill-claim) finding, "kill_tier" is "REFUTED" or "EVIDENCE_AGAINST" (an "INCONCLUSIVE"
 kill never graduates - it queues a fix-and-rerun unit instead).
 
-Three promotion surfaces, two strictness tiers. The citation rule and the surface/recency rule are
+Two promotion surfaces, two strictness tiers. The citation rule and the surface/recency rule are
 independent and complementary - a write must satisfy both, not either:
-  * results*/DISCOVERIES.md writes - SUBJECT-MATCHED + FAIL-CLOSED: the entry must cite its verdict
-    file by name (incl. REVISES/retraction entries - an invalidation is as load-bearing as a promotion);
-    the cited artifact must be CONFIRMED with a named refuter and a graduating kill tier. Any guard
-    error on this surface DENIES - a bad DISCOVERIES write is the one unrecoverable ledger write.
   * RECOMMENDED*.json (current-best) writes and scoreboard writes that INTRODUCE a `CONFIRMED` /
-    `NEW BEST` token - RECENCY-CHECKED + FAIL-OPEN-LOGGED: a CONFIRMED verdict artifact WITH A NAMED
-    INDEPENDENT REFUTER (and a graduating kill tier if any) must exist within AUTORESEARCH_VERIFY_WINDOW_MIN
-    (default 60) - the same refuter the DISCOVERIES surface requires, because hard gate #1's warrant is the
-    independent refuter, not merely that a CONFIRMED file exists (a self-authored / refuterless verdict does
-    not promote). These files are recoverable, so a guard *error* here allows BUT logs to
-    results/gate_failures.log (campaign-status hard-fails on a non-empty log); a refuterless verdict is a
-    clean, recoverable DENY (fix the verdict or run verify, then retry), not a bypass.
-Both surfaces also require an AFFIRMATIVE GREEN correctness suite (results/correctness_state.json, written
-by run_campaign) - not merely 'not red'. RED, EMPTY (a freshly-scaffolded all-skip suite: zero active
-checks), ERROR, ABSENT, and a never-run (no state file) all block, because none is evidence the machinery is
-right - deleting/never-finishing the suite was the trivial silent bypass. ABSENT/EMPTY are excused only by an
-explicit tests/CORRECTNESS_NA.md (a recorded N/A decision, never a silent gap). A green is further rejected
-if STALE - recorded against a different FROZEN/core hash than the code on disk now (the file set is
-scripts/frozen_core.py). No finding built on a red/empty/absent suite, or on a green that no longer matches
-the code it certified, is trustworthy.
+    `NEW BEST` token - SUBJECT-MATCHED + FAIL-OPEN-LOGGED: the verdict artifact FOR THE EXPERIMENT
+    BEING PROMOTED (matched by the exp id/name the written content carries) must be CONFIRMED with a
+    NAMED INDEPENDENT REFUTER and a graduating kill tier if any - hard gate #1's warrant is the
+    independent refuter, not merely that a CONFIRMED file exists (a self-authored / refuterless
+    verdict does not promote). Per-block verification means every experiment carries its own verdict,
+    so the gate no longer accepts "some verdict, recently" (the recency window this replaces could be
+    satisfied by any fresh verdict about anything - a residual its own docstring flagged). These
+    files are recoverable, so a guard *error* here allows BUT logs to results/gate_failures.log
+    (campaign-status hard-fails on a non-empty log); an unmatched or refuterless verdict is a clean,
+    recoverable DENY (run verify for that experiment, then retry), not a bypass.
+  * the PROJECT ledger <project>/DISCOVERIES.md - SUBJECT-MATCHED + FAIL-CLOSED: promoting a
+    system-level finding upward must cite the SOURCE campaign's verdict artifact by name
+    (campaigns/<slug>/results/verdicts/<id>.json); the artifact must be CONFIRMED with a named refuter
+    and a graduating kill tier, and the source campaign's correctness suite must be an affirmative,
+    non-stale GREEN. Any guard error on this surface DENIES - the project ledger is the record that
+    survives fork-and-archive, the one unrecoverable write.
+The campaign surface also requires an AFFIRMATIVE GREEN correctness suite (results/correctness_state.json,
+written by run_campaign) - not merely 'not red'. RED, EMPTY (a freshly-scaffolded all-skip suite: zero
+active checks), ERROR, ABSENT, and a never-run (no state file) all block, because none is evidence the
+machinery is right - deleting/never-finishing the suite was the trivial silent bypass. ABSENT/EMPTY are
+excused only by an explicit tests/CORRECTNESS_NA.md (a recorded N/A decision, never a silent gap). A green
+is further rejected if STALE - recorded against a different FROZEN/core hash than the code on disk (the
+file set is scripts/frozen_core.py). No finding built on a red/empty/absent suite, or on a green that no
+longer matches the code it certified, is trustworthy.
+
+Settled findings are RECORDED in results/JOURNAL.md's Findings section, each citing its verdict - but the
+journal is working memory, edited every cycle, and is deliberately NOT a gated surface: the mechanical
+authorities downstream trusts are the scoreboard's verified column and RECOMMENDED.json, which are. A
+findings entry with no verdict citation is an open thread, not a finding; campaign-status audits that.
 
 A normal scoreboard row append (no promotion token) is recording, not promotion - never gated. Writes
 to anything else are always allowed; unparseable stdin is allowed + logged (we cannot even tell what is
@@ -38,7 +48,9 @@ being written).
 
 SCOPE (gaps campaign-status backstops): the scoreboard signal is token-based - a promotion phrased
 without those tokens slips past (verified-column check is the backstop); the hook only fires if THIS
-tree wired it (.claude/settings.json) - campaign-status asserts the wiring.
+tree wired it (.claude/settings.json) - campaign-status asserts the wiring - and it is wired per
+CAMPAIGN, so a session rooted at the project level writes the project ledger unhooked (the promotion
+path runs from inside a campaign, where it is hooked).
 """
 from __future__ import annotations
 import json
@@ -49,8 +61,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 VERDICT_REF_RE = re.compile(r"verdicts[/\\]([\w\-.]+\.json)")
+SUBJECT_RE = re.compile(r"exp[\w\-]*\d[\w\-]*", re.I)
 PROMOTABLE = {"CONFIRMED"}
-WINDOW_MIN = int(os.environ.get("AUTORESEARCH_VERIFY_WINDOW_MIN", "60"))
 
 
 def _allow():
@@ -86,32 +98,31 @@ def _env_campaign_root() -> Path | None:
     return p if (p / "scripts").is_dir() and (p / "configs").is_dir() else None
 
 
-def _is_discoveries_surface(fp: Path | None) -> bool:
-    """True for a campaign's own `results*/DISCOVERIES*.md` — basename-matched, parent-scoped.
+def _is_project_ledger(fp: Path | None) -> bool:
+    """True for the PROJECT-level `DISCOVERIES*.md` - basename-matched, parent must BE a project root
+    (PROJECT.md + LINEAGE.md beside the written file).
 
-    This used to be `if "DISCOVER" in fp_str.upper()`, a substring test over the whole path, which was
-    wrong in BOTH directions:
-
-    * OVER-selected. Any path containing "discover" hit the promotion gate — `scripts/discover_peaks.py`
-      was denied, as would anything under a directory named for the `discovery-loop` skill. A gate that
-      blocks ordinary source writes teaches agents to route around it.
-    * UNDER-selected. Renaming the ledger silently disabled hard gate #1 — no error, no log, just no
-      gate. The recon flagged this as the highest-blast-radius anchor in the kit.
-
-    Matches `DISCOVERIES*.md` (not exactly `DISCOVERIES.md`) so a suffixed ledger stays gated, which is
-    the same glob `validate_campaign.py` requires.
-
-    SCOPE, stated rather than left implicit: the PROJECT-level `<project>/DISCOVERIES.md` is NOT gated
-    here. It never really was — `_campaign_root` cannot resolve above a campaign, so every project-level
-    write failed with "the correctness suite is MISSING" and could not be satisfied by any action. An
-    unsatisfiable deny is not protection. Gating the project ledger needs a check that knows about
-    project roots; V6 owns it.
+    The campaign-level results*/DISCOVERIES.md surface this hook once guarded no longer exists: settled
+    findings live in the journal's Findings section, and the file dissolved (V6). What remains
+    ledger-shaped is the project record, which the old guard could never validate (its `_campaign_root`
+    cannot resolve above a campaign, so every project-level write hit an unsatisfiable deny). This
+    predicate knows about project roots, closing that deliberately deferred gap.
     """
     if fp is None or not fp.name.upper().endswith(".MD"):
         return False
     if not fp.name.upper().startswith("DISCOVERIES"):
         return False
-    return fp.parent.name.lower().startswith("results")
+    parent = fp.parent
+    try:
+        return (parent / "PROJECT.md").is_file() and (parent / "LINEAGE.md").is_file()
+    except OSError:
+        return False
+
+
+def _find_project_verdict(project_root: Path, name: str) -> Path | None:
+    """The cited verdict artifact anywhere under the project's campaigns (incl. campaigns/_archive)."""
+    hits = sorted(project_root.glob(f"campaigns/**/verdicts/{name}"))
+    return hits[0] if hits else None
 
 
 def _note_bypass(root: Path | None, reason: str):
@@ -126,7 +137,7 @@ def _note_bypass(root: Path | None, reason: str):
     """
     root = root or _env_campaign_root()
     if root is None:
-        print(f"guard_discoveries FAIL-OPEN (no campaign root; not logged): {reason}", file=sys.stderr)
+        print(f"guard_promotion FAIL-OPEN (no campaign root; not logged): {reason}", file=sys.stderr)
         return
     try:
         log = root / "results" / "gate_failures.log"
@@ -243,16 +254,6 @@ def green_is_stale(root: Path | None) -> bool:
     return recorded != current
 
 
-def _find_verdict(discoveries_path: Path, root: Path | None, name: str) -> Path | None:
-    candidates = [discoveries_path.parent / "verdicts" / name]
-    if root is not None:
-        candidates.append(root / "results" / "verdicts" / name)
-    for c in candidates:
-        if c.is_file():
-            return c
-    return None
-
-
 def _check_verdict(path: Path, name: str) -> str | None:
     """Deny-reason if the cited verdict artifact does not clear the gate, else None."""
     v = json.loads(path.read_text(encoding="utf-8"))
@@ -282,35 +283,55 @@ def _check_verdict(path: Path, name: str) -> str | None:
     return None
 
 
-def recent_promotable_verdict(root: Path | None) -> bool:
-    """True if a recent (within WINDOW_MIN) verdict artifact CLEARS THE FULL GATE - CONFIRMED, a graduating
-    kill tier if any, AND a named independent refuter (the same `_check_verdict` the DISCOVERIES surface
-    applies). Hard gate #1's warrant is the independent refuter, so a self-authored / refuterless CONFIRMED
-    verdict does NOT promote a current-best. Recency-, not subject-, matched (that residual is
-    campaign-status' backstop)."""
+def _eid(label: str) -> str:
+    """The <NN> id inside an exp label ('exp003_slug' -> '003'). A deliberate, tiny twin of the
+    runner's exp_id_for: importing the runner would drag numpy and the FROZEN scorer into a hook that
+    must answer in milliseconds on every file write."""
+    head = str(label).strip().split("_", 1)[0]
+    raw = head[3:] if head.lower().startswith("exp") else head
+    return raw.zfill(3) if raw.isdigit() else raw.lower()
+
+
+def promotion_subject_problem(root: Path | None, ti) -> str | None:
+    """Deny-reason unless the experiment THIS WRITE PROMOTES has a promotable verdict, else None.
+
+    Subject-matched: the written content names its experiment (RECOMMENDED.json carries its config
+    path; a scoreboard token lands on its experiment's row), and the gate demands THAT experiment's
+    verdict - CONFIRMED, graduating kill tier if any, named independent refuter (`_check_verdict`,
+    the same bar the project-ledger surface applies). With per-block verification every experiment
+    carries its own verdict artifact, so an unmatched subject means the experiment was never
+    verified, not that a window expired."""
     if root is None:
-        return False
+        return ("cannot resolve the campaign root for this write - promote from inside the campaign "
+                "tree so the gate can find results/verdicts/")
+    toks = {t.lower() for t in SUBJECT_RE.findall(_written_text(ti))}
+    if not toks:
+        return ("cannot tell WHICH experiment this write promotes - the written content names no exp "
+                "id. Write the file so it names its experiment (RECOMMENDED.json carries its config "
+                "path; a promotion token belongs on its experiment's scoreboard row), then the gate "
+                "can match the verdict.")
+    ids = {_eid(t) for t in toks}
     vdir = root / "results" / "verdicts"
-    if not vdir.is_dir():
-        return False
-    cutoff = datetime.now(timezone.utc).timestamp() - WINDOW_MIN * 60
-    for p in sorted(vdir.glob("*.json")):
-        try:
-            v = json.loads(p.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        try:
-            t = datetime.fromisoformat(str(v.get("utc", "")).replace("Z", "+00:00")).timestamp()
-        except Exception:
-            t = p.stat().st_mtime
-        if t < cutoff or str(v.get("verdict", "")).strip().upper() != "CONFIRMED":
-            continue
-        try:
-            if _check_verdict(p, p.name) is None:   # CONFIRMED + graduating kill tier + named refuter
-                return True
-        except Exception:
-            continue                                # unreadable/malformed here is fail-open (surface 2)
-    return False
+    problems = []
+    if vdir.is_dir():
+        for p in sorted(vdir.glob("*.json")):
+            try:
+                v = json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            subjects = {_eid(p.stem), _eid(str(v.get("exp_id", "")).strip())}
+            if not (subjects & ids):
+                continue
+            reason = _check_verdict(p, p.name)
+            if reason is None:
+                return None
+            problems.append(reason)
+    if problems:
+        return " | ".join(problems)
+    return (f"no verdict artifact in results/verdicts/ matches the promoted experiment(s) "
+            f"{', '.join(sorted(toks))}. A promotion needs THAT experiment's CONFIRMED verdict with a "
+            "named independent refuter (hard gate #1) - run the verify skill for it (in supervised "
+            "runs the driver's per-block verification writes it), then promote.")
 
 
 def scoreboard_promotion(ti) -> bool:
@@ -340,43 +361,43 @@ def main():
     fp = Path(fp_str) if fp_str else None
     root = _campaign_root(fp) if fp else None
 
-    # ---- surface 1: results*/DISCOVERIES*.md writes - subject-matched, FAIL-CLOSED ----
-    if _is_discoveries_surface(fp):
+    # ---- surface 1: the PROJECT ledger <project>/DISCOVERIES.md - subject-matched, FAIL-CLOSED ----
+    if _is_project_ledger(fp):
         try:
-            suite_reason = correctness_blocks_promotion(root)
-            if suite_reason:
-                _deny("DISCOVERIES gate: " + suite_reason)
-                return
-            if green_is_stale(root):
-                _deny("DISCOVERIES gate: the correctness suite's green was recorded against a DIFFERENT "
-                      "version of the FROZEN/core code than what is on disk now (scripts/frozen_core.py) - a "
-                      "green does not survive an edit to the code it certified. Re-run the experiment (or the "
-                      "suite via run_campaign) so it validates the current core, then promote. Hard gate #1.")
-                return
             refs = sorted(set(VERDICT_REF_RE.findall(_written_text(ti))))
             if not refs:
-                _deny("DISCOVERIES gate: the entry cites no verdict artifact. Every DISCOVERIES entry "
-                      "(positive, negative, or REVISES) must cite its results/verdicts/<id>.json - run "
-                      "the verify skill (it spawns an independent refuter and writes the verdict "
-                      "artifact), get CONFIRMED, then cite the file in the entry. CLAUDE.md hard gate #1.")
+                _deny("project-ledger gate: the entry cites no verdict artifact. Promoting a finding to "
+                      "the project DISCOVERIES ledger requires citing the SOURCE campaign's verdict by "
+                      "path (campaigns/<slug>/results/verdicts/<id>.json) - run the verify skill in that "
+                      "campaign, get CONFIRMED, then cite the file. CLAUDE.md hard gate #1.")
                 return
             problems = []
             for name in refs:
-                found = _find_verdict(fp, root, name)
+                found = _find_project_verdict(fp.parent, name)
                 if found is None:
-                    problems.append(f"cited verdict artifact not found: verdicts/{name}")
-                else:
-                    reason = _check_verdict(found, name)
-                    if reason:
-                        problems.append(reason)
+                    problems.append(f"cited verdict artifact not found under campaigns/**/verdicts/: {name}")
+                    continue
+                reason = _check_verdict(found, name)
+                if reason:
+                    problems.append(reason)
+                    continue
+                src_root = found.parent.parent.parent   # <campaign>/results/verdicts/<file>
+                suite_reason = correctness_blocks_promotion(src_root)
+                if suite_reason:
+                    problems.append(f"source campaign '{src_root.name}': {suite_reason}")
+                elif green_is_stale(src_root):
+                    problems.append(f"source campaign '{src_root.name}': its correctness green was "
+                                    "recorded against a DIFFERENT version of its FROZEN/core code than "
+                                    "what is on disk now - re-run its suite before promoting the finding "
+                                    "upward")
             if problems:
-                _deny("DISCOVERIES gate: " + " | ".join(problems))
+                _deny("project-ledger gate: " + " | ".join(problems))
                 return
             _allow()
         except Exception as exc:
-            _deny(f"DISCOVERIES gate (fail-closed): could not validate the promotion ({exc}). Fix the "
-                  "verdict citation or the guard input and retry; a bad promotion is the one "
-                  "unrecoverable ledger write.")
+            _deny(f"project-ledger gate (fail-closed): could not validate the promotion ({exc}). Fix the "
+                  "verdict citation or the guard input and retry; the project ledger is the record that "
+                  "survives fork-and-archive - the one unrecoverable write.")
         return
 
     # ---- surface 2: RECOMMENDED / scoreboard-token writes - recency-checked, FAIL-OPEN-LOGGED ----
@@ -394,14 +415,11 @@ def main():
                   "the FROZEN/core code than what is on disk now (scripts/frozen_core.py) - re-run the suite "
                   "(run_campaign) so it validates the current core before marking a current-best.")
             return
-        if recent_promotable_verdict(root):
+        subject_problem = promotion_subject_problem(root, ti)
+        if subject_problem is None:
             _allow()
             return
-        _deny(f"promotion gate: no CONFIRMED verdict artifact with a NAMED INDEPENDENT REFUTER in "
-              f"results/verdicts/ within the last {WINDOW_MIN} min. A current-best / scoreboard promotion "
-              "needs the same independent refuter as a DISCOVERIES write (hard gate #1) - a self-authored or "
-              "refuterless CONFIRMED verdict does not graduate. Run the verify skill (it spawns the refuter "
-              "and writes the artifact with its id), then promote.")
+        _deny("promotion gate: " + subject_problem)
     except Exception as exc:
         _note_bypass(root, f"promotion-surface guard error: {exc}")
         _allow()

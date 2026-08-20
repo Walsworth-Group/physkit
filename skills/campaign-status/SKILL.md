@@ -37,13 +37,13 @@ At a project root, step back over the whole investigation, not one loop:
    conflict or undeclared cross-campaign dependency loudly: an undeclared dependency is how a forward-model
    change invalidates a sibling's results without anyone noticing (the `fork-campaign` trigger).
 3. **Promotion and provenance hygiene.** Verified system-level findings are promoted from a campaign's
-   `results/DISCOVERIES.md` to the project `DISCOVERIES.md`, where they survive fork-and-archive. Durable
-   decisions live in `ENGINEERING_NOTES.md`. Archived(forked) campaigns carry a `FROZEN.md` and stay listed
-   in `LINEAGE.md`.
+   journal Findings section to the project `DISCOVERIES.md`, where they survive fork-and-archive. Durable
+   decisions live in the project's `PROJECT_ORIENTATION.md` §Durable decisions. Archived(forked) campaigns
+   carry a `FROZEN.md` and stay listed in `LINEAGE.md`.
 4. **Run the project validator** for the deterministic structure and portability checks, and fold its flags in:
    `python "${CLAUDE_PLUGIN_ROOT}/skills/new-campaign/scripts/validate_campaign.py" <project_root>` (it
-   auto-detects the project tree: required files, every campaign indexed in `LINEAGE.md`, no local shared-doc
-   copies, no absolute paths in configs).
+   auto-detects the project tree: required files, every campaign indexed in `LINEAGE.md`, no local copy
+   of the project background doc, no absolute paths in configs).
 5. **Report** across campaigns: what is active, what has plateaued, which sibling coupling needs attention, and
    the next cross-project move — spin a sibling campaign (`new-campaign`), fork an invalidated campaign
    (`fork-campaign`), or promote a verified finding. A change that invalidates a campaign's findings is a fork
@@ -65,17 +65,25 @@ the primary metric and direction, the guardrail, the baseline/floor, the levers,
 table means the campaign predates it: read `docs/charter*.md` directly.* The checkpoint procedure it
 points to is this skill; the per-unit iteration contract is in `roles/worker.md`. (Journal consolidation
 is step 3 of this skill; it no longer has a separate protocol file.)
-Also read `docs/PROJECT_ORIENTATION.md` (goal, expectations, goal-linked tasks) and
-`docs/VERIFICATION_PLAN.md`. The checkpoint re-checks orientation against these, not only against the metric.
+Also read `campaign.md` §Mission (goal, the decision served, done-criteria), §Loosely-held
+expectations, and §Verification. The checkpoint re-checks orientation against these, not
+only against the metric. *(A pre-merge campaign keeps these in `docs/PROJECT_ORIENTATION.md` and
+`docs/VERIFICATION_PLAN.md` — lint-ok: names the retired layout on purpose.)*
+
+**A campaign with no scoreboard rows yet is in setup, not stalled.** Its status IS the mechanical
+check: run `python scripts/run_campaign.py --preflight` and report its output verbatim — the
+authoritative list of what is unbuilt and how to fix it. Do not reconstruct setup state from the
+docs; the scaffold is deliberately not runnable until the physics hooks are written, and preflight
+is the one source that cannot be stale.
 
 ## Procedure
 
 ### 0.5 Orientation re-check
-Against `PROJECT_ORIENTATION.md`: is the goal still the right goal? Have the loosely-held expectations
-shifted on the evidence? Update them when they have; an updated expectation is success, not drift. Are the
-goal-linked tasks still serving the goal, and is their status current? Has a discovery unblocked a parked
-direction that should re-open? Realignment is the purpose of a checkpoint: the metric can climb while the
-campaign wanders off its goal.
+Against `campaign.md` §Mission and §Loosely-held expectations: is the goal still the right goal? Have the
+loosely-held expectations shifted on the evidence? Update them when they have; an updated expectation is
+success, not drift. Are the queued units (`results/queue.json`) and the JOURNAL NEXT still serving the
+goal? Has a discovery unblocked a shelved direction that should re-open? Realignment is the purpose of a
+checkpoint: the metric can climb while the campaign wanders off its goal.
 
 **Reflect against confirmation bias.** For the current best and the current direction, run the ritual
 explicitly: state the expectation held before the result, argue the strongest case that it is wrong, name
@@ -84,7 +92,7 @@ conclusion that has not been adopted (the effect is noise; a rival explanation c
 Depth: `verify`.
 
 ### 1. Health summary
-From `results/scoreboard.tsv`, `results/JOURNAL.md`, and `results/DISCOVERIES.md`:
+From `results/scoreboard.tsv` and `results/JOURNAL.md` (including its Findings section):
 - **Current best vs references.** State the current-best primary metric and its margin over the
   baseline (exp 000) and over the trivial/degenerate references. A trivial reference beating the current
   best is a red alert. A non-physical trivial winner indicates a metric or units problem, not a target.
@@ -131,13 +139,21 @@ Flag anything wrong; do not silently fix it.
   to commit to.
 - **The enforcement layer is wired.** Assert all of it, loudly. An imported, hand-built, or relocated tree
   can lose the gates, leaving the doctrine unenforced. Check each:
-  - `.claude/settings.json` exists and registers the `guard_discoveries` PreToolUse hook;
-  - `scripts/guard_discoveries.py` present and current (the verdict-artifact version);
+  - `.claude/settings.json` exists and registers the promotion-guard PreToolUse hook
+    (`guard_promotion.py`; `guard_discoveries.py` in a pre-V6 tree — lint-ok: names the retired hook
+    on purpose);
+  - the registered guard script is present and current (the verdict-artifact version);
   - `predictions/` exists and every scoreboard row has its `predictions/<exp_name>.json` — report
     coverage as n/N (the runner's spend gate makes new gaps impossible; a gap means the tree predates the
     gate or bypassed the runner);
-  - `results/verdicts/` exists and every DISCOVERIES entry cites a verdict artifact that resolves
-    (exists, CONFIRMED, named refuter; kill entries carry a graduating tier);
+  - `results/verdicts/` exists and **every journal Findings entry cites a verdict artifact that resolves**
+    (exists, CONFIRMED, named refuter; kill entries carry a graduating tier). The Findings section is not
+    hook-gated — this audit is its enforcement, so an uncited entry is a loud flag, not a note;
+  - `configs/loop.json` `campaign.verification` is `per-block`, or `promotion-only` **with a recorded
+    `verification_reason`** — an unrecorded downgrade of routine verification is an unowned control;
+  - `results/queue.json` `pending_verification` is not accumulating: entries there are accepted
+    experiments the driver has not yet gotten verified, so a growing backlog means verification is
+    failing while science continues — read the driver log's `verifier[...]` lines and flag loudly;
   - `configs/loop.json` parses, when the campaign runs supervisor mode;
   - supervised runs left their decision trace: each `--supervise` launch has a
     `results/diagnostics/supervise_*.log`, and a run with no driver log was launched outside the driver.
@@ -191,7 +207,7 @@ Flag anything wrong; do not silently fix it.
   (rankings no longer hold, or an approach was scored on wrong infrastructure), as opposed to a
   rank-preserving bump, that is a `fork-campaign` clean break, not a quiet bump: archive, fresh ledger,
   re-verified carry-forward.
-- **No premature "done / blocked / at-ceiling."** If the JOURNAL or DISCOVERIES declares the campaign
+- **No premature "done / blocked / at-ceiling."** If the JOURNAL (its Findings included) declares the campaign
   finished, optimal, or blocked on new data, confirm an adversarial attempt to beat it was made:
   an orthogonal lever tried, or a reasoned argument that any further gain is non-physical. An unfalsified
   "we're done" is a flag to resume, not to accept. Surface it loudly and queue the orthogonal directions.
@@ -237,11 +253,12 @@ If the JOURNAL exceeds ~150 lines (or the campaign's stated trigger):
    agent that treats the JOURNAL as the record trims too timidly and the working memory stays unusable,
    which is the failure this step exists to fix.
 2. **Graduate settled findings.** A finding confirmed by multiple experiments AND an independent
-   verification (CONFIRMED) moves to `results*/DISCOVERIES.md`.
+   verification (CONFIRMED) moves into the JOURNAL's §Findings, citing its verdict artifact.
 3. **Keep the live window** — roughly the last 10–15 experiments plus every open thread, PROVISIONAL or
-   QUESTIONABLE-ASSUMPTION finding, and unresolved dispute. **Drop** older entries from the JOURNAL
-   rather than compressing them in place; a one-line pointer (exp id → outcome) is optional, since the
-   logbook already holds them.
+   QUESTIONABLE-ASSUMPTION finding, and unresolved dispute. **Drop** older entries from §Recent
+   experiments rather than compressing them in place; a one-line pointer (exp id → outcome) is optional,
+   since the logbook already holds them. **§Findings is never trimmed** — it is the settled record, the
+   one part of the journal consolidation must not touch.
 4. **Preserve the NEXT pointer** at the top, so the loop resumes cleanly.
 
 **Never edit or trim the append-only files** — `results*/logbook.md`, `results*/scoreboard.tsv` and the

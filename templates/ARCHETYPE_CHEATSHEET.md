@@ -189,7 +189,7 @@ doctrine lives in the **`discovery-loop` skill** — this is the selection-guide
   *independent* method certifies; **state certified vs conjectured** scope. Re-discover the known SOTA as a
   validation gate; require **generalization/extrapolation across regimes**; **credit explanatory (mechanism)
   over descriptive (metric) discovery**; deliver an **interpretable artifact** and extract its design rule
-  into `PHYSICS.md`. (Full loop, memory modes, and checklist: the `discovery-loop` skill;
+  into `PROJECT_ORIENTATION.md`. (Full loop, memory modes, and checklist: the `discovery-loop` skill;
   simulator-scored search: `docs/SIMULATION_VALIDATION.md` §5; budget: `docs/reference/expensive-evaluation.md`.)
 
 ## H. Active / optimal experimental design (sequential experiment selection)
@@ -233,7 +233,7 @@ Operational doctrine: the **`model-selection`** skill.*
   adequacy** (front-runner residuals unstructured), not just relative ranking; **one model's
   misspecification masquerading as discrimination** → `debug`/`verify` each candidate's implementation
   before declaring a mechanism refuted; **prior sensitivity** → confirm the verdict survives reasonable
-  prior changes; **descriptive-not-explanatory** → credit the recovered *mechanism* (update `PHYSICS.md`),
+  prior changes; **descriptive-not-explanatory** → credit the recovered *mechanism* (update `PROJECT_ORIENTATION.md`),
   not just the fit. A campaign can pull **H and I together** (actively design experiments to discriminate)
   or either alone.
 

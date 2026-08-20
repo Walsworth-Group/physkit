@@ -15,7 +15,7 @@ fresh-context workers, and this session is the cockpit around it — launcher, m
 launch/stop controls (the `--supervise` process and `results/STOP`); (3) launch-config repairs only
 (`configs/loop.json` knobs, `AUTORESEARCH_AGENT_CMD`, a missing tool on PATH), because configs are
 user-owned and are not ledgers. Never run a loop unit. Never edit the ledgers (`results/queue.json`,
-scoreboard, logbook, journal, DISCOVERIES) or anything FROZEN on your own judgment. Where a repair to
+scoreboard, logbook, journal incl. its Findings) or anything FROZEN on your own judgment. Where a repair to
 one of those is needed (a corrupt queue, a resolved ESCALATE), propose the exact edit and apply it only
 on the user's explicit go-ahead. The science happens in the driver's workers, and everything you relay
 travels through artifacts, so this session holds no scientific state and is disposable by design. While
@@ -75,8 +75,12 @@ appearing), tell the user the loop is running and where the log lives, then go q
 
 ### 3. Monitor
 On request, or at a periodic check-in, read; never re-derive:
-- the driver log tail: current unit, rendered worker feed, planner triggers, accepted-unit count;
-- `results/queue.json`: `accepted_units`, `last_accept_utc`, what's queued/shelved and why.
+- the driver log tail: current unit, rendered worker feed, planner triggers, accepted-unit count, and
+  the `verifier[...]` lines — after each accepted unit or completed block the driver spawns the
+  verification agent and stamps the scoreboard from its verdicts;
+- `results/queue.json`: `accepted_units`, `last_accept_utc`, what's queued/shelved and why, and
+  `pending_verification` (accepted experiments whose verdicts the driver is still obtaining — a
+  growing list means verification is failing while the loop runs; surface it).
 Report process facts in plain language ("worker on exp007, third unit this run; one unit shelved
 operational overnight, spawn timeout, planner will review"). You own the progress alarm. CORE requires
 monitoring progress rather than liveness, because a loop can be alive, logging, and doing zero science:

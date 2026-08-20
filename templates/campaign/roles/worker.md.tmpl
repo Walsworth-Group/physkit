@@ -59,9 +59,9 @@ WHILE not interrupted:
                     Noteworthy results get additional visualizations. (§The save-set, below)
   9. UPDATE       — the runner already appended this experiment's facts to results/logbook.md; complete
                     that entry's narrative (Analysis / Verification / NEXT) + a one-line note in the
-                    results/JOURNAL.md steering view; graduate settled findings to DISCOVERIES.md only
-                    after independent verification; update {{PHYSICS_DOC}} if a finding changes the
-                    physics.
+                    results/JOURNAL.md steering view; graduate settled findings to the JOURNAL's
+                    Findings section only after independent verification; update
+                    ../../../PROJECT_ORIENTATION.md if a finding changes the physics.
  10. CONSOLIDATE  — if JOURNAL > ~150 lines, trim to recent + open threads (`/physkit:campaign-status` step 3).
  11. CHECKPOINT   — if exp_id % {{CHECKPOINT_EVERY}} == 0, run `/physkit:campaign-status`: stop
                      feature-chasing and reorient. Is the campaign still healthy, and still pointed at
@@ -122,7 +122,7 @@ When you suspect this:
   faithful to what was tested, never merely more lenient. If you cannot tell which, treat it as gaming
   and keep it flagged.
 - Mark resulting findings PROVISIONAL until the fairness is independently reviewed/verified; only then
-  may they graduate to DISCOVERIES.
+  may they graduate to the journal's Findings section.
 - Hard boundary: you may adapt the mutable guardrails and diagnostics for fairness; you may never edit
   the FROZEN primary metric, the data, or known ground truth.
 
@@ -186,15 +186,24 @@ artifact). Depth: `{{VERIFY_SKILL}}` §5c.
   (paired) rather than two point means; a difference must clear the spread.
 - [PROPOSED] Define and report effect size. State the minimum meaningful Δ`{{PRIMARY_METRIC}}`
   (≥ 2× the replicate std) up front, and report deltas as `Δ ± spread`.
-- This is required before (a) graduating a finding to DISCOVERIES.md, or (b) permanently writing
-  off an approach. One run never justifies either.
+- This is required before (a) graduating a finding to the journal's Findings section, or (b)
+  permanently writing off an approach. One run never justifies either.
 
 ## Independent verification — assume the result is wrong and try to refute it
-Convergence is not correctness. Before any finding is graduated to DISCOVERIES.md or accepted as
-current-best, it must be independently re-derived. The campaign's verification plan
-(`docs/VERIFICATION_PLAN.md`, or the tailored `SIMULATION_VALIDATION.md` for sim-heavy work) lists the
-application-specific checks decided at setup; `verify` reads them, `correctness-suite` encodes the
+Convergence is not correctness. Before any finding is graduated to the journal's Findings section or
+accepted as current-best, it must be independently re-derived. `campaign.md` §Verification lists this campaign's
+own checks, decided at setup (for sim-heavy work the V&V&UQ method is the physkit plugin's
+`docs/SIMULATION_VALIDATION.md`); `verify` reads them, `correctness-suite` encodes the
 checkable ones as standing regression gates.
+
+**In supervised mode, routine verification is the DRIVER's job, not yours.** After your unit (or the
+last unit of its block) is accepted, the driver spawns a dedicated verification agent that runs
+`{{VERIFY_SKILL}}` for it and stamps the scoreboard's `verified` column from the verdict artifact —
+you never grade your own work, and you do not need to run verify at the end of a routine unit. You
+DO still invoke `{{VERIFY_SKILL}}` yourself when something inside your unit demands it before you
+act: a result that beats its envelope, a suspicion the metric leaked, a mid-unit claim you are about
+to build on. In an attended session there is no driver, so the pre-promotion verification below is
+yours to run.
 - Validate every fit even when it converged cleanly: re-run from the config, recompute the metric from
   scratch, confirm it reproduces within tolerance.
 - Falsify with code, not prose, and confirm the numbers are real. Write verification scripts and
@@ -236,35 +245,36 @@ in the frozen reference code, not only model-form error.
 
 ## Recording a promotion
 Promotion is enforced, not only described. The verify skill writes a verdict artifact
-`results/verdicts/<id>.json` (verdict, kill tier, named refuter). Record the verdict in the scoreboard
-`verified` column the same turn you promote: a row acting as current-best, or
-backing a DISCOVERY, with a blank `verified` is a hygiene failure that `campaign-status` flags. The
-PreToolUse hook enforces DISCOVERIES writes: every entry must cite its verdict artifact by name, the
-artifact must be CONFIRMED with a named refuter, and an INCONCLUSIVE kill is denied. The gate is
-fail-closed: an error in it denies the promotion rather than allowing it. The hook guards
-current-best promotion too: a write to `configs/RECOMMENDED.json`, or a scoreboard edit that introduces
-a `CONFIRMED` or `NEW BEST` token, needs a recent CONFIRMED verdict with a named refuter or it is
-refused. Run the verify; do not work around the hook.
+`results/verdicts/<id>.json` (verdict, kill tier, named refuter). In supervised runs the driver
+stamps the scoreboard `verified` column from that artifact after each block's verification; in an
+attended session, record it yourself the same turn you promote — a row acting as current-best, or
+backing a Findings entry, with a blank `verified` is a hygiene failure that `campaign-status` flags.
+The PreToolUse hook (`scripts/guard_promotion.py`) guards the mechanical promotion surfaces,
+**subject-matched**: a write to `configs/RECOMMENDED.json`, or a scoreboard edit that introduces a
+`CONFIRMED` or `NEW BEST` token, needs a CONFIRMED verdict with a named refuter **for the experiment
+being promoted** — no other experiment's verdict counts; promoting a system-level finding to the
+project ledger (`../../../DISCOVERIES.md`) must cite the verdict artifact by path and is
+fail-closed. The journal's Findings section is not hook-gated — it is working memory — but the same
+rule binds it: every entry cites its verdict, an INCONCLUSIVE kill never lands, and
+`campaign-status` audits uncited entries. Run the verify; do not work around the hook.
 
 ## The save-set — what every unit writes
 
-### `results/JOURNAL.md` (steering view)
-A lean view only: the NEXT pointer, open threads, and one line per recent experiment. Full narratives
-are not copied here; trimming it loses nothing.
+### `results/JOURNAL.md` (steering view + the findings record)
+A lean view: the NEXT pointer, open threads, one line per recent experiment — and §Findings, the
+append-only settled-knowledge record. Write a §Findings entry only after multiple consistent
+experiments confirm the finding on `{{PRIMARY_METRIC}}` (guardrail noted) and `{{VERIFY_SKILL}}`
+returned CONFIRMED; cite `results/verdicts/<id>.json` in the entry — hard gate #1 in `CLAUDE.md`.
+Full narratives are not copied here; trimming §Recent experiments loses nothing, and §Findings is
+never trimmed. When a finding changes the physical understanding, also update
+`../../../PROJECT_ORIENTATION.md` (the effect, its equations, references — §Updates from
+discoveries, and the §Standing constraints inventory).
 
 ### `results/logbook.md` (append-only — the full narrative record)
 Every experiment's full entry, verbatim, forever. The runner auto-appends the facts of each entry
 (Hypothesis/Predicted from the config, Result, artifact paths); you complete its narrative (Analysis
 / Verification / NEXT). Append-only, and never read in full: grep or read a slice for a specific old
 detail.
-
-### `results/DISCOVERIES.md`
-Write only after multiple consistent experiments confirm a finding on `{{PRIMARY_METRIC}}` (guardrail
-noted) and an independent verification returns CONFIRMED. A PreToolUse hook denies this write unless
-the entry cites a promotable verdict artifact. Run `{{VERIFY_SKILL}}`, which spawns a refuter sub-agent
-and writes `results/verdicts/<id>.json`, get CONFIRMED, and cite the verdict file in the entry; this is
-hard gate #1 in `CLAUDE.md`. Satisfy the hook; do not work around it. When a discovery changes the
-physical understanding, also update `{{PHYSICS_DOC}}` (equations, the effect, references consulted).
 
 ### Where everything is saved (verify each is written every run)
 Per experiment, all of these must exist (the label is the config stem `exp<NN>_<slug>`, which prefixes
@@ -380,6 +390,9 @@ and command line, so re-running the snapshot reproduces the artifact bit-for-bit
 Never delete data, figures, or snapshots without confirmation.
 
 ## Where to look
+- `../../../PROJECT_ORIENTATION.md` — the project background. Its §Standing constraints is already in
+  your prompt; below it are the equations and methods, the instrument characterization, the predictive
+  framework, and the durable decisions. Open it when a result needs physics, not just a number.
 - `results/logbook.md` — per-experiment narrative detail; grep or read a slice for one old experiment.
 - `results/scoreboard.tsv` — the numeric series, one row per experiment.
 - `results/checks_<NN>.json` — what the runner mechanically checked for one experiment, and what it

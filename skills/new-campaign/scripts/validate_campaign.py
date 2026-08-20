@@ -6,17 +6,22 @@ The target is auto-detected:
   * a campaign tree                                            -> campaign validation.
 
 EVERY campaign lives inside a project (<project>/campaigns/<name>/ with ../../PROJECT.md + ../../LINEAGE.md);
-there is no standalone/bare-campaign mode. The physics + conventions + instrument docs therefore live in the
-project's shared/ and are REFERENCED, never copied.
+there is no standalone/bare-campaign mode. The project background - physics, conventions, instrument,
+durable decisions - is ONE document, <project>/PROJECT_ORIENTATION.md, REFERENCED and never copied; its
+"## Standing constraints" section is what the campaign driver delivers into every spawned prompt.
 
 Campaign validation fails (exit 1) on anything new-campaign left unresolved:
   * a literal {{PLACEHOLDER}} token, a dangling [[OPTIONAL … block, a stray [PROPOSED] tag,
   * an un-stripped .tmpl file,
-  * a missing required file (charter, scoreboard, journal, discoveries, config template, the two code stubs),
+  * a missing required file (campaign.md, the role files, README, the ledgers, config template, the
+    code stubs),
   * an illegal campaign property in configs/loop.json "campaign" - an out-of-enum prediction_mode /
     noise_model, or prediction_mode 'none' with no recorded reason (mirrors the runner's preflight),
-  * no project home above the campaign, or a missing shared/{PHYSICS,CONVENTIONS,INSTRUMENT}.md in it,
-  * a LOCAL copy of any shared doc in the campaign's docs/ (design §4.1),
+  * no project home above the campaign, or its PROJECT_ORIENTATION.md missing / lacking the
+    "## Standing constraints" section the driver delivers (a pre-merge project - one still carrying
+    shared/PHYSICS.md - is named as such, with the migration pointer),
+  * a LOCAL copy of the project background in the campaign's docs/ (under the current name or a
+    retired shared-doc name) - it must be referenced, never copied (design §4.1),
   * a hook whose interpreter does not RUN on this machine — a wired-but-dead gate is worse than an
     absent one, because it looks like coverage (bare `python` is the Store alias stub on stock Windows),
   * a dangling row in CLAUDE.md's §Where things live table — live skills route through it instead of
@@ -26,12 +31,14 @@ Legacy trees using the retired multi-stage suffix (charter_<NAME>.md / configs_<
 validate — the required-file checks glob — but new stages are scaffolded as sibling campaigns, not suffixes.
 
 Project-tree validation fails (exit 1) if the project home is malformed:
-  * a missing required file/dir (PROJECT.md, LINEAGE.md, CLAUDE.md, DISCOVERIES.md, ENGINEERING_NOTES.md,
-    shared/{PHYSICS,CONVENTIONS,INSTRUMENT}.md, data/, campaigns/, sessions/, reports/),
+  * a missing required file/dir (PROJECT.md, PROJECT_ORIENTATION.md - with its "## Standing
+    constraints" section - LINEAGE.md, CLAUDE.md, DISCOVERIES.md, data/, shared/, campaigns/,
+    sessions/, reports/),
   * a leftover {{PLACEHOLDER}}/[[OPTIONAL/[PROPOSED] in a project-root or shared/ doc,
   * a campaign in campaigns/ (or campaigns/_archive/) NOT indexed in LINEAGE.md,
-  * a campaign carrying a LOCAL copy of a shared doc (docs/PHYSICS.md|CONVENTIONS.md|INSTRUMENT.md) —
-    it must reference ../../shared/, never copy (design §4.1),
+  * a campaign carrying a LOCAL copy of the project background (docs/PROJECT_ORIENTATION.md, or a
+    retired shared-doc name: docs/PHYSICS.md|CONVENTIONS.md|INSTRUMENT.md) — it must reference
+    ../../PROJECT_ORIENTATION.md, never copy (design §4.1),
   * an ABSOLUTE path hard-coded in a config JSON (the portability breaker; prose docs are exempt because
     they legitimately carry example paths — the invariant is that the tree relocates as one unit, the only
     absolute path being the resolved data_path pointer in PROJECT.md / data/DATA_PATH.txt).
@@ -60,18 +67,17 @@ CAMPAIGN_REQUIRED_GLOBS = [
     ("campaign definition", "campaign.md"),
     ("worker role", "roles/worker.md"),
     ("planner role", "roles/planner.md"),
-    ("doctrine snapshot", "DOCTRINE_SNAPSHOT.md"),
+    ("front door + setup status", "README.md"),
     ("scoreboard ledger", "results*/scoreboard.tsv"),
     ("logbook", "results*/logbook.md"),
     ("journal", "results*/JOURNAL*.md"),
-    ("discoveries", "results*/DISCOVERIES*.md"),
     ("config template", "configs*/_template.json"),
     ("metric scorer", "scripts/metric.py"),
     ("runner", "scripts/run_campaign.py"),
     ("frozen-core manifest", "scripts/frozen_core.py"),
     ("correctness suite", "tests/correctness_checks.py"),
     ("always-on doctrine", "CLAUDE.md"),
-    ("discoveries guard hook", "scripts/guard_discoveries.py"),
+    ("promotion guard hook", "scripts/guard_promotion.py"),
     ("loop heartbeat hook", "scripts/loop_heartbeat.py"),
     ("hook settings", ".claude/settings.json"),
     ("loop knobs", "configs*/loop.json"),
@@ -81,12 +87,18 @@ CAMPAIGN_REQUIRED_GLOBS = [
 ]
 
 PROJECT_REQUIRED_FILES = [
-    "PROJECT.md", "LINEAGE.md", "CLAUDE.md", "DISCOVERIES.md", "ENGINEERING_NOTES.md",
-    "shared/PHYSICS.md", "shared/CONVENTIONS.md", "shared/INSTRUMENT.md",
+    # PROJECT_ORIENTATION.md is required too, but check_orientation() owns it: it also checks the
+    # delivered section and names a pre-merge layout instead of reporting generic damage.
+    "PROJECT.md", "LINEAGE.md", "CLAUDE.md", "DISCOVERIES.md",
 ]
 PROJECT_REQUIRED_DIRS = ["data", "shared", "campaigns", "sessions", "reports"]
-# Shared docs live once at <project>/shared/ and are referenced; a campaign-local copy is a fork (design §4.1).
-SHARED_DOCS = ("PHYSICS.md", "CONVENTIONS.md", "INSTRUMENT.md")
+# The project background lives ONCE at <project>/PROJECT_ORIENTATION.md and is referenced; a
+# campaign-local copy is a fork (design §4.1). The retired shared-doc names are checked too, because a
+# copy under either layout's name forks the same content.
+LOCAL_COPY_DOCS = ("PROJECT_ORIENTATION.md", "PHYSICS.md", "CONVENTIONS.md", "INSTRUMENT.md")
+# The section of PROJECT_ORIENTATION.md the campaign driver delivers into every spawned prompt. Its
+# absence is checked here AND by the driver's preflight, so it is caught at scaffold time, not at 3 a.m.
+CONSTRAINTS_HEADING = "standing constraints"
 
 
 def _read_text(path: Path) -> str | None:
@@ -125,6 +137,49 @@ def scan_leftovers(paths, base: Path, errors: list[str]) -> None:
                     errors.append(f"unresolved {lit} {rel}:{i}: {line.strip()[:100]}")
 
 
+def _local_copy_error(rel: str, doc: str) -> str:
+    """The right message for a campaign-level background doc: which one it is decides the fix.
+
+    A campaign-level PROJECT_ORIENTATION.md is usually the pre-merge campaign file that DISSOLVED,
+    not a copy - telling someone "never copy" invites deleting it, which loses the goal and task
+    content the migration moves into campaign.md and the queue. Name the actual fix."""
+    if doc == "PROJECT_ORIENTATION.md":
+        return (f"campaign-level {rel} - this file dissolved in the one-background-document merge; "
+                "migrate its content (goal -> campaign.md, tasks -> the queue + JOURNAL NEXT, field "
+                "positioning -> ../../PROJECT_ORIENTATION.md) per the kit's docs/MIGRATING.md, then "
+                "delete it. Do not delete it unmigrated.")
+    return (f"campaign carries a LOCAL copy of the project background (must reference "
+            f"../../PROJECT_ORIENTATION.md, never copy): {rel}")
+
+
+def check_orientation(proj_root: Path, errors: list[str]) -> None:
+    """The project background doc exists and carries the section the driver delivers every spawn.
+
+    A project still carrying the retired four-document layout (shared/PHYSICS.md et al.) is named as
+    pre-merge with the migration pointer, not reported as generic damage: an agent told only "file
+    missing" will fabricate one, and a fabricated background document is worse than a named gap.
+    """
+    doc = proj_root / "PROJECT_ORIENTATION.md"
+    if not doc.is_file():
+        if (proj_root / "shared" / "PHYSICS.md").is_file():
+            errors.append(
+                "the project home predates the one-background-document merge: it has shared/PHYSICS.md "
+                "and no PROJECT_ORIENTATION.md. Migrate it with the kit's docs/MIGRATING.md (merge the "
+                "four project docs into PROJECT_ORIENTATION.md); do not author a new one from scratch."
+            )
+        else:
+            errors.append("missing project background doc: no <project>/PROJECT_ORIENTATION.md")
+        return
+    text = _read_text(doc) or ""
+    if not any(line.startswith("## ") and CONSTRAINTS_HEADING in line.lower()
+               for line in text.splitlines()):
+        errors.append(
+            "PROJECT_ORIENTATION.md has no '## Standing constraints' section - that section is what "
+            "the campaign driver delivers into every spawned prompt, so without it the delivery is "
+            "silently empty. Add the section (see the project template)."
+        )
+
+
 def project_root_of(campaign: Path) -> Path | None:
     """The project home above a campaign, or None if the campaign has no home.
 
@@ -148,6 +203,7 @@ def project_root_of(campaign: Path) -> Path | None:
 # agree, so a mode added on one side and not the other fails the suite instead of drifting.
 PREDICTION_MODES = ("range", "direction", "none")
 NOISE_MODELS = ("stochastic", "deterministic")
+VERIFICATION_MODES = ("per-block", "promotion-only")
 
 
 def check_loop_files(root: Path, errors: list[str]) -> None:
@@ -183,6 +239,15 @@ def check_loop_files(root: Path, errors: list[str]) -> None:
                               "campaign.prediction_mode_reason - record why this campaign cannot "
                               "honestly bound its answer. Running unbounded is a legitimate choice; "
                               "making it without a recorded reason leaves the control unowned.")
+            vmode = str(camp.get("verification") or "per-block").strip().lower()
+            if vmode not in VERIFICATION_MODES:
+                errors.append(f"loop.json campaign.verification is {vmode!r}; expected one of "
+                              + " | ".join(VERIFICATION_MODES))
+            if vmode == "promotion-only" and not str(camp.get("verification_reason") or "").strip():
+                errors.append("loop.json sets campaign.verification='promotion-only' with an empty "
+                              "campaign.verification_reason - record why per-block verification is "
+                              "not affordable or applicable here. Turning routine verification down "
+                              "is a legitimate choice; an unrecorded one leaves the control unowned.")
         except Exception as exc:
             errors.append(f"loop.json does not parse as JSON ({exc})")
     queue_files = list(root.glob("results*/queue.json"))
@@ -289,8 +354,9 @@ def check_hook_wiring(root: Path, errors: list[str]) -> None:
 def validate_campaign(root: Path) -> list[str]:
     errors: list[str] = []
 
-    # Every campaign lives inside a project, so the physics/conventions/instrument docs are SHARED at
-    # ../../shared/ — referenced, never copied (design §4.1). There is no standalone mode to detect.
+    # Every campaign lives inside a project, so the background doc is SHARED at
+    # ../../PROJECT_ORIENTATION.md — referenced, never copied (design §4.1). There is no standalone
+    # mode to detect.
     proj_root = project_root_of(root)
 
     # 1. Required files present (glob-based; tolerates the retired _<NAME> suffix in legacy trees).
@@ -298,24 +364,23 @@ def validate_campaign(root: Path) -> list[str]:
         if not list(root.glob(pattern)):
             errors.append(f"missing {label}: no file matches '{pattern}'")
 
-    # 1b. The project home + its shared docs. A campaign with no home is a legacy bare tree — lift it into a
-    #     project (new-campaign Step 0.1) rather than authoring campaign-local physics/conventions.
+    # 1b. The project home + its background doc. A campaign with no home is a legacy bare tree — lift it
+    #     into a project (new-campaign Step 0.1) rather than authoring campaign-local physics/conventions.
     if proj_root is None:
         errors.append(
             "no project home: expected <project>/campaigns/<slug>/ with ../../PROJECT.md + ../../LINEAGE.md — "
             "every campaign lives in a project; lift this tree in via new-campaign Step 0.1"
         )
     else:
-        for doc in SHARED_DOCS:
-            if not (proj_root / "shared" / doc).is_file():
-                errors.append(f"missing shared reference: no '../../shared/{doc}'")
+        check_orientation(proj_root, errors)
 
-    # 1c. No campaign-local copy of a shared doc (validate_project runs the same check tree-wide).
-    for doc in SHARED_DOCS:
+    # 1c. No campaign-local copy of the project background (validate_project runs the same check tree-wide).
+    for doc in LOCAL_COPY_DOCS:
         if (root / "docs" / doc).is_file():
-            errors.append(
-                f"campaign carries a LOCAL copy of a shared doc (must reference ../../shared/): docs/{doc}"
-            )
+            errors.append(_local_copy_error(f"docs/{doc}", doc))
+
+    # (README's §Setup status is a static pointer to --preflight, the authoritative setup check; the
+    # CLAUDE.md routing-table check below already verifies the section exists for the row that names it.)
 
     # 1d. The loop driver's config + queue ledger parse and carry the keys the driver dereferences.
     check_loop_files(root, errors)
@@ -330,13 +395,14 @@ def validate_campaign(root: Path) -> list[str]:
 def validate_project(root: Path) -> list[str]:
     errors: list[str] = []
 
-    # 1. Required project files + dirs.
+    # 1. Required project files + dirs, and the background doc with its delivered section.
     for rel in PROJECT_REQUIRED_FILES:
         if not (root / rel).is_file():
             errors.append(f"missing required project file: {rel}")
     for rel in PROJECT_REQUIRED_DIRS:
         if not (root / rel).is_dir():
             errors.append(f"missing required project dir: {rel}/")
+    check_orientation(root, errors)
 
     # 2. No leftover tokens in the project-root docs + shared/ (campaigns validate separately; skip data/).
     root_docs = [p for p in root.glob("*.md")]
@@ -356,12 +422,9 @@ def validate_project(root: Path) -> list[str]:
             slug_noidx = re.sub(r"^\d+[_-]", "", slug)   # 01_cnn-inverse -> cnn-inverse
             if slug not in lineage and slug_noidx not in lineage:
                 errors.append(f"campaign not indexed in LINEAGE.md: campaigns/{('_archive/' if d.parent.name=='_archive' else '')}{slug}")
-            for shared_doc in SHARED_DOCS:
-                if (d / "docs" / shared_doc).is_file():
-                    errors.append(
-                        f"campaign carries a LOCAL copy of a shared doc (must reference ../../shared/): "
-                        f"campaigns/{slug}/docs/{shared_doc}"
-                    )
+            for local_doc in LOCAL_COPY_DOCS:
+                if (d / "docs" / local_doc).is_file():
+                    errors.append(_local_copy_error(f"campaigns/{slug}/docs/{local_doc}", local_doc))
 
     # 4. Portability: no absolute path hard-coded in a config JSON (prose docs are exempt — legit examples).
     for cfg in root.glob("campaigns/**/configs*/*.json"):

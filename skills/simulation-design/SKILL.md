@@ -98,9 +98,9 @@ Decide every check now, as a concrete plan `correctness-suite` will later execut
 
 ## 4 · Capture application-specific checks
 Record the field-standard comparisons, known numerical artifacts, and checks that are standard practice in
-the subfield for *this* simulation. They go into the verification plan (the campaign's tailored
-`SIMULATION_VALIDATION.md` / `VERIFICATION_PLAN.md`) and become standing regression gates in
-`correctness-suite`. Record the reason for a non-obvious one (`record-decision`).
+the subfield for *this* simulation. They go into `campaign.md` §Verification (the V&V&UQ method itself is
+the physkit plugin's `docs/SIMULATION_VALIDATION.md`, never restated per campaign) and become standing
+regression gates in `correctness-suite`. Record the reason for a non-obvious one (`record-decision`).
 
 ## 5 · Surface the design, then build
 Show the user the tool choice, the model + domain of validity, and the V&V&UQ plan before implementing. That

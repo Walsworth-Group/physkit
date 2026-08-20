@@ -1,67 +1,83 @@
-# {{PROJECT_TITLE}}
+# {{CAMPAIGN_TITLE}}
 
 {{ONE_PARAGRAPH_PROBLEM_STATEMENT}}
 
-> These campaign documents fold scientific-rigor best practices into each iteration:
-> a-priori bounding of expectations, uncertainty/error-type tracking, independent verification of
-> every promotion, model parsimony and tie-breaking, simulation-gap caution, and full provenance
-> logging.
-> Items tagged **[PROPOSED]** in any of them are machine-suggested additions awaiting your review —
-> keep or cut each. Everything untagged is settled campaign doctrine.
+Part of the **{{PROJECT_TITLE}}** project (`../../PROJECT.md`). This folder is an autonomous research
+**campaign**: a loop that optimizes the single FROZEN metric `{{PRIMARY_METRIC}}`
+({{PRIMARY_DIRECTION}} = better) under fixed constraints, logging every experiment for full
+reproducibility. {{APPROACH_SUMMARY}}
 
-## Approach
+## New here? — orientation for readers unfamiliar with this tree
 
-{{APPROACH_SUMMARY}} — an autonomous research campaign that optimizes the single frozen primary
-metric **`{{PRIMARY_METRIC}}`** ({{PRIMARY_DIRECTION}} = better) under fixed constraints, logging every
-experiment for full reproducibility.
+- **The contract is [`campaign.md`](campaign.md)**: mission, the frozen metric, levers, caps,
+  verification checks, promotion rules. It is the one document a human reviews and signs off. Its
+  §Decision record tail is the campaign's append-only "why" ledger.
+- **Rules bind automatically.** [`CLAUDE.md`](CLAUDE.md) auto-loads for ANY agent working in this
+  folder — its §Where things live table is this tree's own map — and the project rules auto-load from
+  `../../CLAUDE.md` above it. What is FROZEN stays frozen: do not edit this campaign to satisfy a
+  newer kit or validator (see the kit's `docs/MIGRATING.md` instead).
+- **Results live in `results/`**: `scoreboard.tsv` is the numeric record (one row per experiment),
+  `JOURNAL.md` the working window and NEXT pointer, `logbook.md` the full narrative record. The
+  physkit version this campaign was scaffolded under is stamped at the top of the logbook and in
+  `campaign.md`'s header — that pin recovers the exact kit it runs with.
+- **Ad-hoc exploration does not belong here.** Work with no frozen metric goes in a project session
+  (`../../sessions/<date>_<slug>/`); everything in this tree is driven by the metric above.
 
-## Status
+## How the loop runs — the two roles
 
-| Stage | What | State |
-|-------|------|-------|
-{{STAGE_TABLE_ROWS}}
+The driver (`scripts/run_campaign.py --supervise`) alternates two spawned agents, each receiving only
+what its job needs:
 
-## How this campaign runs
+- **The worker** executes ONE experiment per spawn, following the numbered loop in
+  [`roles/worker.md`](roles/worker.md): a-priori prediction *first* (the runner refuses to spend an
+  evaluation without one), run, evaluate against the frozen metric, complete the ledgers, verify
+  before any promotion. Its iteration contract makes every unit cold-resumable — the ledger is the
+  loop's only memory.
+- **The planner** runs strategy every N units ([`roles/planner.md`](roles/planner.md)): rewrites the
+  `results/queue.json` ordering, revives shelved directions a promotion has re-opened, prunes dead
+  ones with a recorded rationale. It never runs experiments.
 
-This is an autonomous research loop. The worker re-reads [`campaign.md`](campaign.md) and
-[`roles/worker.md`](roles/worker.md) every iteration and: hypothesizes a change (recording which
-levers it moves), predicts the metric, runs it, evaluates the frozen metric + guardrail, logs a scoreboard
-row, and graduates confirmed findings to `DISCOVERIES.md` only after independent verification.
-Experiments are numbered `exp000` (the baseline gate), `exp001` (first method), then `exp002`,
-`exp003`, … — zero-padded to three digits so they sort correctly.
+Both roles re-read `campaign.md` every cycle, and every spawned prompt carries the project's
+§Standing constraints (`../../PROJECT_ORIENTATION.md`) by value. A human attending the loop acts as
+its **concierge** (the `run-campaign` skill): launch, watch, steer through notes in `results/inbox/`
+— never by-hand execution. The same gates apply either way.
 
-- **The campaign definition (both roles, every cycle):** [`campaign.md`](campaign.md)
-- **Role procedures:** [`roles/worker.md`](roles/worker.md) · [`roles/planner.md`](roles/planner.md)
-- **Conventions & units (bug-prevention reference):** [`{{CONVENTIONS_DOC}}`]({{CONVENTIONS_DOC}})
-- **Scoreboard (ledger):** [`results/scoreboard.tsv`](results/scoreboard.tsv)
-- **Working memory / settled findings:** [`results/JOURNAL.md`](results/JOURNAL.md) · [`results/DISCOVERIES.md`](results/DISCOVERIES.md)
+## Who reads what, when
 
-## Attended sessions
+| File | Who reads it | When |
+|---|---|---|
+| `campaign.md` | both roles + the human | every cycle; at sign-off |
+| `CLAUDE.md` | every agent in this folder | auto-loaded, every turn |
+| `roles/worker.md` · `roles/planner.md` | that role only | every spawn |
+| `../../PROJECT_ORIENTATION.md` | everyone; §Standing constraints is injected into every spawn | background depth, on demand |
+| `results/JOURNAL.md` | both roles | every cycle (working window) |
+| `results/scoreboard.tsv` · `results/logbook.md` | both roles; the permanent record | appended every experiment |
+| `results/queue.json` | worker takes the next unit; planner rewrites the order | per unit / per planner pass |
+| `configs/loop.json` | the driver and its checks | at launch; hot-reloaded |
+| `LITERATURE.md` *(when present)* | planner (idea roadmap) · worker (cite sources) | per the literature rule |
+| `tests/correctness_checks.py` | the runner, every experiment | green-gates promotion |
+{{EXTRA_BACKGROUND_DOC_LINKS}}
 
-- **Attended = the cockpit, not by-hand execution.** A human-attended session in this folder is the
-  loop's **concierge** (`run-campaign` skill): it launches `--supervise`, watches the driver log, and
-  relays steering through `results/inbox/`. It never executes units itself. A by-hand `--config` run
-  is for debugging a single experiment, not a mode for running the loop. The same gates apply either way.
-- **Steering does not require stopping the loop.** Notes dropped in `results/inbox/` are relayed
-  verbatim into the next worker or planner prompt, then archived. The agent acknowledges each note in
-  [`results/JOURNAL.md`](results/JOURNAL.md): what it changed, or why nothing.
+## Setup status — is this campaign runnable yet?
 
-## Repository map
+`new-campaign` generates a complete, valid tree but does **not** write the physics: the scorer and
+the experiment hooks ship as `raise NotImplementedError` stubs, because only this campaign knows
+what an experiment is. A fresh scaffold is therefore *deliberately not runnable*, and the
+authoritative list of what remains is mechanical, never a table to maintain:
 
-{{REPO_MAP}}
+```
+python scripts/run_campaign.py --preflight
+```
 
-## Environment
+It refuses to launch while anything is missing and names each item with its fix. Downstream of a
+first launch, the gates hold the rest: experiment 000 must measure the baseline and the trivial
+reference before any comparison means anything, and promotion stays blocked until the correctness
+suite is green and the noise model is confirmed empirically. Campaign-specific setup tasks (a solver
+to wire in, data to stage) live as the opening `results/JOURNAL.md` **NEXT** items — the loop's
+working list — not in a separate ledger.
+
+## Environment & quick start
 
 {{ENVIRONMENT_NOTES}}
 
-## Quick start
-
 {{QUICKSTART_COMMANDS}}
-
-## Background docs
-
-- Campaign definition: [`campaign.md`](campaign.md)
-- Role procedures: [`roles/worker.md`](roles/worker.md) · [`roles/planner.md`](roles/planner.md)
-- Conventions/units: [`{{CONVENTIONS_DOC}}`]({{CONVENTIONS_DOC}})
-- Governing physics: [`{{PHYSICS_DOC}}`]({{PHYSICS_DOC}})
-{{EXTRA_BACKGROUND_DOC_LINKS}}
