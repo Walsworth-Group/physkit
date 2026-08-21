@@ -165,15 +165,18 @@ so the index is a complete map of the intended kit, not just what exists.
 
 | id | path | kind | addresses | status |
 |---|---|---|---|---|
-| project-charter | `templates/project/PROJECT.md.tmpl` | scaffold-template | 7 | new (system · goal · data/shared pointers) |
-| lineage | `templates/project/LINEAGE.md.tmpl` | scaffold-template | 7 | new (the campaign + session index) |
-| project-claude | `templates/project/CLAUDE.md.tmpl` | scaffold-template | 1,7 | new (project always-on rules) |
-| project-discoveries | `templates/project/DISCOVERIES.md.tmpl` | scaffold-template | 2,7 | new (promoted verified findings; survive fork-and-archive) |
-| project-orientation | `templates/project/PROJECT_ORIENTATION.md.tmpl` | scaffold-template | 5,7 | the ONE background document — governing physics + target-of-study + inventory · units/signs/frames · the instrument · durable decisions, merged from the four rows below; its §Standing constraints is delivered into every spawned prompt by the campaign driver |
-| project-engineering-notes | — | scaffold-template | 7 | absorbed into `templates/project/PROJECT_ORIENTATION.md.tmpl` §Durable decisions |
-| shared-physics | — | scaffold-template | 5 | absorbed into `templates/project/PROJECT_ORIENTATION.md.tmpl` (§Standing constraints inventory · §The system under study · §Equations and methods) |
-| shared-conventions | — | scaffold-template | 5 | absorbed into `templates/project/PROJECT_ORIENTATION.md.tmpl` §Standing constraints |
-| shared-instrument | — | scaffold-template | 5 | absorbed into `templates/project/PROJECT_ORIENTATION.md.tmpl` §The instrument (the SYSTEM.md retirement carries over) |
+| project-readme | `templates/project/README.md.tmpl` | scaffold-template | 7,8 | new (ADR-0015): the front door — a very short where-to-find-things map, the directory map's ONLY home |
+| project-overview | `templates/project/PROJECT.md.tmpl` | scaffold-template | 5,7 | THE overview (ADR-0015), merging the retired charter / orientation / lineage rows below: §Mission · §Standing constraints (delivered into every spawned prompt by the campaign driver) · system + instrument + equations depth · §Updates from discoveries (verdict-cited pointers) · §Durable decisions · §Lineage (the campaign + session index). Edited by tier (OPEN/GUARDED banners; project CLAUDE.md rule 7) |
+| project-claude | `templates/project/CLAUDE.md.tmpl` | scaffold-template | 1,7 | new (project always-on rules incl. the edit tiers) |
+| project-charter | — | scaffold-template | 7 | absorbed into `PROJECT.md.tmpl` §Mission (ADR-0015) |
+| lineage | — | scaffold-template | 7 | absorbed into `PROJECT.md.tmpl` §Lineage (ADR-0015) |
+| project-discoveries | — | scaffold-template | 2,7 | retired (user re-decision, ADR-0015): verified findings stay in the campaign that produced them (journal §Findings + `results/verdicts/`); the project layer is pointers — §Lineage's verified-findings column + §Updates from discoveries entries citing the verdict by path. A legacy ledger stays hook-gated |
+| project-orientation | — | scaffold-template | 5,7 | absorbed into `PROJECT.md.tmpl` (ADR-0015); its §Standing constraints keeps its name and its delivered-into-every-prompt role, with the driver falling back to a pre-consolidation `PROJECT_ORIENTATION.md` |
+| project-engineering-notes | — | scaffold-template | 7 | absorbed into `PROJECT.md.tmpl` §Durable decisions (via the retired orientation doc) |
+| shared-physics | — | scaffold-template | 5 | absorbed into `PROJECT.md.tmpl` (§Standing constraints inventory · §The system under study · §Equations and methods) |
+| shared-conventions | — | scaffold-template | 5 | absorbed into `PROJECT.md.tmpl` §Standing constraints |
+| shared-instrument | — | scaffold-template | 5 | absorbed into `PROJECT.md.tmpl` §The instrument (the SYSTEM.md retirement carries over) |
+| shared-dir | — | convention | 7 | retired (ADR-0015): promoted artifacts live in flat purpose-named project dirs (`scripts/`, `models/`, …) created at first promotion; the promotion mark is the `PROJECT.md` §Lineage promotion line, not a directory name |
 | data-readme | `templates/project/data/README.md.tmpl` | scaffold-template | 7 | new (read-only + DATA_PATH pointer convention) |
 | reports-readme | `templates/project/reports/README.md.tmpl` | scaffold-template | 1 | new (single project outputs location) |
 | session-notes | `templates/project/sessions/NOTES.md.tmpl` | scaffold-template | 7,8 | new (ad-hoc session record at true tier) |
@@ -185,10 +188,10 @@ so the index is a complete map of the intended kit, not just what exists.
 | campaign-definition | `templates/campaign/campaign.md.tmpl` | scaffold-template | 3,4 | THE campaign definition, read by both roles every cycle: mission, the FROZEN metric, levers, caps, promotion, the baseline gate and the dataset. Split out of the retired single-file charter, which had fused it with the per-role procedure |
 | campaign-role-worker | `templates/campaign/roles/worker.md.tmpl` | scaffold-template | 3,5 | the per-experiment procedure: the loop, the iteration contract, the save-set and its retention plan. Assembled into every worker spawn; the planner never reads it |
 | campaign-role-planner | `templates/campaign/roles/planner.md.tmpl` | scaffold-template | 5,7 | strategy: reopening shelved directions, getting unstuck, the literature rule. Assembled into every planner spawn; the worker never reads it |
-| physics | — | scaffold-template | 5 | merged into `templates/project/PROJECT_ORIENTATION.md.tmpl` (project scaffold table above); the campaign-local copy was already retired with standalone mode |
+| physics | — | scaffold-template | 5 | merged into the project overview `templates/project/PROJECT.md.tmpl` (project scaffold table above); the campaign-local copy was already retired with standalone mode |
 | intake | — | scaffold-template | 8 | retired: the input form is replaced by draft-document mode — `new-campaign` emits a pre-filled draft `campaign.md` the user edits directly, finalized at sign-off ([PROPOSED] tags refused by the validator) |
-| campaign-orientation | — | scaffold-template | 7,8 | dissolved: goal / done-criteria / expectations → `templates/campaign/campaign.md.tmpl` §Mission + §Loosely-held expectations; the task hierarchy → `results/queue.json` + the JOURNAL NEXT pointer; field-positioning → `templates/project/PROJECT_ORIENTATION.md.tmpl` §Where this sits in the field |
-| engineering-notes | — | scaffold-template | 7 | absorbed into `templates/campaign/campaign.md.tmpl` (§Known landmines + the append-only §Decision record tail); project-outliving decisions promote to `PROJECT_ORIENTATION.md` §Durable decisions |
+| campaign-orientation | — | scaffold-template | 7,8 | dissolved: goal / done-criteria / expectations → `templates/campaign/campaign.md.tmpl` §Mission + §Loosely-held expectations; the task hierarchy → `results/queue.json` + the JOURNAL NEXT pointer; field-positioning → `templates/project/PROJECT.md.tmpl` §Where this sits in the field |
+| engineering-notes | — | scaffold-template | 7 | absorbed into `templates/campaign/campaign.md.tmpl` (§Known landmines + the append-only §Decision record tail); project-outliving decisions promote to `PROJECT.md` §Durable decisions |
 | verification-plan | — | scaffold-template | 2 | absorbed into `templates/campaign/campaign.md.tmpl` §Verification (the campaign-specific checks only; the procedure is `verify`/`correctness-suite`, the V&V&UQ method the plugin's `SIMULATION_VALIDATION.md`) |
 | artifacts-protocol | — | protocol | 7 | absorbed into `templates/campaign/roles/worker.md.tmpl` — the save-set, the artifact tiers, the save discipline, and the "Retention plan" subsection |
 | campaign-doctrine-snapshot | — | scaffold-template | 1,6 | retired (user re-decision, ADR-0012): the snapshot recorded only the spine while skills, reference docs, and the driver also govern behavior — a partial record reading as complete. Replaced by the `{{PHYSKIT_VERSION}}` stamp in `campaign.md`'s header + the logbook top; every release is tagged, so the pin recovers the WHOLE kit. Still never re-synced: the stamp records what governed THIS run |

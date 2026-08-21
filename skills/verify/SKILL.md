@@ -458,7 +458,7 @@ reproduce mode by run cost.
 >    PROVISIONAL) vs LENIENT (relaxed the bar → REFUTED). The FROZEN metric, data, and known ground truth must
 >    not have been touched — if they were, REFUTED outright.
 > [CODE / FORWARD-MUTATING ONLY:
-> 10. **Code soundness.** Sign/convention slip (check this first — see `../../PROJECT_ORIENTATION.md` §Standing constraints), units
+> 10. **Code soundness.** Sign/convention slip (check this first — see `../../PROJECT.md` §Standing constraints), units
 >    error, geometry mismatch. `--selftest` still passes; no stale cache reused after a core change; no
 >    silently-added free parameters (must be no freer). Upstream preprocessing: the load-bearing transform
 >    feeding the metric (registration / pose / normalization) is non-degenerate on the data it is applied

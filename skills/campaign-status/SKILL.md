@@ -1,6 +1,6 @@
 ---
 name: campaign-status
-description: Periodic health-check, journal consolidation, and N-experiment checkpoint for a running autoresearch campaign — and, at a project root, a cross-campaign checkpoint. Use when the user asks for campaign status, a health check, a checkpoint, "where do we stand", project status / "how's the whole investigation", or to consolidate/trim a long journal — or automatically every N experiments per the loop. In a campaign it reads the scoreboard, journal, discoveries, and campaign.md to summarize progress against the baseline and trivial references, flag plateaus and unverified current-bests, run hygiene checks (every result saved, disputes preserved, the metric self-test passing), consolidate the journal when it grows long, and queue the next orthogonal directions as the NEXT pointer. At a PROJECT root it reads LINEAGE.md to report across campaigns and checks cross-campaign FROZEN/MUTABLE (sibling-coupling) consistency. Read-mostly — it never edits the scoreboard, results, or the frozen scorer/physics. NOT for scaffolding a campaign (new-campaign) or project (new-project), process-level loop questions — launching, "is the loop still running", "why did it halt", steering (run-campaign), forking an invalidated campaign (fork-campaign), verifying a single finding (verify), or writing the end-of-campaign report (final-report).
+description: Periodic health-check, journal consolidation, and N-experiment checkpoint for a running autoresearch campaign — and, at a project root, a cross-campaign checkpoint. Use when the user asks for campaign status, a health check, a checkpoint, "where do we stand", project status / "how's the whole investigation", or to consolidate/trim a long journal — or automatically every N experiments per the loop. In a campaign it reads the scoreboard, journal, discoveries, and campaign.md to summarize progress against the baseline and trivial references, flag plateaus and unverified current-bests, run hygiene checks (every result saved, disputes preserved, the metric self-test passing), consolidate the journal when it grows long, and queue the next orthogonal directions as the NEXT pointer. At a PROJECT root it reads the lineage (PROJECT.md §Lineage; old layout: LINEAGE.md) to report across campaigns and checks cross-campaign FROZEN/MUTABLE (sibling-coupling) consistency. Read-mostly — it never edits the scoreboard, results, or the frozen scorer/physics. NOT for scaffolding a campaign (new-campaign) or project (new-project), process-level loop questions — launching, "is the loop still running", "why did it halt", steering (run-campaign), forking an invalidated campaign (fork-campaign), verifying a single finding (verify), or writing the end-of-campaign report (final-report).
 ---
 
 # campaign-status — the operator's checkpoint
@@ -20,30 +20,39 @@ directory of invocation and from how far back the user asks to step.
 - **Inside a campaign** (`CLAUDE.md` present, alongside `results*/scoreboard.tsv` — a campaign scaffolded
   before the §Where things live table existed has the former but not the table, and is still a campaign)
   → the per-campaign checkpoint (the rest of this skill, the default).
-- **At the project root** (`PROJECT.md` + `LINEAGE.md` + `campaigns/`) → the cross-campaign checkpoint in
+- **At the project root** (`PROJECT.md` + `campaigns/`; the old layout also has `LINEAGE.md`) → the cross-campaign checkpoint in
   *Project mode* (next section). Asked for both, or ambiguous → project pass first, then descend into the
   active campaign.
 
 ## Project mode — the cross-campaign checkpoint
 At a project root, step back over the whole investigation, not one loop:
-1. **Read `LINEAGE.md`** — the index of every campaign and session. Report, per campaign: its status
+1. **Read the lineage** — `PROJECT.md` §Lineage (old layout: `LINEAGE.md`), the index of every campaign
+   and session. Report, per campaign: its status
    (active / superseded / archived(forked) / done), the headline result, whether its current-best is
-   independently verified, and its verified discoveries. Flag any `active` row whose result is blank or stale.
+   independently verified, and its verified findings. Flag any `active` row whose result is blank or stale.
 2. **Cross-campaign FROZEN/MUTABLE consistency.** For each coupled pair, taken from each campaign's
    *Relationship to sibling campaigns* block (route to it via that campaign's own `CLAUDE.md` — siblings
    may not share a layout), confirm the declarations are mutually consistent. What campaign
-   A freezes and promotes to `../../shared/`, campaign B must treat as fixed and must consume from
-   `../../shared/`, never from A's working folder. A lever A froze must not be mutated by B. Surface any
+   A freezes and promotes to a project-level purpose dir (`../../models/`, …; old layout:
+   `../../shared/`), campaign B must treat as fixed and must consume from that promoted copy — with
+   its lineage promotion line — never from A's working folder. **Flag a consumed artifact that has no
+   promotion line**: without the mark, promoted and working files are indistinguishable. A lever A
+   froze must not be mutated by B. Surface any
    conflict or undeclared cross-campaign dependency loudly: an undeclared dependency is how a forward-model
    change invalidates a sibling's results without anyone noticing (the `fork-campaign` trigger).
-3. **Promotion and provenance hygiene.** Verified system-level findings are promoted from a campaign's
-   journal Findings section to the project `DISCOVERIES.md`, where they survive fork-and-archive. Durable
-   decisions live in the project's `PROJECT_ORIENTATION.md` §Durable decisions. Archived(forked) campaigns
-   carry a `FROZEN.md` and stay listed in `LINEAGE.md`.
+3. **Promotion and provenance hygiene.** Verified system-level findings from a campaign's journal
+   Findings section are recorded in `PROJECT.md` §Updates from discoveries, each citing its verdict
+   artifact by path — check for uncited entries (an old-layout project promotes to `DISCOVERIES.md`
+   instead, hook-gated). Durable decisions live in `PROJECT.md` §Durable decisions
+   (old layout: `PROJECT_ORIENTATION.md`), and **the guarded overview sections (§Mission, §Standing
+   constraints) change only with a matching §Durable decisions entry** — flag a change with no trail
+   (project `CLAUDE.md` rule 7). Archived(forked) campaigns
+   carry a `FROZEN.md` and stay listed in the lineage.
 4. **Run the project validator** for the deterministic structure and portability checks, and fold its flags in:
    `python "${CLAUDE_PLUGIN_ROOT}/skills/new-campaign/scripts/validate_campaign.py" <project_root>` (it
-   auto-detects the project tree: required files, every campaign indexed in `LINEAGE.md`, no local copy
-   of the project background doc, no absolute paths in configs).
+   auto-detects the project tree and its layout: required files, every campaign indexed in the
+   lineage, no local copy
+   of the project background, no absolute paths in configs).
 5. **Report** across campaigns: what is active, what has plateaued, which sibling coupling needs attention, and
    the next cross-project move — spin a sibling campaign (`new-campaign`), fork an invalidated campaign
    (`fork-campaign`), or promote a verified finding. A change that invalidates a campaign's findings is a fork
@@ -73,8 +82,8 @@ only against the metric. *(A pre-merge campaign keeps these in `docs/PROJECT_ORI
 **A campaign with no scoreboard rows yet is in setup, not stalled.** Its status IS the mechanical
 check: run `python scripts/run_campaign.py --preflight` and report its output verbatim — the
 authoritative list of what is unbuilt and how to fix it. Do not reconstruct setup state from the
-docs; the scaffold is deliberately not runnable until the physics hooks are written, and preflight
-is the one source that cannot be stale.
+docs; `new-campaign` hands off preflight-green, so a red preflight here means an incomplete or
+imported/hand-built scaffold, and preflight is the one source that cannot be stale.
 
 ## Procedure
 

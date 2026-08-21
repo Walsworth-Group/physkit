@@ -6,6 +6,47 @@ All notable changes to the kit are recorded here. Format follows
 Dates are UTC. Each entry cites the run/finding that motivated it (the kit's own
 `campaign-review → improve-kit` loop) so a future reviewer can trace the "why".
 
+## [0.10.1] - 2026-08-20
+
+Two user-driven scaffolding fixes, same day: the project root consolidates to three documents, and
+`new-campaign` finishes setup before handing off. Both are new-scaffolds-only; old trees keep
+working under era-tolerant consumers, and no migration is required.
+
+### Changed — the project root consolidates: README + one overview + rules (ADR-0015)
+
+User request + approved plan (2026-08-20, `synthesis/PROJECT_CONSOLIDATION_PLAN_2026-08.md`): five
+project-root files were hard to review, `shared/` was opaque, and even verified discoveries get
+superseded. New scaffolds get three root documents — a very short `README.md` front door (the
+directory map's only home), **`PROJECT.md` as THE overview** (§Mission · §Standing constraints,
+still delivered into every spawned prompt · system/instrument/equations depth · §Updates from
+discoveries · §Durable decisions · §Lineage), and a lean `CLAUDE.md` — with `PROJECT.md` edited by
+tier (OPEN depth/ledgers vs GUARDED mission/constraints/decisions). The project `DISCOVERIES.md`
+ledger is **retired**: verified findings stay in the campaign that produced them (journal §Findings
++ `results/verdicts/`), and the project layer is verdict-cited pointers; a legacy ledger stays
+hook-gated. `shared/` flattens into purpose-named project dirs (`scripts/`, `models/`, …), the
+promotion mark being the §Lineage promotion line. **Old trees never break**: the driver resolves
+`## Standing constraints` from `PROJECT.md` with a `PROJECT_ORIENTATION.md` fallback, the guard and
+validator accept both layouts, and migration (`docs/MIGRATING.md`, new top section) is optional.
+Threaded across the campaign templates, 15 skills, and the reference docs; verified by validator
+green on both layouts, toy preflight green, an era-fallback probe, a legacy-ledger guard check, and
+a cold fresh-agent findability audit (all five orientation questions answered in ≤4 hops from the
+README, no grepping).
+
+### Changed — scaffold-complete now means launch-ready (`new-campaign` finishes setup)
+
+Motivated by a user report (2026-08-20): freshly scaffolded campaigns failed to run in the fresh
+session they hand off to, because the scorer and experiment hooks shipped as deliberate stubs and the
+skill's exit gate (the template validator) was weaker than the driver's entry gate (`--preflight`).
+`new-campaign` now implements the campaign code in the setup session — the FROZEN scorer
+(`--selftest` green), the three experiment hooks and `save_figure()`, and exp 000's prediction — and
+gates handoff on the driver's own `--preflight` beside the validator, so the two bars are the same by
+construction (ADR-0014, reversing the "deliberately not runnable" stance). Anything only the user can
+supply is handed over by name, never silently. The fresh session's job collapses to
+`/physkit:run-campaign`; exp 000 runs as the first queued unit under the driver's gates. Threaded:
+`new-campaign` / `run-campaign` / `campaign-status` SKILL.md, campaign `README.md.tmpl` §Setup
+status, `GETTING_STARTED.md` §3. The template stubs and preflight's stub check are unchanged — they
+remain the fill target and the safety net for imported or hand-built trees.
+
 ## [0.10.0] - 2026-08-20
 
 The document consolidation and the verification rework, in one clean break. A campaign is now **7

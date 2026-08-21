@@ -14,6 +14,55 @@ versions behind, work upward from the oldest section that matches your tree.
 > `python` is correct on macOS and Linux. Every command in this file works either way with that
 > substitution.
 
+## To the consolidated project root — README + one overview + rules (kit ≥ v0.10.1, 2026-08-20, ADR-0015)
+
+**Symptom.** The validator reports *"consolidated project still carries LINEAGE.md /
+PROJECT_ORIENTATION.md"* or *"still has shared/"* on a half-migrated tree; or you want a five-file
+project root (`PROJECT.md` · `PROJECT_ORIENTATION.md` · `LINEAGE.md` · `DISCOVERIES.md` ·
+`CLAUDE.md` · `shared/`) brought down to the consolidated three (`README.md` · `PROJECT.md` ·
+`CLAUDE.md`).
+
+**What changed.** The project root consolidated (ADR-0015): `PROJECT.md` is THE overview — §Mission
+(the old charter), §Standing constraints and the system/instrument/equations depth (the old
+`PROJECT_ORIENTATION.md`, section names unchanged), §Updates from discoveries, §Durable decisions,
+and §Lineage (the old `LINEAGE.md` tables) — edited by tier (OPEN vs GUARDED; project `CLAUDE.md`
+rule 7). A short `README.md` front door carries the directory map, and nothing else does. The
+project `DISCOVERIES.md` ledger is **retired**: verified findings live in the campaign that produced
+them (journal §Findings + `results/verdicts/`), and the project layer is pointers — the §Lineage
+verified-findings column and §Updates-from-discoveries entries citing the verdict by path. `shared/`
+is retired for flat purpose-named dirs (`scripts/`, `models/`, …) created at first promotion; the
+promotion mark is the §Lineage promotion line. **Era tolerance:** the current driver reads
+`## Standing constraints` from `PROJECT.md` and falls back to `PROJECT_ORIENTATION.md`, and the
+guard still gates any legacy `DISCOVERIES.md`, so an un-migrated project keeps working and a new
+campaign scaffolds into it fine. Migrate for the reading surface, not out of necessity.
+
+**What breaks.** Nothing in an un-migrated project. Do NOT migrate a project whose ACTIVE campaigns
+were scaffolded before this change if you cannot re-verify them: their stamped drivers read
+`../../PROJECT_ORIENTATION.md` directly, so deleting it breaks *their* preflight. Migrate projects
+whose campaigns are done/archived, or whose campaigns are new-era.
+
+**The procedure** (per project; the validator's errors double as the checklist):
+
+1. Scaffold-fresh the two new files from the kit templates (`templates/project/README.md.tmpl`,
+   `PROJECT.md.tmpl`), then **move** — do not rewrite — the content: the old `PROJECT.md` charter
+   into §Mission; `PROJECT_ORIENTATION.md` wholesale into the matching sections (they kept their
+   names); `LINEAGE.md`'s tables into §Lineage.
+2. For each `DISCOVERIES.md` entry, add a §Updates-from-discoveries entry citing the same verdict
+   artifact path, and make sure the finding's §Lineage row points at its campaign. Then either
+   delete the ledger or keep it as read-only history — the guard gates it either way; the validator
+   tolerates it.
+3. Move each `shared/` artifact to a purpose-named project dir (`models/`, `scripts/`, …), keep its
+   version tag, and add its §Lineage promotion line. Update consuming campaigns' `campaign.md`
+   §Relationship paths. Delete `shared/`.
+4. Delete `PROJECT_ORIENTATION.md` and `LINEAGE.md` (their content now lives in `PROJECT.md`; a
+   surviving copy is a fork and the validator flags it). Update the project `CLAUDE.md` from its
+   template (new paths + the edit-tier rule).
+5. Run the validator on the project root; it detects the new layout and checks §Standing
+   constraints, §Lineage indexing, and the retired-file flags:
+   `python "<kit>/skills/new-campaign/scripts/validate_campaign.py" <project_root>`
+
+---
+
 ## To the consolidated layout — one background document, seven campaign docs, one promotion gate (kit ≥ v0.10.0, 2026-08-20)
 
 **Symptom.** The validator reports *"the project home predates the one-background-document merge: it

@@ -7,13 +7,14 @@ always describes this tree. Re-read the campaign definition it points at (`campa
 every experiment, and your role file (`roles/worker.md` or `roles/planner.md`) for the procedure.
 
 > This campaign lives inside a project. Project-wide rules live in `../../CLAUDE.md`, auto-loaded as an
-> ancestor: shared data and docs are referenced, never copied (`../../data`, `../../shared/`); every
-> campaign and session is indexed in `../../LINEAGE.md`; ad-hoc work that has no frozen metric belongs in
+> ancestor: shared data and promoted artifacts are referenced, never copied (`../../data`; the
+> promoted purpose dirs `../../scripts`, `../../models`, …); every campaign and session is indexed in
+> `../../PROJECT.md` §Lineage; ad-hoc work that has no frozen metric belongs in
 > `../../sessions/<date>_<slug>/`, not here. Invalidating updates **fork-and-archive** to a fresh ledger
 > rather than quietly carrying a tainted ledger forward. The project background — physics, conventions,
-> instrument, durable decisions — is ONE document, `../../PROJECT_ORIENTATION.md`; its §Standing
+> instrument, durable decisions — lives in the project overview, `../../PROJECT.md`; its §Standing
 > constraints is delivered into every spawned prompt, and the rest is depth to consult. Read and
-> update it; do not make a local copy.
+> update it per its edit tiers (project `CLAUDE.md` rule 7); do not make a local copy.
 
 ---
 
@@ -57,8 +58,9 @@ ground truth. Unlocked hyperparameters are legitimate levers; "frozen" means the
 
 ### HARD GATES (do not skip — these are the ones that get skipped under time pressure)
 1. **No promotion without independent verification.** Promotion means updating the current-best
-   (`RECOMMENDED.json`), marking a scoreboard row `verified: CONFIRMED` / `NEW BEST`, or promoting a
-   system-level finding to the project ledger (`../../DISCOVERIES.md`). Before any of those writes you
+   (`RECOMMENDED.json`), marking a scoreboard row `verified: CONFIRMED` / `NEW BEST`, or recording a
+   system-level finding in the project overview (`../../PROJECT.md` §Updates from discoveries, citing
+   the verdict artifact by path; a legacy project's `../../DISCOVERIES.md` stays hook-gated). Before any of those writes you
    must have run `{{VERIFY_SKILL}}` for that finding and gotten CONFIRMED. It spawns an independent
    refuter sub-agent: a fresh agent, different or peer model, that never saw your reasoning. Quote the
    verdict line in the logbook entry. A finding that is PROVISIONAL / QUESTIONABLE / INCONCLUSIVE does
@@ -133,7 +135,8 @@ naming a file this campaign does not have is worse than no row, because an agent
 | Per-experiment narrative detail | `results/logbook.md` |
 | The current best configuration | `configs/RECOMMENDED.json` |
 | Verdict artifacts from independent verification | `results/verdicts/` |
-| Project background — physics · conventions · instrument · durable decisions | `../../PROJECT_ORIENTATION.md` |
+| A-priori predictions, written BEFORE each solve (the spend gate refuses without one) | `predictions/` |
+| Project overview — physics · conventions · instrument · durable decisions · lineage | `../../PROJECT.md` |
 [[OPTIONAL — the campaign keeps a LITERATURE.md (starting sources or ongoing search):
 | Curated references + the literature idea roadmap | `LITERATURE.md` |
 ]]

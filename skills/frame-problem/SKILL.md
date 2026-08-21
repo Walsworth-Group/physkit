@@ -65,7 +65,7 @@ Rules that make the inventory honest:
   a parked or missing effect here (model-form error), or at a bug in the FROZEN reference code or forward
   model, where a sign or convention error upstream presents as missing physics. Re-verify that
   infrastructure; do not only add terms. Update the inventory as understanding changes; in a campaign it
-  graduates into the project's `PROJECT_ORIENTATION.md` §Standing constraints.
+  graduates into the project overview's (`PROJECT.md`) §Standing constraints.
 
 ### The predictive framework — the model you predict *with* (and revise)
 The inventory records which effects are in play. The **predictive framework** is the model that ties them
@@ -83,7 +83,7 @@ into predictions: the model an expert physicist reasons from. Name it explicitly
   structured residual, an out-of-envelope result), decide whether the anomaly fits the framework's stated
   domain or the framework itself must change, then record what changed and why. The revised laser-cooling
   model adds the AC Stark shift and its spatial variation across the beam. In a campaign this revision log
-  lives in `PROJECT_ORIENTATION.md`, in its "Updates from discoveries" section.
+  lives in `PROJECT.md`, in its "Updates from discoveries" section.
 
 ## 2 · Verification plan — how you'll know the answer is right (decided up front)
 
@@ -157,7 +157,7 @@ step order that buries risk. Then execute the steps, running each planned check 
 
 For anything beyond a quick question, write the frame to a durable **framing artifact** (template:
 `assets/framing_template.md`) so it survives the session and seeds what comes next. Its content graduates:
-the inventory to `PROJECT_ORIENTATION.md` §Standing constraints, the goal to `campaign.md` and the steps
+the inventory to `PROJECT.md` §Standing constraints, the goal to `campaign.md` and the steps
 to the queue + JOURNAL NEXT in a campaign, the
 verification plan to the verification gate. Keep one artifact, and update it as the frame changes.
 

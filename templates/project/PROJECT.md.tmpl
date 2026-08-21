@@ -1,34 +1,249 @@
 # Project — {{PROJECT_TITLE}}
 
-The home for the whole investigation into {{PHYSICAL_SYSTEM}}. Individual attempts live under
-`campaigns/`; ad-hoc work under `sessions/`; both share this project's data and docs. `LINEAGE.md` is the
-index of everything: what each campaign changed and found. Read it first to orient.
+The overview of the whole investigation into {{PHYSICAL_SYSTEM}}: the mission, everything we know
+about the system, the durable decisions, and — at the tail — §Lineage, the index of every campaign
+and session. Ordered for a first read: sign-off material first, depth in the middle, the append-only
+ledgers last. The directory map is the top-level `README.md`; the always-on rules are `CLAUDE.md`.
 
-## End goal & the decision it serves
+**Living document, but not uniformly — two edit tiers** (rule 7 in `CLAUDE.md`):
+
+<!-- EDIT TIERS.
+  OPEN: §The system under study · §The instrument · §Equations and methods · §Where this sits in
+    the field · appends to §Updates from discoveries and §Lineage. Edit in response to new
+    information; every edit cites its evidence (a verdict path, a session, a source).
+  GUARDED: §Mission · §Standing constraints · closed §Durable decisions entries. Append or
+    supersede, never rewrite; every change carries a §Durable decisions entry (what changed, why,
+    on what evidence); changes that alter what a RUNNING campaign is held to need the user.
+    §Standing constraints is delivered into every spawned worker/planner prompt of every campaign —
+    the highest-blast-radius text in this tree. -->
+
+> Notation: write all equations in math blocks (`$$ … $$` for display, `$…$` inline) with
+> **precise, well-defined symbols and units**. Define every symbol the first time it appears.
+
+## Mission
+<!-- GUARDED tier — append/supersede with a §Durable decisions entry; user sign-off if it moves a
+     running campaign's goalposts. -->
 - **Goal (concretely):** {{GOAL_STATEMENT}}
 - **The decision/outcome this serves:** {{DECISION_SERVED}}
 - **Done looks like:** {{DONE_CRITERIA}}
+- **Project-wide invariants** — facts true across every campaign; no campaign may silently
+  contradict them:
+  {{SYSTEM_INVARIANTS}}
+- **Canonical data:** {{DATA_LOCATION}} — a read-only `data/` copy, or the resolved `data_path`
+  pointer: {{DATA_PATH}}. Campaigns reference it as `../../data`, never copy it, and never write
+  into it (`data/README.md` carries the rules; that pointer is the tree's only absolute path).
 
-## The physical system (project-wide invariants)
-Facts true across every campaign. No campaign may silently contradict them.
-{{SYSTEM_INVARIANTS}}
-Everything we know about the system — the full physics, the conventions, the instrument, and the
-durable decisions — is `PROJECT_ORIENTATION.md`, beside this file.
+## Standing constraints
+<!-- GUARDED tier — same rule as §Mission. -->
 
-## Canonical data — referenced, never copied
-- **Location:** {{DATA_LOCATION}} — a read-only `data/` copy, or the resolved `data_path` pointer below.
-- **`data_path` (if off-tree):** {{DATA_PATH}}
-- **Rule:** campaigns reference the data by relative path (`../../data`). The loop never writes into `data/`
-  and never copies it into a campaign. This keeps the tree portable and free of duplicates.
+**The operative section.** The campaign driver delivers everything under this heading into every
+spawned worker and planner prompt, every cycle — a constraint recorded here is guaranteed present,
+never merely pointed at. Keep it lean: the hard constraints a run must obey and the mistakes it
+must not repeat; depth and derivations live in the sections below. When a bug keeps recurring, its
+one-line guard belongs here.
 
-## Shared, promoted artifacts
-`shared/` also holds artifacts a campaign froze for siblings to consume, such as a validated forward model or
-a generated training set. Each is versioned. Downstream campaigns reference `../../shared/<artifact>`,
-never a sibling's working folder. Current promoted artifacts: {{PROMOTED_ARTIFACTS}}
+### Physics inventory — what's modeled, what's not, and why
+Every effect that could matter, tagged — so every omission is **deliberate and auditable**, and a
+persistent model–data gap points straight at a parked effect (model-form error). Graduates from the
+`frame-problem` framing artifact; re-check it whenever a discovery changes the physics.
 
-## Layout
-`PROJECT.md` (this — what we are trying to achieve) · `PROJECT_ORIENTATION.md` (what we know about
-the system, durable decisions included) · `LINEAGE.md` (what has been done) · `DISCOVERIES.md`
-(promoted verified findings) · `CLAUDE.md` (always-on rules) · `data/` · `shared/` (promoted frozen
-artifacts) · `campaigns/<name>/` · `sessions/<date>_<slug>/` · `reports/`. All internal references
-are relative, so the whole tree relocates as one unit.
+| Effect | Tag | Why (number where "negligible") |
+|---|---|---|
+| {{EFFECT_1}} | accounted-for | <how it's modeled> |
+| {{EFFECT_2}} | negligible-by-scale | <the estimate/ratio showing it's small here> |
+| {{EFFECT_3}} | out-of-scope | <why outside this project> |
+| {{EFFECT_4}} | deferred | <added when…> |
+| {{EFFECT_5}} | unknown | <flagged risk — how we'll find out> |
+
+- **Dimensionless groups (the problem's *real* parameters)** *(optional — delete if the problem has
+  no informative ones)*: the Buckingham-π groups that govern the behavior and the regime each sits
+  in (≫1 / ≪1 / O(1)), so you know which terms dominate or drop. The `dimensional-analysis` skill
+  derives them; recording them here names the *actual* knobs.
+- **A-priori bound on the key result (ceiling / floor / order):** {{APRIORI_BOUND}}
+- **Domain of validity / key assumptions:** {{DOMAIN_ASSUMPTIONS}}
+- **Degeneracies / ill-posedness that constrain interpretation:** <the non-uniqueness or symmetry
+  every fit and claim must respect — e.g. a null space, a sign-unobservable, an exchange symmetry>
+
+### Units, signs, frames, and ordering
+The bug-prevention rules. Sign, unit, coordinate, and ordering conventions are where silent errors
+hide; define each once, here, and cite this section whenever a result is surprising.
+- **Units & scales:** {{UNITS_TABLE}}
+  <!-- per quantity: name · symbol · unit · plausible range -->
+- **Sign & direction conventions:** {{SIGN_CONVENTIONS}}
+  <!-- positive directions, axis orientations, the sign of any projection; the ONE definition the
+       whole pipeline obeys -->
+- **Coordinates & ordering:** {{COORDINATE_CONVENTIONS}}
+  <!-- array index order (row/col vs x/y), pixel-center vs corner, canonical catalog ordering -->
+- **Frame hygiene.** Name every frame; one symbol per axis per frame; state the frame of every
+  gradient, derivative, and projected component. Resolve orientation and handedness from an
+  independent geometric reference, never from the fit. Depth and the frame-consistency checklist:
+  the physkit plugin's `docs/reference/coordinate-frames.md`.
+- **Data layout & key arrays:** {{DATA_LAYOUT}}
+  <!-- shapes and dtypes of the main arrays, what each axis means, masked/NaN handling -->
+
+### Rig parameters that constrain a run
+<!-- The instrument values a run must respect — a field-of-view, a max safe setpoint, a fixed
+     standoff, an acquisition floor. The full characterization lives in §The instrument below. -->
+
+### Known gotchas / past bugs
+A living catalog, one line per bug already paid for, in the form `symptom → check`. The
+fast-recognition companion to the `correctness-suite` regression gate; `debug` appends an entry
+after each fix.
+- {{KNOWN_GOTCHAS}}
+  <!-- <symptom you'd see> → <the check that catches it>. Seed with the #1 recurring bug for this
+       domain (e.g. "fidelity > analytic ceiling → wrong drive regime; assert Ω/A"). -->
+
+### Environment gotchas (fill for this machine; delete lines that don't apply)
+<!-- Recurring, turn-wasting environment traps. Capture them once so no future session rediscovers them. -->
+- **Windows long paths (`MAX_PATH`):** deeply-nested install or repo paths break pip wheels with
+  long headers (TF/torch) and git object reads. Install heavyweight wheels into a short root such
+  as `C:\venvs\<name>`, and set `git config --global core.longpaths true`.
+- **Python launcher:** use `py -3.x` or the venv's `python`, not `python3`, which is a Windows
+  Store stub on many machines.
+- **Shared-drive filesystem (Google Drive / OneDrive File Stream):** may not support symlinks or
+  junctions, reporting "Incorrect function". Use a copy or sync step instead of a symlink.
+
+## The system under study
+<!-- OPEN tier from here through §Where this sits in the field — edit with the evidence cited. -->
+
+### Target of study
+{{TARGET_OF_STUDY}}   <!-- what is under investigation: the sample / material / plasma / star /
+molecule / device — its identity, structure, and the physical quantities the project aims to
+determine or optimize. Spans subfields (an astronomer's target is not a "sample"). The rig that
+probes it is §The instrument, not this. -->
+
+### Predictive framework — the model we predict *with* (and revise)
+<!-- The mental model the loop reasons FROM: the mechanism + the key variables and their
+     relationships, at a complexity CHOSEN to match this problem (say WHY this level, not more).
+     The inventory above lists the effects; this ties them into PREDICTIONS. Fill:
+     - Mechanism / model: the underlying mechanism + the variables & relationships it predicts with.
+     - Thought-experiments it licenses ("if I change X, the framework predicts Y") — run these
+       before a run to get a-priori predictions and candidate levers. Prefer predictions that
+       DISCRIMINATE between hypotheses.
+     When data contradicts a framework prediction, decide whether the anomaly fits the framework's
+     stated domain or the FRAMEWORK ITSELF must change, and log the change under §Updates from
+     discoveries with its reason. -->
+
+### System behavior (through the lens of this problem)
+<!-- Properties and typical behavior most relevant to the metric/levers: regimes, symmetries,
+     conserved quantities, hysteresis, typical scales. The degeneracies that constrain
+     interpretation are pinned in §Standing constraints; expand on them here. -->
+
+## The instrument
+
+The measurement apparatus / detector / observational setup and its parameters — the concrete rig
+that produces this project's data.
+
+- **What measures what:** {{INSTRUMENT_DESCRIPTION}}
+- **Measurement model — what the raw data actually is:** {{MEASUREMENT_MODEL}}
+  <!-- how instrument readings map to physical quantities: the forward measurement chain, so raw
+       data is never mistaken for the quantity of interest -->
+- **Known artifacts / systematics:** {{INSTRUMENT_ARTIFACTS}}
+  <!-- drifts, backgrounds, calibration caveats — the recurring gotchas to guard against -->
+
+### Parameters (with provenance)
+| Parameter | Value | Units | Source / how known |
+|---|---|---|---|
+| {{INSTR_PARAM_1}} | {{INSTR_VALUE_1}} | {{INSTR_UNITS_1}} | {{INSTR_SOURCE_1}} |
+
+## Equations and methods
+
+### Foundational equations
+<!-- The governing equations of the system, in math blocks. Define each symbol + its units. -->
+
+### Simulation methods & approximations
+<!-- How the physics is computed/simulated for this project (shared by all its campaigns), the key
+     approximations, and their domain of validity (discretization, linearization, truncation…). -->
+
+### Common techniques for this problem
+<!-- The standard approaches the field uses to attack this problem, with their trade-offs — so the
+     agent isn't reinventing or missing a known method. -->
+
+## Where this sits in the field *(optional — fill if the field has an answer; delete if N/A)*
+Positions the work so agents know what would be new and what not to over-claim.
+- **The gap it fills / what's new:** <the specific gap vs prior work — or "engineering reuse, not novelty">
+- **Adjacent work / nearest prior results:** <the closest methods or numbers to beat>
+- **Threshold ladder & named precedents:** the field's meaningful rungs for the key quantity — the
+  values separating trivial / useful / state-of-the-art, each against a named precedent, so every
+  reported number is read against them. Build it once, cite it every time. Skip if the quantity has
+  no canonical thresholds; never invent them.
+- **What not to claim:** <over-claims to avoid given the above>
+
+## Updates from discoveries
+<!-- OPEN tier, append-only. -->
+
+Append here when a `verify`-CONFIRMED finding changes the physical understanding or the predictive
+framework (the loop's UPDATE step in a campaign's `roles/worker.md`). Date each entry; give the
+effect, its equations and references; and **cite the source campaign's verdict artifact by path**
+(`campaigns/<slug>/results/verdicts/<id>.json`). The full evidence stays in the campaign that
+produced it — this section is the project's synthesis and pointer layer, not a second ledger. To
+overturn or narrow an earlier entry, append a superseding one; never delete.
+
+## Durable decisions
+<!-- GUARDED tier, append-only: never rewrite a closed entry; supersede it and link the two. -->
+
+The durable **"why"** record for the whole project: decisions that outlive any one campaign — data
+conventions, promoted-artifact choices, tooling / environment calls, cross-campaign methodology —
+**plus the change log for this document's guarded sections** (§Mission and §Standing constraints
+changes land here as entries). Losing this rationale on a copy or fork is what causes work to be
+repeated; keep it here so it survives. (Campaign-scoped decisions live in that campaign's
+`campaign.md` §Decision record.)
+
+Each entry: the decision, the alternatives, why this one, the conditions it rests on, and what
+would make you revisit it (mirrors the `record-decision` skill).
+
+<!-- ### ED1 — [decision, one line]  (YYYY-MM-DD)
+**Decision.** …
+**Alternatives considered.** …
+**Why this one.** …
+**Rests on.** [conditions / assumptions that must hold]
+**Revisit if.** [the trigger that would reopen it] -->
+
+## References
+<!-- Literature consulted (prefer arXiv versions). Keep in sync with a campaign's LITERATURE.md
+     where one exists. -->
+
+## Lineage
+<!-- OPEN tier, append-only tables: never delete a row; supersede it. -->
+
+The project's master index: every campaign and session, what changed, and what it found, in one
+place. Archived campaigns stay listed. A resuming agent or colleague reads this first to find past
+work; each row's `@key` links to its knowledge-base resource, and the *Verified findings* column
+points into the campaign's own record (`results/JOURNAL.md` §Findings + `results/verdicts/`), where
+the evidence lives.
+
+### Campaigns
+
+`status`: active · superseded · archived(forked) · done.  `approach`: a free tag (e.g. `cnn`,
+`sims`, `fit`). A fork is an invalidating update, defined in the project `CLAUDE.md`. It archives
+the source campaign and starts a fresh one. Both appear here, with the fork noted.
+
+| # | Campaign | Date | Approach | Frozen metric | What changed from predecessor | Headline result | Verified findings | @KB-key | Status |
+|---|---|---|---|---|---|---|---|---|---|
+| 01 | {{CAMPAIGN_1_NAME}} | {{CAMPAIGN_1_DATE}} | {{CAMPAIGN_1_APPROACH}} | {{CAMPAIGN_1_METRIC}} | — (first) | {{CAMPAIGN_1_RESULT}} | {{CAMPAIGN_1_DISCOVERIES}} | {{CAMPAIGN_1_KBKEY}} | active |
+
+### Sessions (ad-hoc / non-campaign)
+
+One-off exploration, debugging, or analysis with no frozen metric. The campaign-vs-session rule is
+in the project `CLAUDE.md`. Record findings at their true rigor tier: a session finding is not a
+verified finding unless it passed `verify`.
+
+| Date | Session (`sessions/<date>_<slug>/`) | What it did | What it found (+ tier) | @KB-key | Promoted to |
+|---|---|---|---|---|---|
+
+_— none yet —_
+
+### Version bumps & promotions
+
+Two kinds of one-liners, both logged here. **A version bump** — a routine fix that does not
+invalidate prior findings (a data or metric correction that preserves rankings) — is logged inside
+its campaign's row history as `<campaign>` · `<date>` · `metric_version 1→2` · `<why>`. **A
+promotion** — an artifact one campaign froze for the whole project to share (a validated forward
+model, a generated training set) — is logged as `<artifact + version>` · `<date>` · `<from
+campaign/session>` · `<project dir it now lives in>`; the promotion line here is what marks a
+project-level artifact as promoted-frozen rather than working.
+
+<!-- example promotion line:
+- forward_model_v2 · 2026-09-01 · from campaigns/01_forward-fit · ../models/forward_model_v2/ -->
+
+_— none yet —_

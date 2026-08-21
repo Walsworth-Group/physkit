@@ -3,9 +3,10 @@
 An ad-hoc, non-campaign session: exploration, debugging, or a one-off analysis with no frozen metric driving
 a loop. With such a metric it is a campaign; see the project `CLAUDE.md` rule. It lives at
 `sessions/{{SESSION_DATE}}_{{SESSION_SLUG}}/`, shares the project's data and docs by relative path, and is
-indexed in `LINEAGE.md`'s Sessions section so the project history stays complete.
+indexed in `PROJECT.md` §Lineage (Sessions table) so the project history stays complete.
 
-> Uses `../../data` and `../../shared/` by reference; never copies them. Same rule as a campaign.
+> Uses `../../data` and the promoted project-level dirs (`../../scripts`, `../../models`, …) by
+> reference; never copies them. Same rule as a campaign.
 
 ## Goal
 {{SESSION_GOAL}}   <!-- the question this session set out to answer / the thing to debug or try -->
@@ -14,8 +15,8 @@ indexed in `LINEAGE.md`'s Sessions section so the project history stays complete
 {{SESSION_WORK}}   <!-- the concrete steps: what was run, inspected, changed. Enough to reconstruct. -->
 
 ## What was found — at its true rigor tier
-State each finding with its tier, accurately. A session finding is not a verified project DISCOVERY unless
-it passed `verify`. Do not let an ad-hoc conclusion be trusted like a campaign result.
+State each finding with its tier, accurately. A session finding is not a verified finding unless it
+passed `verify`. Do not let an ad-hoc conclusion be trusted like a campaign result.
 
 - {{SESSION_FINDING}}  —  **tier:** {{FINDING_TIER}}   <!-- e.g. `exploratory (unverified)` · `verify-CONFIRMED` · `PROVISIONAL` -->
 
@@ -23,7 +24,7 @@ it passed `verify`. Do not let an ad-hoc conclusion be trusted like a campaign r
 {{SESSION_ARTIFACTS}}   <!-- files/plots/scripts produced, with paths inside this session folder -->
 
 ## Promotion (if warranted)
-- **Surfaced a well-posed optimization problem?** → start a campaign (`new-campaign`), citing this session in `LINEAGE.md`.
-- **Produced a reusable artifact (a frozen model, a generated set)?** → promote it to `../../shared/` (see project `CLAUDE.md`).
-- **Established a verified fact about the system?** → only after `verify`-CONFIRMED, promote to project `DISCOVERIES.md`.
-- Otherwise: leave it here, indexed in `LINEAGE.md` at its true tier.
+- **Surfaced a well-posed optimization problem?** → start a campaign (`new-campaign`), citing this session in `PROJECT.md` §Lineage.
+- **Produced a reusable artifact (a frozen model, a generated set)?** → promote it to a versioned copy in a purpose-named project dir (`../../models/`, `../../scripts/`, …), with a §Lineage promotion line (see project `CLAUDE.md` rule 6).
+- **Established a verified fact about the system?** → only after `verify`-CONFIRMED, append it to `PROJECT.md` §Updates from discoveries, citing the verdict.
+- Otherwise: leave it here, indexed in `PROJECT.md` §Lineage at its true tier.

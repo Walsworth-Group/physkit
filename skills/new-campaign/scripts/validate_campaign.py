@@ -2,13 +2,18 @@
 """validate_campaign.py — gate a generated autoresearch CAMPAIGN tree, or a PROJECT tree.
 
 The target is auto-detected:
-  * a PROJECT root (has PROJECT.md + LINEAGE.md + campaigns/)  -> project-tree validation, or
-  * a campaign tree                                            -> campaign validation.
+  * a PROJECT root (has PROJECT.md + campaigns/)  -> project-tree validation, or
+  * a campaign tree                               -> campaign validation.
 
-EVERY campaign lives inside a project (<project>/campaigns/<name>/ with ../../PROJECT.md + ../../LINEAGE.md);
-there is no standalone/bare-campaign mode. The project background - physics, conventions, instrument,
-durable decisions - is ONE document, <project>/PROJECT_ORIENTATION.md, REFERENCED and never copied; its
-"## Standing constraints" section is what the campaign driver delivers into every spawned prompt.
+EVERY campaign lives inside a project (<project>/campaigns/<name>/ with ../../PROJECT.md); there is
+no standalone/bare-campaign mode. Two project layouts exist (ADR-0015) and both validate:
+  * NEW (consolidated): PROJECT.md is THE overview - mission, "## Standing constraints" (what the
+    campaign driver delivers into every spawned prompt), system knowledge, durable decisions, and
+    "## Lineage" (the index of every campaign/session) - beside a short README.md and CLAUDE.md.
+  * OLD (five-file): PROJECT.md + PROJECT_ORIENTATION.md (carrying the constraints section) +
+    LINEAGE.md + DISCOVERIES.md + CLAUDE.md + shared/.
+The layout is probed by where "## Standing constraints" lives; the project background is REFERENCED
+by campaigns and never copied, under either layout.
 
 Campaign validation fails (exit 1) on anything new-campaign left unresolved:
   * a literal {{PLACEHOLDER}} token, a dangling [[OPTIONAL … block, a stray [PROPOSED] tag,
@@ -17,9 +22,10 @@ Campaign validation fails (exit 1) on anything new-campaign left unresolved:
     code stubs),
   * an illegal campaign property in configs/loop.json "campaign" - an out-of-enum prediction_mode /
     noise_model, or prediction_mode 'none' with no recorded reason (mirrors the runner's preflight),
-  * no project home above the campaign, or its PROJECT_ORIENTATION.md missing / lacking the
-    "## Standing constraints" section the driver delivers (a pre-merge project - one still carrying
-    shared/PHYSICS.md - is named as such, with the migration pointer),
+  * no project home above the campaign, or no "## Standing constraints" section in the project's
+    PROJECT.md (new layout) or PROJECT_ORIENTATION.md (old layout) - the section the driver
+    delivers (a pre-merge project - one still carrying shared/PHYSICS.md - is named as such, with
+    the migration pointer),
   * a LOCAL copy of the project background in the campaign's docs/ (under the current name or a
     retired shared-doc name) - it must be referenced, never copied (design §4.1),
   * a hook whose interpreter does not RUN on this machine — a wired-but-dead gate is worse than an
@@ -31,14 +37,20 @@ Legacy trees using the retired multi-stage suffix (charter_<NAME>.md / configs_<
 validate — the required-file checks glob — but new stages are scaffolded as sibling campaigns, not suffixes.
 
 Project-tree validation fails (exit 1) if the project home is malformed:
-  * a missing required file/dir (PROJECT.md, PROJECT_ORIENTATION.md - with its "## Standing
-    constraints" section - LINEAGE.md, CLAUDE.md, DISCOVERIES.md, data/, shared/, campaigns/,
-    sessions/, reports/),
+  * a missing required file/dir for its layout (new: README.md, PROJECT.md - with its "## Standing
+    constraints" and "## Lineage" sections - CLAUDE.md, data/, campaigns/, sessions/, reports/;
+    old: additionally PROJECT_ORIENTATION.md, LINEAGE.md, DISCOVERIES.md, shared/),
+  * a NEW-layout project still carrying a retired root doc whose content PROJECT.md now owns
+    (PROJECT_ORIENTATION.md, LINEAGE.md - two authorities for the same content is a fork) or a
+    leftover shared/ (its artifacts belong in purpose-named project dirs). A legacy imported
+    DISCOVERIES.md is tolerated: it is an append-only historical ledger, still hook-gated, that
+    PROJECT.md does not duplicate,
   * a leftover {{PLACEHOLDER}}/[[OPTIONAL/[PROPOSED] in a project-root or shared/ doc,
-  * a campaign in campaigns/ (or campaigns/_archive/) NOT indexed in LINEAGE.md,
+  * a campaign in campaigns/ (or campaigns/_archive/) NOT indexed in the lineage (PROJECT.md
+    "## Lineage" in the new layout; LINEAGE.md in the old),
   * a campaign carrying a LOCAL copy of the project background (docs/PROJECT_ORIENTATION.md, or a
     retired shared-doc name: docs/PHYSICS.md|CONVENTIONS.md|INSTRUMENT.md) — it must reference
-    ../../PROJECT_ORIENTATION.md, never copy (design §4.1),
+    the project overview, never copy (design §4.1),
   * an ABSOLUTE path hard-coded in a config JSON (the portability breaker; prose docs are exempt because
     they legitimately carry example paths — the invariant is that the tree relocates as one unit, the only
     absolute path being the resolved data_path pointer in PROJECT.md / data/DATA_PATH.txt).
@@ -86,19 +98,30 @@ CAMPAIGN_REQUIRED_GLOBS = [
     ("verdicts dir", "results*/verdicts"),
 ]
 
-PROJECT_REQUIRED_FILES = [
-    # PROJECT_ORIENTATION.md is required too, but check_orientation() owns it: it also checks the
-    # delivered section and names a pre-merge layout instead of reporting generic damage.
-    "PROJECT.md", "LINEAGE.md", "CLAUDE.md", "DISCOVERIES.md",
-]
-PROJECT_REQUIRED_DIRS = ["data", "shared", "campaigns", "sessions", "reports"]
-# The project background lives ONCE at <project>/PROJECT_ORIENTATION.md and is referenced; a
-# campaign-local copy is a fork (design §4.1). The retired shared-doc names are checked too, because a
-# copy under either layout's name forks the same content.
+# Per-layout requirements (ADR-0015). The overview's constraints section is owned by
+# check_orientation(), which also names a pre-merge layout instead of reporting generic damage.
+PROJECT_REQUIRED_FILES = {
+    "new": ["README.md", "PROJECT.md", "CLAUDE.md"],
+    "old": ["PROJECT.md", "LINEAGE.md", "CLAUDE.md", "DISCOVERIES.md"],
+}
+PROJECT_REQUIRED_DIRS = {
+    "new": ["data", "campaigns", "sessions", "reports"],
+    "old": ["data", "shared", "campaigns", "sessions", "reports"],
+}
+# Root docs a NEW-layout project must NOT still carry: PROJECT.md owns their content now, so a
+# surviving copy is two authorities for the same record - a fork. (DISCOVERIES.md is deliberately
+# absent from this list: a legacy imported ledger is append-only history, still hook-gated, and
+# PROJECT.md does not duplicate its entries.)
+NEW_LAYOUT_FORK_DOCS = ("PROJECT_ORIENTATION.md", "LINEAGE.md")
+# The project background lives ONCE in the project overview and is referenced; a campaign-local copy
+# is a fork (design §4.1). The retired shared-doc names are checked too, because a copy under any
+# layout's name forks the same content.
 LOCAL_COPY_DOCS = ("PROJECT_ORIENTATION.md", "PHYSICS.md", "CONVENTIONS.md", "INSTRUMENT.md")
-# The section of PROJECT_ORIENTATION.md the campaign driver delivers into every spawned prompt. Its
-# absence is checked here AND by the driver's preflight, so it is caught at scaffold time, not at 3 a.m.
+# The section the campaign driver delivers into every spawned prompt - in PROJECT.md (new layout) or
+# PROJECT_ORIENTATION.md (old). Its absence is checked here AND by the driver's preflight, so it is
+# caught at scaffold time, not at 3 a.m.
 CONSTRAINTS_HEADING = "standing constraints"
+LINEAGE_HEADING = "lineage"
 
 
 def _read_text(path: Path) -> str | None:
@@ -112,6 +135,31 @@ def _read_text(path: Path) -> str | None:
             return None
     except OSError:
         return None
+
+
+def _md_has_section(path: Path, heading: str) -> bool:
+    """True if the file has an H2 whose text contains `heading` (case-insensitive)."""
+    text = _read_text(path) or ""
+    return any(line.startswith("## ") and heading in line.lower() for line in text.splitlines())
+
+
+def _md_section_text(path: Path, heading: str) -> str:
+    """The body under the matching H2, through its H3s, up to the next H2; '' if absent."""
+    out, on = [], False
+    for line in (_read_text(path) or "").splitlines():
+        if line.startswith("## ") and not line.startswith("### "):
+            on = heading in line.lower()
+            continue
+        if on:
+            out.append(line)
+    return "\n".join(out)
+
+
+def project_layout(root: Path) -> str:
+    """'new' = the consolidated single-overview layout (ADR-0015: PROJECT.md carries the delivered
+    constraints section); 'old' = the five-file layout. Probed by content, not by file census, so a
+    half-migrated tree is judged by which file actually feeds the driver."""
+    return "new" if _md_has_section(root / "PROJECT.md", CONSTRAINTS_HEADING) else "old"
 
 
 def scan_leftovers(paths, base: Path, errors: list[str]) -> None:
@@ -146,37 +194,43 @@ def _local_copy_error(rel: str, doc: str) -> str:
     if doc == "PROJECT_ORIENTATION.md":
         return (f"campaign-level {rel} - this file dissolved in the one-background-document merge; "
                 "migrate its content (goal -> campaign.md, tasks -> the queue + JOURNAL NEXT, field "
-                "positioning -> ../../PROJECT_ORIENTATION.md) per the kit's docs/MIGRATING.md, then "
+                "positioning -> the project overview) per the kit's docs/MIGRATING.md, then "
                 "delete it. Do not delete it unmigrated.")
-    return (f"campaign carries a LOCAL copy of the project background (must reference "
-            f"../../PROJECT_ORIENTATION.md, never copy): {rel}")
+    return (f"campaign carries a LOCAL copy of the project background (must reference the project "
+            f"overview - ../../PROJECT.md, or ../../PROJECT_ORIENTATION.md in an old-layout "
+            f"project - never copy): {rel}")
 
 
 def check_orientation(proj_root: Path, errors: list[str]) -> None:
-    """The project background doc exists and carries the section the driver delivers every spawn.
+    """The project overview carries the section the driver delivers every spawn - in PROJECT.md
+    (new layout) or PROJECT_ORIENTATION.md (old layout), the same resolution order the driver uses.
 
     A project still carrying the retired four-document layout (shared/PHYSICS.md et al.) is named as
     pre-merge with the migration pointer, not reported as generic damage: an agent told only "file
     missing" will fabricate one, and a fabricated background document is worse than a named gap.
     """
-    doc = proj_root / "PROJECT_ORIENTATION.md"
-    if not doc.is_file():
-        if (proj_root / "shared" / "PHYSICS.md").is_file():
+    if _md_has_section(proj_root / "PROJECT.md", CONSTRAINTS_HEADING):
+        return                                    # new layout: PROJECT.md feeds the driver
+    old = proj_root / "PROJECT_ORIENTATION.md"
+    if old.is_file():
+        if not _md_has_section(old, CONSTRAINTS_HEADING):
             errors.append(
-                "the project home predates the one-background-document merge: it has shared/PHYSICS.md "
-                "and no PROJECT_ORIENTATION.md. Migrate it with the kit's docs/MIGRATING.md (merge the "
-                "four project docs into PROJECT_ORIENTATION.md); do not author a new one from scratch."
+                "PROJECT_ORIENTATION.md has no '## Standing constraints' section - that section is "
+                "what the campaign driver delivers into every spawned prompt, so without it the "
+                "delivery is silently empty. Add the section (see the project template)."
             )
-        else:
-            errors.append("missing project background doc: no <project>/PROJECT_ORIENTATION.md")
         return
-    text = _read_text(doc) or ""
-    if not any(line.startswith("## ") and CONSTRAINTS_HEADING in line.lower()
-               for line in text.splitlines()):
+    if (proj_root / "shared" / "PHYSICS.md").is_file():
         errors.append(
-            "PROJECT_ORIENTATION.md has no '## Standing constraints' section - that section is what "
-            "the campaign driver delivers into every spawned prompt, so without it the delivery is "
-            "silently empty. Add the section (see the project template)."
+            "the project home predates the one-background-document merge: it has shared/PHYSICS.md "
+            "and no delivered-constraints doc. Migrate it with the kit's docs/MIGRATING.md; do not "
+            "author a new background document from scratch."
+        )
+    else:
+        errors.append(
+            "no '## Standing constraints' anywhere the driver looks: PROJECT.md does not carry the "
+            "section and there is no PROJECT_ORIENTATION.md. That section is delivered into every "
+            "spawned prompt; author it in PROJECT.md (see the project template)."
         )
 
 
@@ -193,7 +247,9 @@ def project_root_of(campaign: Path) -> Path | None:
         cand = campaign.parent.parent.parent
     else:
         return None
-    return cand if (cand / "PROJECT.md").is_file() and (cand / "LINEAGE.md").is_file() else None
+    # PROJECT.md alone marks the home: the old layout pairs it with LINEAGE.md, the consolidated
+    # layout (ADR-0015) absorbed that index into PROJECT.md §Lineage.
+    return cand if (cand / "PROJECT.md").is_file() else None
 
 
 # The campaign-property enums. An intentional twin of run_campaign.py.tmpl's PREDICTION_MODES /
@@ -354,9 +410,9 @@ def check_hook_wiring(root: Path, errors: list[str]) -> None:
 def validate_campaign(root: Path) -> list[str]:
     errors: list[str] = []
 
-    # Every campaign lives inside a project, so the background doc is SHARED at
-    # ../../PROJECT_ORIENTATION.md — referenced, never copied (design §4.1). There is no standalone
-    # mode to detect.
+    # Every campaign lives inside a project, so the background is SHARED in the project overview
+    # (../../PROJECT.md; old layout: ../../PROJECT_ORIENTATION.md) — referenced, never copied
+    # (design §4.1). There is no standalone mode to detect.
     proj_root = project_root_of(root)
 
     # 1. Required files present (glob-based; tolerates the retired _<NAME> suffix in legacy trees).
@@ -368,7 +424,7 @@ def validate_campaign(root: Path) -> list[str]:
     #     into a project (new-campaign Step 0.1) rather than authoring campaign-local physics/conventions.
     if proj_root is None:
         errors.append(
-            "no project home: expected <project>/campaigns/<slug>/ with ../../PROJECT.md + ../../LINEAGE.md — "
+            "no project home: expected <project>/campaigns/<slug>/ with ../../PROJECT.md — "
             "every campaign lives in a project; lift this tree in via new-campaign Step 0.1"
         )
     else:
@@ -394,23 +450,47 @@ def validate_campaign(root: Path) -> list[str]:
 
 def validate_project(root: Path) -> list[str]:
     errors: list[str] = []
+    layout = project_layout(root)
 
-    # 1. Required project files + dirs, and the background doc with its delivered section.
-    for rel in PROJECT_REQUIRED_FILES:
+    # 1. Required project files + dirs for this layout, and the delivered-constraints section.
+    for rel in PROJECT_REQUIRED_FILES[layout]:
         if not (root / rel).is_file():
-            errors.append(f"missing required project file: {rel}")
-    for rel in PROJECT_REQUIRED_DIRS:
+            errors.append(f"missing required project file ({layout} layout): {rel}")
+    for rel in PROJECT_REQUIRED_DIRS[layout]:
         if not (root / rel).is_dir():
-            errors.append(f"missing required project dir: {rel}/")
+            errors.append(f"missing required project dir ({layout} layout): {rel}/")
     check_orientation(root, errors)
+
+    # 1b. New layout: PROJECT.md must carry the §Lineage index, and the retired root docs whose
+    #     content it now owns must be GONE - a surviving LINEAGE.md or PROJECT_ORIENTATION.md is a
+    #     second authority for the same record, the fork the single-source rule names. shared/ is
+    #     retired too: promoted artifacts live in purpose-named project dirs (ADR-0015). A legacy
+    #     imported DISCOVERIES.md is tolerated (append-only history, still hook-gated).
+    if layout == "new":
+        if not _md_has_section(root / "PROJECT.md", LINEAGE_HEADING):
+            errors.append("PROJECT.md has no '## Lineage' section - the consolidated layout keeps "
+                          "the campaign/session index there (see the project template).")
+        for rel in NEW_LAYOUT_FORK_DOCS:
+            if (root / rel).is_file():
+                errors.append(f"consolidated project still carries {rel} - PROJECT.md owns that "
+                              "content now; two authorities fork. Merge any unabsorbed content into "
+                              "PROJECT.md and delete the file (docs/MIGRATING.md).")
+        if (root / "shared").is_dir():
+            errors.append("consolidated project still has shared/ - promoted artifacts live in "
+                          "purpose-named project dirs (scripts/, models/, ...) with a PROJECT.md "
+                          "§Lineage promotion line. Move them and delete shared/ (docs/MIGRATING.md).")
 
     # 2. No leftover tokens in the project-root docs + shared/ (campaigns validate separately; skip data/).
     root_docs = [p for p in root.glob("*.md")]
     shared_docs = list((root / "shared").glob("*.md")) if (root / "shared").is_dir() else []
     scan_leftovers(sorted(root_docs + shared_docs), root, errors)
 
-    # 3. Every campaign (incl. archived) is indexed in LINEAGE.md; no campaign carries a LOCAL shared-doc copy.
-    lineage = _read_text(root / "LINEAGE.md") or ""
+    # 3. Every campaign (incl. archived) is indexed in the lineage - PROJECT.md §Lineage (new) or
+    #    LINEAGE.md (old); no campaign carries a LOCAL shared-doc copy.
+    if layout == "new":
+        lineage, lineage_name = _md_section_text(root / "PROJECT.md", LINEAGE_HEADING), "PROJECT.md §Lineage"
+    else:
+        lineage, lineage_name = _read_text(root / "LINEAGE.md") or "", "LINEAGE.md"
     campaigns_dir = root / "campaigns"
     if campaigns_dir.is_dir():
         camp_dirs = [d for d in campaigns_dir.iterdir() if d.is_dir() and not d.name.startswith(".") and d.name != "_archive"]
@@ -421,7 +501,7 @@ def validate_project(root: Path) -> list[str]:
             slug = d.name
             slug_noidx = re.sub(r"^\d+[_-]", "", slug)   # 01_cnn-inverse -> cnn-inverse
             if slug not in lineage and slug_noidx not in lineage:
-                errors.append(f"campaign not indexed in LINEAGE.md: campaigns/{('_archive/' if d.parent.name=='_archive' else '')}{slug}")
+                errors.append(f"campaign not indexed in {lineage_name}: campaigns/{('_archive/' if d.parent.name=='_archive' else '')}{slug}")
             for local_doc in LOCAL_COPY_DOCS:
                 if (d / "docs" / local_doc).is_file():
                     errors.append(_local_copy_error(f"campaigns/{slug}/docs/{local_doc}", local_doc))
@@ -483,7 +563,9 @@ def main() -> int:
         print(f"ERROR: not a directory: {root}", file=sys.stderr)
         return 2
 
-    is_project = (root / "PROJECT.md").is_file() and (root / "LINEAGE.md").is_file() and (root / "campaigns").is_dir()
+    # PROJECT.md + campaigns/ marks a project root in both layouts (the old one also has LINEAGE.md,
+    # but keying on it would misread a consolidated project as a campaign - ADR-0015).
+    is_project = (root / "PROJECT.md").is_file() and (root / "campaigns").is_dir()
     kind = "PROJECT" if is_project else "CAMPAIGN"
 
     if not is_project:

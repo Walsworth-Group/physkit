@@ -1,0 +1,18 @@
+# {{PROJECT_TITLE}}
+
+One investigation into {{PHYSICAL_SYSTEM}}, tried over many attempts. Everything deeper — the goal,
+what we know, the decisions, and the index of every attempt — is [`PROJECT.md`](PROJECT.md).
+
+| Where | What |
+|---|---|
+| [`PROJECT.md`](PROJECT.md) | **the overview** — mission, standing constraints, system knowledge, durable decisions, and §Lineage: the index of every campaign and session |
+| `CLAUDE.md` | the always-on rules binding any agent working in this tree |
+| `campaigns/<NN>_<slug>/` | **campaigns** — autonomous research loops, each optimizing ONE frozen metric; every attempt driven by a metric lives here |
+| `sessions/<date>_<slug>/` | **sessions** — ad-hoc exploration, debugging, one-off analyses; no frozen metric |
+| `data/` | the ONE canonical data copy (read-only; referenced, never copied — its README carries the rules) |
+| `scripts/`, `models/`, … | artifacts promoted for the whole project to share — a validated model, a generated dataset, a shared script; each promotion is recorded in `PROJECT.md` §Lineage |
+| `reports/` | project-level and cross-campaign write-ups |
+
+New here? Read `PROJECT.md` top to bottom — it is ordered for a first read. To find what a past
+attempt did or found, its §Lineage tables point into the campaign and session folders, where the
+full evidence lives.

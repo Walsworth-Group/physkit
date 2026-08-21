@@ -7,7 +7,8 @@ description: >-
   It captures four things: the vision and goal, the current state including the in-flight reasoning (what
   you were doing and why), a concrete "run this to confirm state" command that verifies the environment and
   reproduces where things stand, and a prioritized roadmap of next steps. Prior handoffs are archived, never
-  overwritten, so the trail of reasoning is preserved. It resumes from LINEAGE.md (the cross-campaign index)
+  overwritten, so the trail of reasoning is preserved. It resumes from the project lineage (PROJECT.md
+  §Lineage; old layout: LINEAGE.md — the cross-campaign index)
   and checks whole-tree portability. Pairs with campaign-status (health) and campaign.md §Mission
   (goal/done-criteria).
 ---
@@ -59,20 +60,22 @@ converges. The handoff distills durable artifacts; it is not where they first ap
    canting term on the coercive-band subset, experiment queue in JOURNAL NEXT" is. Keep it in sync with
    `results/queue.json` and the JOURNAL NEXT pointer.
 
-## Resume from `LINEAGE.md`, check whole-tree portability
-The campaign sits in a project (`PROJECT.md` and `LINEAGE.md` above it), so the handoff is project-aware:
-- **Vision/goal** also come from `PROJECT.md`, the investigation-wide goal. The project-wide state is
-  `LINEAGE.md`: the index of every campaign and session, what each changed and found. A resumer reads
-  `LINEAGE.md` first for where the whole investigation stands (active campaign, archived or forked
-  campaigns, what is verified), then descends into the active campaign's own docs. Name `LINEAGE.md` as the
-  first resume anchor.
-- **Current state** notes which campaign is active by its `LINEAGE.md` row, any sibling coupling in play
-  such as a frozen artifact consumed from `../../shared/`, and whether a recent change is a
+## Resume from the lineage, check whole-tree portability
+The campaign sits in a project (`PROJECT.md` above it), so the handoff is project-aware. The lineage —
+the index of every campaign and session, what each changed and found — is `PROJECT.md` §Lineage
+(old layout: a separate `LINEAGE.md`):
+- **Vision/goal** also come from `PROJECT.md` §Mission, the investigation-wide goal. A resumer reads
+  the lineage first for where the whole investigation stands (active campaign, archived or forked
+  campaigns, what is verified), then descends into the active campaign's own docs. Name the lineage as
+  the first resume anchor.
+- **Current state** notes which campaign is active by its lineage row, any sibling coupling in play
+  such as a frozen artifact consumed from a promoted project-level dir (`../../models/`, …; old
+  layout: `../../shared/`), and whether a recent change is a
   `fork-campaign` trigger, meaning it invalidated a sibling's findings, rather than a local matter.
 - **Portability check over the project tree.** The tree must relocate as one unit: every reference relative,
   and the resolved `data_path` the only absolute path. Add the project validator to "run this to confirm
   state": `python "${CLAUDE_PLUGIN_ROOT}/skills/new-campaign/scripts/validate_campaign.py" <project_root>`
-  checks structure, indexing of every campaign in `LINEAGE.md`, and absence of absolute paths in configs. A
+  checks structure, indexing of every campaign in the lineage, and absence of absolute paths in configs. A
   broken path or an un-indexed campaign is a resume landmine.
 
 ## Archive, don't overwrite
@@ -85,8 +88,9 @@ direction was abandoned. `record-decision` holds the durable why, the handoff ho
 ## Composition
 - `campaign.md` §Mission + `results/queue.json` — source of the vision/goal and the task roadmap. The
   handoff references them rather than duplicating the full queue.
-- `LINEAGE.md` and `PROJECT.md` — the cross-campaign index a resumer reads first, and the
-  investigation-wide goal. The handoff points at the active campaign's row rather than duplicating the index.
+- `PROJECT.md` — the investigation-wide goal (§Mission) and the cross-campaign index a resumer reads
+  first (§Lineage; old layout: a separate `LINEAGE.md`). The handoff points at the active campaign's
+  row rather than duplicating the index.
 - `campaign-status` — its latest checkpoint feeds "current state". Run it before a handoff if stale.
 - `correctness-suite`, `verify`, and the metric self-test — the "run this to confirm state" commands.
 - the logbook / JOURNAL — the narrative the handoff distills. The handoff points into them rather than
@@ -109,5 +113,5 @@ direction was abandoned. `record-decision` holds the durable why, the handoff ho
 - [ ] A prioritized, goal-linked NEXT roadmap is present and synced with the JOURNAL NEXT.
 - [ ] The prior handoff was archived, not overwritten.
 - [ ] Resume anchors are current: the newest handoff/JOURNAL covers the latest session; any external digest is advisory and is flagged when its date lags the newest work.
-- [ ] `LINEAGE.md` is named as the first resume anchor, and the tree passes the portability/structure validator (no absolute paths; every campaign indexed).
+- [ ] The lineage (`PROJECT.md` §Lineage, or the old layout's `LINEAGE.md`) is named as the first resume anchor, and the tree passes the portability/structure validator (no absolute paths; every campaign indexed).
 - [ ] Cold-resume test passes: a fresh agent could act from this file and the repo alone.

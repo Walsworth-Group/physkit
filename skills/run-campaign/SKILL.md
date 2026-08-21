@@ -28,8 +28,8 @@ is fresh, the Stop hook stands down for attended sessions like this one; campaig
 is the driver's job.
 
 ## When to invoke
-- Right after `new-campaign` finishes and the setup work (metric, selftest, baseline) is done. This is
-  the handoff's destination.
+- Right after `new-campaign` finishes — it hands off preflight-green (metric implemented, selftest
+  passing, exp 000 queued as the first unit). This is the handoff's destination.
 - "Start / launch / restart the loop", "resume the campaign."
 - Process questions mid-run: "is it still running?", "what is it doing?", "why did it stop?"
 - "Tell the loop to …" — any steering the user wants relayed without killing the run.
@@ -56,7 +56,8 @@ python scripts/run_campaign.py --preflight
 ```
 Every failure line names its fix. Apply the launch-config ones yourself (an unfilled `loop.json` knob, a
 stale `AUTORESEARCH_AGENT_CMD`, an agent CLI not on PATH). Surface substantive ones to the user: an
-unimplemented metric is setup work, so point back at the `new-campaign` handoff list, and a missing
+unimplemented metric or hook means scaffolding stopped short of its preflight-green gate (or the tree
+was imported/hand-built) — point back at the `new-campaign` handoff list, and a missing
 `results/`/`campaign.md`/`roles/worker.md`/`scoreboard.tsv` (the names the preflight itself reports — quote what it
 printed, don't translate it) means you are not in a scaffolded campaign root at all. Fix the
 directory; do not fabricate the tree. `--smoke` adds one real spawn when the user wants the full dress

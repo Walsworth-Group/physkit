@@ -76,14 +76,14 @@ reflexes, the hard gates, the file map), and the reasoning behind those rules is
 ### First: the Project home (every campaign lives in one)
 Every campaign lives inside a **Project**: one folder holding the shared data and the physics,
 conventions, and instrument docs once, referenced by every campaign and never copied. It also holds a
-single `LINEAGE.md` index of what each attempt changed and found, plus the campaigns and ad-hoc
+single lineage index (`PROJECT.md` §Lineage) of what each attempt changed and found, plus the campaigns and ad-hoc
 sessions. There is no bare-campaign mode. Inside a Project a campaign grows into a sibling, a fork,
 or an ad-hoc follow-up session with no reorganization and no path rewrites.
 
 You need not create the Project yourself. `/physkit:new-campaign` finds the Project home or
-scaffolds one (`PROJECT.md` · `LINEAGE.md` · `data/` · `shared/` · `campaigns/` · `sessions/` ·
+scaffolds one (`README.md` · `PROJECT.md` · `CLAUDE.md` · `data/` · `campaigns/` · `sessions/` ·
 `reports/`), then continues into the interview below. It wires the campaign to the shared
-`../../data` and `../../shared/` and appends its `LINEAGE.md` row. A campaign that already exists
+`../../data` and appends its `PROJECT.md` §Lineage row. A campaign that already exists
 outside a Project is lifted into one the same way.
 
 If a change invalidated a campaign's findings, such as a forward-model bug or a corrected metric, use
@@ -124,16 +124,16 @@ blank:
 
 ```
 your-project/
-  PROJECT.md            what we are trying to achieve — the system, the end goal, project-wide invariants
-  PROJECT_ORIENTATION.md  what we know about the system — the ONE background document (a living doc):
-                        governing physics + effect inventory · units/signs/frames · the instrument ·
-                        durable decisions. Its §Standing constraints is delivered into every
-                        spawned worker/planner prompt, every cycle
-  LINEAGE.md            what has been done — every campaign and session, what it changed, what it found
-  DISCOVERIES.md        project-wide verified findings, promoted from campaigns (survive a fork)
+  README.md             the front door — a very short "where to find things" map for someone new
+  PROJECT.md            THE overview (a living doc, edited by tier): §Mission — the goal and
+                        project-wide invariants · §Standing constraints — delivered into every
+                        spawned worker/planner prompt, every cycle · the system, instrument, and
+                        equations depth · §Updates from discoveries — verified findings, each citing
+                        its campaign's verdict · §Durable decisions · §Lineage — every campaign and
+                        session, what it changed, what it found
   CLAUDE.md             the project's always-on rules, auto-loaded anywhere in the tree
   data/                 the canonical data, read-only — or a DATA_PATH.txt pointer to where it lives
-  shared/               promoted frozen artifacts a campaign froze for its siblings
+  scripts/ models/ …    promoted frozen artifacts, in purpose-named dirs created at first promotion
   sessions/             ad-hoc work — one <date>_<slug>/NOTES.md each, no frozen metric
   reports/              the single home for project-level outputs
   campaigns/01_<slug>/  the campaign the interview generates (siblings get 02_, 03_, …)
@@ -177,13 +177,18 @@ your-project/
 
 ## 3. Get ready to run
 
-The generated campaign states the first action, which is always:
+Scaffolding hands off launch-ready: the metric is implemented and `python scripts/metric.py --selftest`
+passes (the scorer is frozen, with sign and convention bugs caught before they can corrupt the
+campaign), the experiment hooks are wired, and experiment 000 — the baseline gate, which also validates
+the data and scoring pipeline — is queued as the loop's first unit. Confirm at any time with:
 
-1. Implement the metric in `scripts/metric.py` and make `python scripts/metric.py --selftest` pass.
-   This freezes the scorer and catches sign and convention bugs before they can corrupt the campaign.
-2. Run experiment 000, the baseline gate, which also validates the data and scoring pipeline.
+```
+python scripts/run_campaign.py --preflight
+```
 
-The loop-running agent will do both as its first steps if you prefer.
+If scaffolding handed over anything it could not finish (data only you can stage, an instrument to
+connect), it is named in the handoff message and in `results/JOURNAL.md` **NEXT** — clear those first;
+preflight names them again until they are fixed.
 
 ## 4. Launch the loop
 

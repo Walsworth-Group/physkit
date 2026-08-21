@@ -181,14 +181,15 @@ This campaign shares a project with siblings attacking the same system. Coupling
 so no campaign silently changes a lever a sibling depends on. The failure mode: a forward-model bug
 scored a decoder on wrong test data. See the project `CLAUDE.md` fork-and-archive rule.
 - What this campaign holds FROZEN that a sibling treats as MUTABLE (and vice versa): {{SIBLING_FROZEN_MUTABLE}}
-  <!-- e.g. "We hold the forward model F FROZEN and promote it to ../../shared/forward_<ver>/; the decoder
+  <!-- e.g. "We hold the forward model F FROZEN and promote it to ../../models/forward_<ver>/; the decoder
        campaign treats F as fixed. The decoder treats the decoder architecture as MUTABLE, which is
        out-of-scope here." -->
-- Consumed artifacts come from `../../shared/`, never a sibling's working folder: {{CONSUMED_ARTIFACTS}}
+- Consumed artifacts come from the promoted project-level dirs, never a sibling's working folder: {{CONSUMED_ARTIFACTS}}
   <!-- the promoted, versioned artifacts this campaign reads (a frozen forward model, a generated training set),
-       each at ../../shared/<artifact>_<ver>/. A sibling's results/ is off-limits. -->
+       each at ../../<dir>/<artifact>_<ver>/ with a PROJECT.md §Lineage promotion line. A sibling's
+       results/ is off-limits. -->
 - Changing a lever a sibling froze is a cross-campaign change: coordinate it, re-promote the artifact
-  under a new version tag, and record it in `../../LINEAGE.md`. Do not silently repurpose a frozen input.
+  under a new version tag, and record it in `../../PROJECT.md` §Lineage. Do not silently repurpose a frozen input.
 ]]
 
 [[OPTIONAL — hardware-in-the-loop campaign (the loop drives real instruments):
@@ -229,7 +230,7 @@ scored a decoder on wrong test data. See the project `CLAUDE.md` fork-and-archiv
   physically/theoretically motivated, and generalizes. Near-universal: apply by default.
 - Use precise notation and units everywhere. Name the quantity, its units, and its scale.
   {{UNITS_EXAMPLE_LINE}}. Ambiguous notation is how sign/convention bugs survive (see
-  `../../PROJECT_ORIENTATION.md` §Standing constraints).
+  `../../PROJECT.md` §Standing constraints).
 
 ## Decision / promotion
 - **PRIMARY** (cross-experiment ranking, "current best"): `{{PRIMARY_METRIC}}`. {{PRIMARY_REPORT_RULE}}
@@ -280,7 +281,7 @@ on every run. In supervised mode the driver runs verification **per block**: aft
 unit — or the last unit of a batch of related units sharing a queue `block` id — it spawns a
 verification agent, and the block is not cleared until every verdict artifact exists
 (`configs/loop.json` `campaign.verification`; turning this down requires a recorded reason). Bounds live in §The ONE metric; the physics inventory and domain of validity in
-`../../PROJECT_ORIENTATION.md` §Standing constraints. For a simulation-heavy campaign the V&V&UQ method
+`../../PROJECT.md` §Standing constraints. For a simulation-heavy campaign the V&V&UQ method
 is the physkit plugin's `docs/SIMULATION_VALIDATION.md`. What belongs here is only what generic doctrine
 cannot supply — the checks specific to this campaign. Append new ones as the work uncovers them; when a
 bug is found, add the check that would have caught it and promote it to a regression gate.
@@ -326,7 +327,7 @@ obvious). The source-authority ledger from setup seeds the first entries — one
 resolved from a source, with its value, the artifact it is PINNED to, its provenance tag
 (PINNED / REPORTED / INFERRED / RECALLED, or REASONED), and the lower-authority sources quarantined and
 why. Append-only: never rewrite a closed entry; supersede it and link the two. A decision that outlives
-this campaign is promoted to `../../PROJECT_ORIENTATION.md` §Durable decisions.
+this campaign is promoted to `../../PROJECT.md` §Durable decisions.
 
 <!-- ### ED-001 — <one-line title>  (YYYY-MM-DD · active · <method / model / convention / tooling>)
 **Decision.** …

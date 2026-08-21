@@ -179,7 +179,7 @@ filled by that skill and documented by it, not here.
 | `{{LOAD_PIPELINE}}` | How a config loads the data. |
 | `{{DISTRIBUTION_NOTE}}` | Which knobs are data-choices vs method-levers. |
 
-### Conventions (fill `PROJECT_ORIENTATION.md` §Standing constraints)
+### Conventions (fill `PROJECT.md` §Standing constraints)
 | Placeholder | Meaning |
 |---|---|
 | `{{UNITS_TABLE}}` | Quantity · symbol · unit · plausible range table. |
@@ -205,17 +205,18 @@ filled by that skill and documented by it, not here.
 | `{{TOPIC}}` | A literature topic heading. |
 | `{{NEXT_SEQUENCE}}` | The recommended next-experiment sequence. |
 
-### Project & shared-artifact references
-The project's ONE background document, `PROJECT_ORIENTATION.md`, lives at a fixed place (the project
-root), so the campaign templates carry its path as a literal — `../../PROJECT_ORIENTATION.md` from the
-campaign root, `../../../PROJECT_ORIENTATION.md` one directory down (`roles/`, `results/`, `docs/`) —
+### Project & promoted-artifact references
+The project overview, `PROJECT.md`, lives at a fixed place (the project
+root), so the campaign templates carry its path as a literal — `../../PROJECT.md` from the
+campaign root, `../../../PROJECT.md` one directory down (`roles/`, `results/`, `docs/`) —
 and there is no placeholder to fill. Never replace a literal with a campaign-local copy (the validator
-rejects one). `shared/` holds only promoted frozen artifacts:
+rejects one). Promoted frozen artifacts live in purpose-named project-level dirs (`scripts/`,
+`models/`, …), each with a `PROJECT.md` §Lineage promotion line (ADR-0015):
 
 | Placeholder | Meaning | Value (by file location) |
 |---|---|---|
 | `{{SIBLING_FROZEN_MUTABLE}}` | (coupled sibling campaigns only — else delete the block) What this campaign FREEZES that a sibling treats as MUTABLE, and vice versa. | — |
-| `{{CONSUMED_ARTIFACTS}}` | (coupled sibling campaigns only) The promoted `../../shared/<artifact>_<ver>/` artifacts this campaign reads, never a sibling's working folder. | — |
+| `{{CONSUMED_ARTIFACTS}}` | (coupled sibling campaigns only) The promoted `../../<dir>/<artifact>_<ver>/` artifacts this campaign reads, never a sibling's working folder. | — |
 
 ### Project-tree placeholders (`templates/project/`)
 Filled by `new-project` when it creates the home. A one-off project fills these from the campaign
@@ -223,15 +224,14 @@ interview; they are not a second interview.
 
 | Placeholder | Meaning |
 |---|---|
-| `{{PROJECT_TITLE}}` | The project/investigation name (the `PROJECT.md`, `LINEAGE.md`, and project `CLAUDE.md` H1). |
+| `{{PROJECT_TITLE}}` | The project/investigation name (the `README.md`, `PROJECT.md`, and project `CLAUDE.md` H1). |
 | `{{PHYSICAL_SYSTEM}}` | One line naming the physical system under investigation. |
 | `{{GOAL_STATEMENT}}` / `{{DECISION_SERVED}}` / `{{DONE_CRITERIA}}` | The end goal, the decision it serves, and what "done" looks like. `{{GOAL_STATEMENT}}` fills `PROJECT.md`; the other two also fill the campaign's `campaign.md` §Mission (the campaign-scoped answers). |
 | `{{SYSTEM_INVARIANTS}}` | Project-wide invariants every campaign inherits (drawn from the topic-4 physics interview). |
 | `{{DATA_LOCATION}}` / `{{DATA_PATH}}` | The canonical-data decision: a read-only copy at `data/`, or the absolute path recorded in `data/DATA_PATH.txt`. This pointer is the project's only absolute path. |
-| `{{PROMOTED_ARTIFACTS}}` | Frozen artifacts promoted to `shared/` — `— (none yet)` in a fresh project. |
-| `{{CAMPAIGN_1_NAME}}` / `{{CAMPAIGN_1_DATE}}` / `{{CAMPAIGN_1_APPROACH}}` / `{{CAMPAIGN_1_METRIC}}` / `{{CAMPAIGN_1_RESULT}}` / `{{CAMPAIGN_1_DISCOVERIES}}` / `{{CAMPAIGN_1_KBKEY}}` | The opening `LINEAGE.md` Campaigns row for the first campaign (`_RESULT` is `pending` until exp 000; `_DISCOVERIES` and `_KBKEY` are `—`). |
-| `{{TARGET_OF_STUDY}}` | `PROJECT_ORIENTATION.md` §The system under study: what is under investigation — the sample, material, plasma, star, molecule, or device — its identity and structure, and the physical quantities the project aims to determine or optimize. The rig that probes it is §The instrument, not this. |
-| `{{INSTRUMENT_DESCRIPTION}}` | `PROJECT_ORIENTATION.md` §The instrument: what measures what (e.g. NV widefield magnetometer · telescope + detector · spectrometer). |
+| `{{CAMPAIGN_1_NAME}}` / `{{CAMPAIGN_1_DATE}}` / `{{CAMPAIGN_1_APPROACH}}` / `{{CAMPAIGN_1_METRIC}}` / `{{CAMPAIGN_1_RESULT}}` / `{{CAMPAIGN_1_DISCOVERIES}}` / `{{CAMPAIGN_1_KBKEY}}` | The opening `PROJECT.md` §Lineage Campaigns row for the first campaign (`_RESULT` is `pending` until exp 000; `_DISCOVERIES` and `_KBKEY` are `—`). |
+| `{{TARGET_OF_STUDY}}` | `PROJECT.md` §The system under study: what is under investigation — the sample, material, plasma, star, molecule, or device — its identity and structure, and the physical quantities the project aims to determine or optimize. The rig that probes it is §The instrument, not this. |
+| `{{INSTRUMENT_DESCRIPTION}}` | `PROJECT.md` §The instrument: what measures what (e.g. NV widefield magnetometer · telescope + detector · spectrometer). |
 | `{{INSTR_PARAM_1}}` / `{{INSTR_VALUE_1}}` / `{{INSTR_UNITS_1}}` / `{{INSTR_SOURCE_1}}` | One row of §The instrument's parameter table: name, value, units, and how the value is known. Provenance is part of the row, not optional. Extend with further rows as the rig is characterized. |
 | `{{MEASUREMENT_MODEL}}` | §The instrument: how instrument readings map to physical quantities — the forward measurement chain, so raw data is never mistaken for the quantity of interest. |
 | `{{INSTRUMENT_ARTIFACTS}}` | §The instrument: drifts, backgrounds, and calibration caveats — the recurring gotchas to guard against. Pairs with `{{KNOWN_GOTCHAS}}` in §Standing constraints. |
@@ -243,14 +243,14 @@ no frozen metric driving a loop. With such a metric it is a campaign, not a sess
 
 | Placeholder | Meaning |
 |---|---|
-| `{{SESSION_DATE}}` / `{{SESSION_SLUG}}` | The session's date and short name. They also form its directory, `sessions/<date>_<slug>/`, and its `LINEAGE.md` Sessions row, so the two must agree. |
+| `{{SESSION_DATE}}` / `{{SESSION_SLUG}}` | The session's date and short name. They also form its directory, `sessions/<date>_<slug>/`, and its `PROJECT.md` §Lineage Sessions row, so the two must agree. |
 | `{{SESSION_GOAL}}` | The question the session set out to answer, or the thing to debug or try. |
 | `{{SESSION_WORK}}` | The concrete steps: what was run, inspected, changed. Enough to reconstruct. |
 | `{{SESSION_FINDING}}` | One finding from the session. |
 | `{{FINDING_TIER}}` | The rigor tier of that finding, stated accurately (e.g. `exploratory (unverified)` · `verify-CONFIRMED` · `PROVISIONAL`). A session finding is not a verified project DISCOVERY unless it passed `verify`; the tag is what stops an ad-hoc conclusion being trusted like a campaign result. |
 | `{{SESSION_ARTIFACTS}}` | Files, plots, and scripts produced, with paths inside this session folder. |
 
-### Goal & verification (campaign.md §Mission / §Verification · the project's PROJECT_ORIENTATION.md)
+### Goal & verification (campaign.md §Mission / §Verification · the project overview PROJECT.md)
 The campaign's orienting answers and its own verification checks, filled directly into the signed-off
 contract. There is no separate planning doc: `campaign.md` is drafted, user-edited where preferred
 (draft-document mode), and frozen at sign-off.
@@ -260,9 +260,9 @@ contract. There is no separate planning doc: `campaign.md` is drafted, user-edit
 | `{{OUT_OF_SCOPE}}` | `campaign.md` §FROZEN / out of scope: what is explicitly out of scope / not claimed. |
 | `{{DECISION_SERVED}}` | `campaign.md` §Mission: the decision this campaign's result serves. |
 | `{{DONE_CRITERIA}}` | `campaign.md` §Mission: what "done" looks like for this campaign. |
-| `{{EFFECT_1}}`, `{{EFFECT_2}}`, `{{EFFECT_3}}`, `{{EFFECT_4}}`, `{{EFFECT_5}}` | PROJECT_ORIENTATION §Standing constraints: rows of the physical-effect inventory (extend/trim to fit). |
-| `{{APRIORI_BOUND}}` | PROJECT_ORIENTATION §Standing constraints: the a-priori order-of-magnitude bound on the answer (see alias note). |
-| `{{DOMAIN_ASSUMPTIONS}}` | PROJECT_ORIENTATION §Standing constraints: assumptions that define the model's domain of applicability. |
+| `{{EFFECT_1}}`, `{{EFFECT_2}}`, `{{EFFECT_3}}`, `{{EFFECT_4}}`, `{{EFFECT_5}}` | PROJECT.md §Standing constraints: rows of the physical-effect inventory (extend/trim to fit). |
+| `{{APRIORI_BOUND}}` | PROJECT.md §Standing constraints: the a-priori order-of-magnitude bound on the answer (see alias note). |
+| `{{DOMAIN_ASSUMPTIONS}}` | PROJECT.md §Standing constraints: assumptions that define the model's domain of applicability. |
 | `{{ANALYTIC_LIMITS}}` | campaign.md §Verification: closed-form / limiting cases the result must match. |
 | `{{INVARIANTS}}` | campaign.md §Verification: conservation / symmetry invariants to check. |
 | `{{CONVERGENCE_PLAN}}` | campaign.md §Verification: how numerical convergence will be demonstrated. |
@@ -313,10 +313,10 @@ in wall-clock, whichever trips first.
 | `{{VERIFY_REPRO_THRESHOLD_S}}` | The verification tier boundary: unit cost at/below → full re-execution in verify; above → judgment + cheapest discriminating spot-check. |
 
 > **Alias note (near-synonyms across docs).** A few tokens name the same quantity in different docs; fill
-> them consistently. The a-priori bound appears as `{{APRIORI_BOUND}}` (PROJECT_ORIENTATION),
+> them consistently. The a-priori bound appears as `{{APRIORI_BOUND}}` (PROJECT.md §Standing constraints),
 > `{{APRIORI_BOUND_NOTES}}` (campaign.md), and `{{METRIC_PLAUSIBLE_RANGE}}` (campaign.md §The ONE metric).
 > The metric's hard bounds appear as `{{METRIC_HARD_BOUNDS}}` (campaign.md) and `{{PLAUSIBILITY_BOUNDS}}`
 > (the executable form of those same bounds, in the FROZEN scorer): fill both from one answer, and if you
 > change one, change both. The domain gotchas appear as `{{KNOWN_ARTIFACTS}}` (campaign.md §Verification —
-> what a *check* must guard against) and `{{KNOWN_GOTCHAS}}` (PROJECT_ORIENTATION §Standing constraints —
+> what a *check* must guard against) and `{{KNOWN_GOTCHAS}}` (PROJECT.md §Standing constraints —
 > the project-wide symptom → check catalog). The split is intentional; keep the paired values in sync.

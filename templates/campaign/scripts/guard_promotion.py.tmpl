@@ -100,7 +100,14 @@ def _env_campaign_root() -> Path | None:
 
 def _is_project_ledger(fp: Path | None) -> bool:
     """True for the PROJECT-level `DISCOVERIES*.md` - basename-matched, parent must BE a project root
-    (PROJECT.md + LINEAGE.md beside the written file).
+    (PROJECT.md beside the written file; LINEAGE.md is NOT required, because the consolidated layout
+    absorbed it into PROJECT.md - ADR-0015).
+
+    New projects no longer scaffold a DISCOVERIES ledger at all (retired by ADR-0015: findings live
+    in the campaign that produced them, pointed at from PROJECT.md §Lineage / §Updates from
+    discoveries). This surface stays so a LEGACY or imported ledger remains gated rather than
+    silently fail-open - and detection must therefore not key on LINEAGE.md, which a consolidated
+    project holding an imported old ledger will not have.
 
     The campaign-level results*/DISCOVERIES.md surface this hook once guarded no longer exists: settled
     findings live in the journal's Findings section, and the file dissolved (V6). What remains
@@ -114,7 +121,7 @@ def _is_project_ledger(fp: Path | None) -> bool:
         return False
     parent = fp.parent
     try:
-        return (parent / "PROJECT.md").is_file() and (parent / "LINEAGE.md").is_file()
+        return (parent / "PROJECT.md").is_file()
     except OSError:
         return False
 

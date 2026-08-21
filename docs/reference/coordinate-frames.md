@@ -95,5 +95,5 @@ to prevent.
 `frame-problem` declares frames in the physics inventory, up front. `verify` runs the checklist above
 before a cross-frame result is trusted. `dimensional-analysis` is the first cheap check on units and
 frames, and shares the requirement that an unstated quantity is not checkable. A campaign's
-`PROJECT_ORIENTATION.md` §Standing constraints pins the project's frame names, handedness, and active/passive plus degrees/radians
+The project overview's (`PROJECT.md`) §Standing constraints pins the project's frame names, handedness, and active/passive plus degrees/radians
 choices for the duration.

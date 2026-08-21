@@ -61,7 +61,7 @@ WHILE not interrupted:
                     that entry's narrative (Analysis / Verification / NEXT) + a one-line note in the
                     results/JOURNAL.md steering view; graduate settled findings to the JOURNAL's
                     Findings section only after independent verification; update
-                    ../../../PROJECT_ORIENTATION.md if a finding changes the physics.
+                    ../../../PROJECT.md if a finding changes the physics.
  10. CONSOLIDATE  — if JOURNAL > ~150 lines, trim to recent + open threads (`/physkit:campaign-status` step 3).
  11. CHECKPOINT   — if exp_id % {{CHECKPOINT_EVERY}} == 0, run `/physkit:campaign-status`: stop
                      feature-chasing and reorient. Is the campaign still healthy, and still pointed at
@@ -252,9 +252,9 @@ backing a Findings entry, with a blank `verified` is a hygiene failure that `cam
 The PreToolUse hook (`scripts/guard_promotion.py`) guards the mechanical promotion surfaces,
 **subject-matched**: a write to `configs/RECOMMENDED.json`, or a scoreboard edit that introduces a
 `CONFIRMED` or `NEW BEST` token, needs a CONFIRMED verdict with a named refuter **for the experiment
-being promoted** — no other experiment's verdict counts; promoting a system-level finding to the
-project ledger (`../../../DISCOVERIES.md`) must cite the verdict artifact by path and is
-fail-closed. The journal's Findings section is not hook-gated — it is working memory — but the same
+being promoted** — no other experiment's verdict counts; recording a system-level finding in the
+project overview (`../../../PROJECT.md` §Updates from discoveries) must cite the verdict artifact by
+path (a legacy project's `../../../DISCOVERIES.md` write stays hook-gated and fail-closed). The journal's Findings section is not hook-gated — it is working memory — but the same
 rule binds it: every entry cites its verdict, an INCONCLUSIVE kill never lands, and
 `campaign-status` audits uncited entries. Run the verify; do not work around the hook.
 
@@ -267,8 +267,8 @@ experiments confirm the finding on `{{PRIMARY_METRIC}}` (guardrail noted) and `{
 returned CONFIRMED; cite `results/verdicts/<id>.json` in the entry — hard gate #1 in `CLAUDE.md`.
 Full narratives are not copied here; trimming §Recent experiments loses nothing, and §Findings is
 never trimmed. When a finding changes the physical understanding, also update
-`../../../PROJECT_ORIENTATION.md` (the effect, its equations, references — §Updates from
-discoveries, and the §Standing constraints inventory).
+`../../../PROJECT.md` (the effect, its equations, references — §Updates from
+discoveries, citing the verdict; and the §Standing constraints inventory, per its guarded tier).
 
 ### `results/logbook.md` (append-only — the full narrative record)
 Every experiment's full entry, verbatim, forever. The runner auto-appends the facts of each entry
@@ -390,9 +390,10 @@ and command line, so re-running the snapshot reproduces the artifact bit-for-bit
 Never delete data, figures, or snapshots without confirmation.
 
 ## Where to look
-- `../../../PROJECT_ORIENTATION.md` — the project background. Its §Standing constraints is already in
+- `../../../PROJECT.md` — the project overview. Its §Standing constraints is already in
   your prompt; below it are the equations and methods, the instrument characterization, the predictive
-  framework, and the durable decisions. Open it when a result needs physics, not just a number.
+  framework, the durable decisions, and §Lineage — what sibling campaigns tried and found. Open it
+  when a result needs physics, not just a number.
 - `results/logbook.md` — per-experiment narrative detail; grep or read a slice for one old experiment.
 - `results/scoreboard.tsv` — the numeric series, one row per experiment.
 - `results/checks_<NN>.json` — what the runner mechanically checked for one experiment, and what it

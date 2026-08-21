@@ -1,6 +1,6 @@
 ---
 name: new-campaign
-description: Interview a researcher and scaffold a new autonomous-research ("autoresearch") campaign in the physical sciences. Use when the user wants to START or SET UP a new campaign, optimization loop, fitting/decoder campaign, forward-model-improvement campaign, generative-design search, ML-training campaign, or hardware-in-the-loop tuning loop — phrasings like "start a new campaign", "set up an autoresearch loop", "scaffold a campaign to optimize X", "I want to build a loop that improves Y", or "create the campaign.md / metric / scoreboard for a new project". Conducts a structured interview (goal, metric, physics, data, levers, constraints, compute, time), co-designs the FROZEN metric, determines which archetype(s) apply, then generates a complete ready-to-run campaign tree (campaign.md, role files, configs, results ledger, and light code stubs) from the kit templates and validates that nothing is left unfilled. NOT for running an existing loop, verifying a result (verify), or writing the end-of-campaign report (final-report).
+description: Interview a researcher and scaffold a new autonomous-research ("autoresearch") campaign in the physical sciences. Use when the user wants to START or SET UP a new campaign, optimization loop, fitting/decoder campaign, forward-model-improvement campaign, generative-design search, ML-training campaign, or hardware-in-the-loop tuning loop — phrasings like "start a new campaign", "set up an autoresearch loop", "scaffold a campaign to optimize X", "I want to build a loop that improves Y", or "create the campaign.md / metric / scoreboard for a new project". Conducts a structured interview (goal, metric, physics, data, levers, constraints, compute, time), co-designs the FROZEN metric, determines which archetype(s) apply, then generates a complete campaign tree (campaign.md, role files, configs, results ledger) from the kit templates, implements the FROZEN scorer and the experiment hooks, and hands off only when the tree passes both the template validator and the driver's own --preflight — scaffold-complete means launch-ready. NOT for running an existing loop, verifying a result (verify), or writing the end-of-campaign report (final-report).
 ---
 
 # new-campaign — interview, then scaffold a campaign
@@ -81,24 +81,29 @@ Read these so your questions and fills are grounded (paths are under the plugin 
 ## Step 0.1 — establish the project home (every campaign lives in one)
 **Every campaign lives inside a project**: the home for one physical system investigated over many
 campaigns and ad-hoc sessions, so shared data and docs live once and are referenced by relative path. This
-is unconditional; there is no bare-campaign mode. A one-off costs about five near-empty files for it, since
-the physics, conventions, and instrument docs move into `shared/` rather than multiplying. In exchange it
+is unconditional; there is no bare-campaign mode. A one-off costs three near-empty documents for it, since
+the physics, conventions, and instrument knowledge lives once in the project overview rather than
+multiplying. In exchange it
 grows into a sibling campaign, a fork, or a follow-up session with no reorganization and no path rewrites.
-- **An ancestor holds `PROJECT.md` + `LINEAGE.md`**: use that project. The campaign lives at
+- **An ancestor holds `PROJECT.md`**: use that project (the consolidated layout carries the lineage in
+  `PROJECT.md` §Lineage; a pre-consolidation project pairs it with `LINEAGE.md` — work with whichever
+  the home has). The campaign lives at
   `<project>/campaigns/<NN>_<slug>/`; pick `<NN>` as the next zero-padded index after the last
-  `LINEAGE.md` row.
+  lineage row.
 - **Otherwise, run `new-project` first** to create the home, then come back here. **Carry everything you
   have already gathered**: `new-project` fills its tree from the same answers, so never re-interview. When
   `new-project` invoked you, the flow is one-way: do not call back into it. Tell the user the home is being
   created; do not ask permission for it.
 - **A pre-existing bare campaign** (imported, hand-built, or scaffolded before this default) is lifted into
   a project rather than left as it is: create the home around it, move it to `campaigns/01_<slug>/`, hoist
-  its physics, conventions, and instrument docs into `shared/`, and append its `LINEAGE.md` row.
+  its physics, conventions, and instrument docs into the project overview, and append its lineage row.
 
 Consequences, unconditional, with no campaign-local variant:
-1. **Physics/conventions/instrument** are referenced from `../../shared/`, never copied (design §4.1).
+1. **Physics/conventions/instrument** are referenced from the project overview (`../../PROJECT.md`;
+   old layout: `../../PROJECT_ORIENTATION.md`), never copied (design §4.1).
 2. **Data** is `../../data`.
-3. The campaign appends a `LINEAGE.md` row and resolves `campaign.md` §Relationship to sibling campaigns:
+3. The campaign appends its lineage row (`PROJECT.md` §Lineage, or the old layout's `LINEAGE.md`) and
+   resolves `campaign.md` §Relationship to sibling campaigns:
    keep and fill if coupled to a sibling, delete if independent. Coupling decides that one, not project
    membership.
 4. The campaign `CLAUDE.md` **project-context** block is always kept.
@@ -233,12 +238,12 @@ control, or training or fitting purely on real experimental data). If there is o
      (degeneracies, symmetries, regimes — for instance that magnetization-from-field is non-unique, or how
      an ASI traverses a hysteresis loop). Source this from user information, provided literature, or, if
      enabled, a targeted search.
-   - **Conventions**: units, signs, and ordering (→ `../../PROJECT_ORIENTATION.md` §Standing
+   - **Conventions**: units, signs, and ordering (→ `../../PROJECT.md` §Standing
      constraints), and known artifacts or recurring bugs to guard against. Capture the simulation methods
      and approximations here too; the always-determine simulation check above decides whether the V&V
      plan in Step 3 applies.
 
-   All of this background lives in the project's ONE document, **`../../PROJECT_ORIENTATION.md`** —
+   All of this background lives in the project overview, **`../../PROJECT.md`** —
    the governing physics (with the target-of-study section), the conventions, the instrument, and the
    durable decisions, one section each. Reference it; never copy any part of it into the campaign.
    `new-project` seeded it, so fill any thin slot here, and if this campaign surfaced new physics or
@@ -251,9 +256,10 @@ control, or training or fitting purely on real experimental data). If there is o
    artifact — and the **predictive framework**: the mechanism or model the loop predicts with, at a
    complexity matched to the problem, plus the discriminating thought-experiments it licenses.
 
-   The campaign templates already link the background doc by its literal relative path
-   (`../../PROJECT_ORIENTATION.md`; one directory deeper, `../../../…`) — there is no path placeholder
-   to fill. Record anything you had to ask, so the next agent
+   The campaign templates already link the overview by its literal relative path
+   (`../../PROJECT.md`; one directory deeper, `../../../…`) — there is no path placeholder
+   to fill. (In a pre-consolidation project the driver's fallback still delivers the constraints from
+   `../../PROJECT_ORIENTATION.md`, but the prose links point at the current name.) Record anything you had to ask, so the next agent
    does not have to. If a `frame-problem` artifact exists, confirm its inventory rather than rebuilding it.
 4b. **Verification — capture the application-specific checks now.** Decide how a result will be known to be
    right before the loop runs: the analytic limits, invariants, convergence, independent-method parity, and
@@ -329,7 +335,7 @@ control, or training or fitting purely on real experimental data). If there is o
 11. **Internet / literature level (always ask; 3 options).** This sets ongoing literature use during the
     loop: **none** (no ongoing searches; remove the literature-search rule), **only when needed** (search
     when stuck, the default), or **extensive** (proactively search at setup to seed
-    `../../PROJECT_ORIENTATION.md`/`LITERATURE.md`, and periodically thereafter, not only when stuck). Independently, if the
+    `../../PROJECT.md`/`LITERATURE.md`, and periodically thereafter, not only when stuck). Independently, if the
     user provided any starting literature, summarize it in `LITERATURE.md` and keep the file, even when
     ongoing search is *none*. For needed and extensive, prefer arXiv and convert PDFs efficiently
     (`docs/PRINCIPLES.md` §2).
@@ -350,7 +356,7 @@ control, or training or fitting purely on real experimental data). If there is o
     (2) design a measurement protocol the user runs to characterize their real magnets' imperfections;
     (3) optimize the arrangement of the imperfect magnets, building on (1) and the data from (2).
     Each stage is a **sibling campaign**: its own `campaigns/<NN>_<slug>/` with its own `campaign.md`,
-    ledger, and `LINEAGE.md` row (Step 3, *Sibling campaigns & multi-stage*). Scaffold stage 1 now; confirm
+    ledger, and lineage row (Step 3, *Sibling campaigns & multi-stage*). Scaffold stage 1 now; confirm
     the staging with the user and record the later stages as planned successors rather than building them
     up front.
 
@@ -388,11 +394,12 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   fixed-data campaign, delete `campaign.md` §Dataset / inputs entirely, leaving in its place the READ-ONLY
   note its `[[OPTIONAL]]` marker quotes.
 - **Setup state is mechanical, not a ledger.** `README.md` §Setup status ships as a static pointer:
-  `--preflight` is the authoritative list of what is unbuilt (it refuses to launch and names each stub
-  with its fix), and the downstream gates enforce the rest — never author a to-do table restating what
-  the code computes live. Campaign-specific setup tasks that preflight cannot know about — a solver to
-  wire in, a calibration to pin, a file to stage — go in as the opening `results/JOURNAL.md` **NEXT**
-  items, before the user's ideas to try, so the loop's working list starts with them.
+  `--preflight` is the authoritative answer to "is this runnable?" (it refuses to launch and names each
+  missing item with its fix — and Step 4 requires it green before handoff), and the downstream gates
+  enforce the rest — never author a to-do table restating what the code computes live. Setup tasks that
+  preflight cannot know about and this session cannot finish — a calibration to pin, a file only the
+  user can stage — go in as the opening `results/JOURNAL.md` **NEXT** items, before the user's ideas to
+  try, so the loop's working list starts with them.
 - **Resolve every `[PROPOSED]` tag:** present each speculative discipline to the user to keep or cut; drop
   the tag on kept ones, and delete cut ones.
 - **Strip the `.tmpl` suffix** on write (`campaign.md.tmpl` → `campaign.md`, and so on).
@@ -423,8 +430,9 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   PreToolUse hook that denies an unverified promotion write — a `configs/RECOMMENDED.json` update or a
   scoreboard edit introducing a `CONFIRMED`/`NEW BEST` token without a recent promotable verdict
   artifact (`results/verdicts/<id>.json`, written by `verify`; CONFIRMED with a named refuter; an
-  INCONCLUSIVE kill is denied), and a project-ledger (`../../DISCOVERIES.md`) entry that does not cite
-  its source verdict by path (fail-closed). Fill **`{{PYTHON_CMD}}`** with the python
+  INCONCLUSIVE kill is denied), and — in a legacy project that still carries one — a project-ledger
+  (`../../DISCOVERIES.md`) entry that does not cite its source verdict by path (fail-closed; new
+  projects have no such ledger, per ADR-0015). Fill **`{{PYTHON_CMD}}`** with the python
   invocation detected in Step 0.5 (`py -3` on Windows, `python3` on macOS/Linux) so the hook command runs
   on this machine.
 
@@ -450,10 +458,10 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   both gate directories present, and `loop.json` and `queue.json` parsing. A tree without them runs with no
   gates at all, and a tree assembled by hand rather than by this skill is the case where that happens;
   `campaign-status` asserts all of it.
-- **Code stubs.** Fill `scripts/metric.py` (the FROZEN scorer and `--selftest`) and
-  `scripts/run_campaign.py` (the runner). These are intentionally light: leave the TODO hooks for the agent
-  to implement the physics in-loop, but wire the names and metric so `--selftest` is the gate for exp 000.
-  Leave **`scripts/frozen_core.py`**'s `CORE_FILES_DEFAULT` alone, since editing it per campaign forks the
+- **Campaign code — filled here, implemented in Step 3.5.** Fill `scripts/metric.py` (the FROZEN scorer
+  and `--selftest`) and `scripts/run_campaign.py` (the runner) with the campaign's names, paths, and
+  metric wiring during the template fill; the real implementations — the scorer's math and the three
+  experiment hooks — are Step 3.5's job, in this session, never deferred to the loop. Leave **`scripts/frozen_core.py`**'s `CORE_FILES_DEFAULT` alone, since editing it per campaign forks the
   one authority; if this campaign's frozen physics spans more files, such as a shared simulator or a
   forward model from topic 6, declare them in `configs/frozen_core.json` instead.
   **`tests/correctness_checks.py`**, the **correctness suite**, ships as skip-stubs. From
@@ -467,7 +475,7 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   from `frame-problem` goes into `results/queue.json` as the opening units (with rationales) and the
   JOURNAL **NEXT** pointer — the queue is the task hierarchy; there is no separate orientation file to
   keep in sync with it. When the field has them, fill the project doc's optional
-  **"Where this sits in the field"** section (`../../PROJECT_ORIENTATION.md`): the gap or novelty,
+  **"Where this sits in the field"** section (`../../PROJECT.md`): the gap or novelty,
   adjacent work, the threshold ladder and named precedents for the key quantity, and what not to claim.
   Ask the user or draw on the topic-4 literature; skip it if the quantity has no canonical thresholds,
   and never invent them. Fill
@@ -477,26 +485,28 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   it is PINNED to, the provenance tag, and the lower-authority sources quarantined and why. An empty section
   is correct only if there was a single source.
 - **Reference docs (see topic 4).** The physics, conventions, instrument, and durable-decision background
-  is the project's `../../PROJECT_ORIENTATION.md`, so the campaign tree carries no copy of it, and the
+  is the project overview `../../PROJECT.md`, so the campaign tree carries no copy of it, and the
   templates already link it by literal relative path. Update it in place if this campaign added physics
   or conventions — run-constraining facts into §Standing constraints, depth below. Record the detected compute and the chosen
   environment and setup commands in the README (Environment / Quick-start), note available compute in
   `campaign.md` §Caps, and register any new docs in the README.
 - **Project wiring — always, from Step 0.1:**
   1. Reference the canonical data as **`../../data`**; never copy it into the campaign.
-  2. **Append a row to `../../LINEAGE.md`** (Campaigns table): index `<NN>`, campaign name, date, the
+  2. **Append the lineage row** — `../../PROJECT.md` §Lineage Campaigns table (old layout:
+     `../../LINEAGE.md`): index `<NN>`, campaign name, date, the
      `approach` tag, the FROZEN primary metric, what changed from the predecessor (or "— (first)"),
      headline result (leave `pending` until exp 000), verified discoveries (none yet), `@KB-key` (—), and
      status `active`.
   3. Resolve `campaign.md` §**Relationship to sibling campaigns**: keep it and fill
      `{{SIBLING_FROZEN_MUTABLE}}` and `{{CONSUMED_ARTIFACTS}}` if this campaign is coupled to a sibling
-     (what it FREEZES versus MUTATES; which `../../shared/<artifact>` it consumes); delete it if
+     (what it FREEZES versus MUTATES; which promoted `../../<dir>/<artifact>` it consumes); delete it if
      independent. Coupling decides this block, not project membership, so the first campaign in a fresh
      project deletes it.
   4. **Keep** the campaign `CLAUDE.md` project-context block.
   5. A verified finding that is a fact about the **system**, rather than a config that scored well, is
-     later promoted from the journal's Findings section to the project `../../DISCOVERIES.md`, which
-     survives fork-and-archive. Note this in the handoff so the loop agent knows the promotion path.
+     later recorded in `../../PROJECT.md` §Updates from discoveries, citing its verdict artifact by
+     path — the pointer that survives fork-and-archive (ADR-0015; a legacy project's
+     `../../DISCOVERIES.md` stays hook-gated). Note this in the handoff so the loop agent knows the path.
 - **Literature (per the topic-11 level).** The ongoing-search rule and the `LITERATURE.md` file are decided
   separately:
   - *Ongoing-search rule in `roles/planner.md` §Literature search rule:* for **none**, resolve the
@@ -513,7 +523,7 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   **verify-before-validate gate**, under which the simulator must pass code and solution verification
   before any simulator-based result is trusted, plus the **sim-to-experiment guardrail** in `campaign.md`
   §Mind the simulation-to-experiment gap. Record the simulator's assumptions, domain of validity, and V&V
-  status in `../../PROJECT_ORIENTATION.md` (§Equations and methods; domain of validity is a standing
+  status in `../../PROJECT.md` (§Equations and methods; domain of validity is a standing
   constraint), and keep *calibration is not validation* by holding out independent
   validation data. Register it in the README.
 - **Seed the user's directions.** Put the user's ideas to try (topic 12) as the opening JOURNAL **NEXT**
@@ -521,8 +531,9 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   list.
 - **Sibling campaigns & multi-stage (project model, §5).** A second track, approach, or stage is always a
   **sibling campaign**: its own `campaigns/<NN>_<slug>/` with its own `campaign.md` and ledger, coupled via
-  `campaign.md` §Relationship to sibling campaigns and shared promoted artifacts (`../../shared/`).
-  Scaffold each by re-running this skill in the project, with a new `LINEAGE.md` row per sibling. The
+  `campaign.md` §Relationship to sibling campaigns and the promoted project-level artifacts
+  (`../../<dir>/<artifact>_<ver>`, each with a §Lineage promotion line).
+  Scaffold each by re-running this skill in the project, with a new lineage row per sibling. The
   retired `_<NAME>`-suffix-in-one-tree form is not an option: that was the bare-campaign fallback, and
   every campaign now has a project home.
 - Seed `results/scoreboard.tsv` with its header. Leave `results/logbook.md` (append-only full record)
@@ -532,18 +543,54 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   user wants hard separation, the logbook and diagnostics can be redirected to a path outside the campaign
   tree; the default is in-tree for reproducibility.
 
-## Step 4 — validate (deterministic gate)
-Run the bundled validator on the generated tree and fix anything it flags:
+## Step 3.5 — implement the campaign code (finish setup; do not hand off stubs)
+This session holds the whole interview — the metric definition, the data paths and shapes, the
+conventions, the topic-10 code to reuse. No later agent will ever be better positioned to write this
+code, so write it now; deferring it "for the loop" hands the work to a colder context and guarantees the
+fresh session a red preflight. Sub-agents may draft; this session verifies.
+1. **Implement `scripts/metric.py` for real** — the topic-3 co-designed FROZEN scorer, not a
+   `NotImplementedError` stub — and run `python scripts/metric.py --selftest` until green. The selftest
+   exists to catch sign and convention bugs before they can corrupt the campaign; an unimplemented
+   scorer defers exactly those bugs. The scorer is FROZEN from here on.
+2. **Implement the three campaign hooks** in `scripts/run_campaign.py` — `validate_method` (the lever
+   contract), `run_experiment` (the experiment dispatcher), `load_target` (the target/data loader) —
+   wiring the topic-5 data paths and the topic-10 existing code. Implement `save_figure()` so it
+   actually writes the file.
+3. **Write `predictions/exp000_baseline.json`** from the topic-3 a-priori range and prediction mode. The
+   spend gate requires it before exp 000 can run, and the prediction is interview output — record what
+   was co-designed, invent nothing.
+4. **What this session genuinely cannot finish** — a data file only the user can stage, an instrument to
+   connect, a credential — is left as its named preflight failure, queued as an opening
+   `results/JOURNAL.md` **NEXT** item, and handed over by name in Step 5. Never silently, and never as
+   an unimplemented hook: code is always this session's to write.
+
+Do **not** run exp 000 here. It is the first queued unit, and the driver runs it under the gates in the
+fresh session (the loop-gate rationale in Step 5).
+
+## Step 4 — validate (two deterministic gates)
+Run both gates on the generated tree and fix anything they flag:
+1. The bundled validator:
 ```
 python "${CLAUDE_PLUGIN_ROOT}/skills/new-campaign/scripts/validate_campaign.py" <target_dir>
 ```
 It fails if any literal `{{…}}`, dangling `[[OPTIONAL`, or stray `[PROPOSED]` remains, or if a required
-file is missing. A generated campaign with an unresolved token is not done.
+file is missing.
+2. The driver's own launch check, from the campaign root, with the Step 0.5 python:
+```
+<python> scripts/run_campaign.py --preflight
+```
+This is the same check `--supervise` runs at launch, so passing it here makes scaffold-complete and
+launch-ready the same bar by construction — any future preflight check automatically becomes a
+scaffolding obligation. Fix every failure (each names its fix); the only failures allowed to survive to
+handoff are the Step 3.5.4 kind this session genuinely cannot resolve, each named in the handoff.
+
+A campaign with an unresolved token, a failing selftest, or an unexplained red preflight is not done.
 
 ## Step 5 — hand off (and start a fresh session)
-Tell the user what was created, and **name the destination up front: the loop runs in supervisor mode,
-launched and watched through the `run-campaign` skill.** The fresh session's job is setup, then
-`/physkit:run-campaign`, never executing the loop by hand.
+Tell the user what was created — including that setup is finished: the scorer and hooks are implemented,
+`--selftest` passes, and preflight is green (or name each handed-over failure and its fix). **Name the
+destination up front: the loop runs in supervisor mode, launched and watched through the `run-campaign`
+skill.** The fresh session's job is `/physkit:run-campaign`, never executing the loop by hand.
 
 The **critical handoff rule: do not start the loop in this setup session.** The campaign's `CLAUDE.md`
 (always-on doctrine and hard gates) and the enforcement hooks only take effect in a session that starts in
@@ -560,13 +607,15 @@ handing over the command.
 *(add `--plugin-dir "<KIT_DIR>"` if running the kit per-session rather than installed).*
 
 In that fresh session, the sequence is:
-1. **Pre-loop setup, not the loop:** implement `scripts/metric.py` and `save_figure()` and make
-   `--selftest` pass; write `predictions/exp000_baseline.json`, which the spend gate requires and whose
-   expected floor is in `campaign.md` §Baseline gate; run experiment 000, the baseline gate. Confirm with
-   `/context` that `CLAUDE.md` is loaded.
-2. **Then invoke `/physkit:run-campaign`.** That session becomes the loop's cockpit: it runs the driver's
+1. **Confirm the session, clear any handed-over items:** confirm with `/context` that `CLAUDE.md` is
+   loaded; if Step 4 handed over preflight failures this session could not resolve (staged data, an
+   instrument, a credential), clear them — they are named in the handoff and as the opening JOURNAL
+   **NEXT** items, and `run-campaign`'s preflight will name them again until they are fixed.
+2. **Invoke `/physkit:run-campaign`.** That session becomes the loop's cockpit: it runs the driver's
    preflight and translates any failure into its fix, launches `--supervise` in the background, narrates
-   progress from the driver log, and relays the user's steering into `results/inbox/`. Fallback, if no
+   progress from the driver log, and relays the user's steering into `results/inbox/`. Experiment 000 —
+   the baseline gate, whose expected floor is in `campaign.md` §Baseline gate — is the first queued unit,
+   run by the driver under the same gates as every other unit. Fallback, if no
    skill is available: hand over `<python> scripts/run_campaign.py --preflight`, then `--supervise`,
    writing out the actual python command detected in Step 0.5, e.g. `py -3`, and never the literal
    placeholder.
@@ -584,12 +633,13 @@ user-owned; `roles/worker.md` §How the loop runs explains the contract.
 `--config` run is for debugging a single experiment; it is not a mode for running the loop. The
 interactive-executor pattern is retired, because it produced unbounded context, docs that were never
 re-read, premature stops, and verification decay — the failure record that motivated the driver.
-- The campaign lives at `<project>/campaigns/<NN>_<slug>/` and its opening `../../LINEAGE.md` row is
+- The campaign lives at `<project>/campaigns/<NN>_<slug>/` and its opening lineage row is
   `status: active`. Hand over the absolute path to the campaign dir, not the project root. Remind the loop
-  agent that shared data and docs are `../../data` and `../../shared/`, referenced and never copied, with
+  agent that the shared data and promoted artifacts are `../../data` and the purpose dirs
+  (`../../scripts`, `../../models`, …), referenced and never copied, with
   the ancestor `../../CLAUDE.md` carrying the project rules; that ad-hoc follow-up work belongs in
   `../../sessions/<date>_<slug>/` rather than in this tree; and that a verified system-level finding is
-  later promoted from the journal's Findings section to the project `../../DISCOVERIES.md`.
+  later recorded in `../../PROJECT.md` §Updates from discoveries, citing its verdict.
 - **If the loop runs agents beyond the main session** — Task subagents, or SDK-spawned generation and
   critic roles — those contexts inherit nothing from `CLAUDE.md`; their prompts replace the doctrine stack.
   Before the first real experiment, run the prompt-surface audit
@@ -601,7 +651,7 @@ re-read, premature stops, and verification decay — the failure record that mot
 - This skill scaffolds; it does not run the loop. After hand-off, the loop-running agent executes
   `campaign.md` and its role file.
 - Never overwrite existing files without confirmation. If the target already holds a campaign, add a
-  **sibling campaign** in the project (a new `campaigns/<NN>_<slug>/` and `LINEAGE.md` row), or stop and
+  **sibling campaign** in the project (a new `campaigns/<NN>_<slug>/` and lineage row), or stop and
   ask.
 - **Imported, relocated, or hand-built trees silently lose the enforcement layer.** A tree not generated by
   this skill — copied in, assembled from frozen inputs, or moved — usually lacks `.claude/settings.json`,

@@ -100,7 +100,7 @@ spelling is the point of a fallback). So do non-kit campaigns.
   `LITERATURE.md`.)
 - **The figures** are outputs from the runs, especially the most refined ones. (Often a `results*/images/`
   or per-experiment output dirs.)
-- **The reference doc** is the project's `../../PROJECT_ORIENTATION.md`: the governing physics
+- **The reference doc** is the project overview, `../../PROJECT.md`: the governing physics
   (equations, methods, system behavior), the conventions, and the measurement rig, apparatus, and
   sample parameters — one document, referenced, never copied. Pull definitions and derivations from
   it rather than reconstructing them.
@@ -180,7 +180,7 @@ step → the forward model → the fit/decoder → the metric out. Make the flow
 what, in what order, with which parameters.
 
 Include the governing equations, pulling them and any campaign-specific derivations from
-`../../PROJECT_ORIENTATION.md` where it exists rather than reconstructing them. Derive the relations specific
+the project overview (`../../PROJECT.md`) where it exists rather than reconstructing them. Derive the relations specific
 to this campaign (the forward map, the metric definition, any effective-parameter or correction
 derivations the campaign relied on) at a level that lets a reader follow and reproduce them. Cite
 standard textbook results rather than re-deriving them: derive what is novel, reference what is known.

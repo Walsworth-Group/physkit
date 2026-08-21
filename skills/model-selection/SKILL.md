@@ -70,7 +70,7 @@ most often misleads.
 
 ## Credit the mechanism, not just the metric
 A model-selection result is explanatory: the win is a recovered understanding of why the system behaves as
-it does, and it updates `PROJECT_ORIENTATION.md`. Credit the mechanism, the parameter values it implies, and the
+it does, and it updates the project overview (`PROJECT.md`). Credit the mechanism, the parameter values it implies, and the
 predictions it newly makes, not the fact that it scored highest. A descriptive "B fits better" is weaker
 than an explanatory "B fits better and implies effect X, which was then observed."
 

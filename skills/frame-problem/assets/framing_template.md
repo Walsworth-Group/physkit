@@ -1,7 +1,7 @@
 # Framing — <problem in one line>
 
 > The durable frame for this problem, produced by `frame-problem` once the goal was clear. Update it as
-> understanding changes. In a campaign its parts graduate: inventory → `PROJECT_ORIENTATION.md`
+> understanding changes. In a campaign its parts graduate: inventory → `PROJECT.md`
 > §Standing constraints, goal → `campaign.md`, steps → the queue + JOURNAL NEXT,
 > verification plan → the verification gate.
 

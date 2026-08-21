@@ -38,7 +38,7 @@ what its job needs:
   ones with a recorded rationale. It never runs experiments.
 
 Both roles re-read `campaign.md` every cycle, and every spawned prompt carries the project's
-§Standing constraints (`../../PROJECT_ORIENTATION.md`) by value. A human attending the loop acts as
+§Standing constraints (`../../PROJECT.md`) by value. A human attending the loop acts as
 its **concierge** (the `run-campaign` skill): launch, watch, steer through notes in `results/inbox/`
 — never by-hand execution. The same gates apply either way.
 
@@ -49,9 +49,10 @@ its **concierge** (the `run-campaign` skill): launch, watch, steer through notes
 | `campaign.md` | both roles + the human | every cycle; at sign-off |
 | `CLAUDE.md` | every agent in this folder | auto-loaded, every turn |
 | `roles/worker.md` · `roles/planner.md` | that role only | every spawn |
-| `../../PROJECT_ORIENTATION.md` | everyone; §Standing constraints is injected into every spawn | background depth, on demand |
+| `../../PROJECT.md` | everyone; §Standing constraints is injected into every spawn | background depth, on demand |
 | `results/JOURNAL.md` | both roles | every cycle (working window) |
 | `results/scoreboard.tsv` · `results/logbook.md` | both roles; the permanent record | appended every experiment |
+| `predictions/<exp>.json` | the runner's spend gate; written by the worker BEFORE each solve | per experiment |
 | `results/queue.json` | worker takes the next unit; planner rewrites the order | per unit / per planner pass |
 | `configs/loop.json` | the driver and its checks | at launch; hot-reloaded |
 | `LITERATURE.md` *(when present)* | planner (idea roadmap) · worker (cite sources) | per the literature rule |
@@ -60,21 +61,22 @@ its **concierge** (the `run-campaign` skill): launch, watch, steer through notes
 
 ## Setup status — is this campaign runnable yet?
 
-`new-campaign` generates a complete, valid tree but does **not** write the physics: the scorer and
-the experiment hooks ship as `raise NotImplementedError` stubs, because only this campaign knows
-what an experiment is. A fresh scaffold is therefore *deliberately not runnable*, and the
-authoritative list of what remains is mechanical, never a table to maintain:
+`new-campaign` hands off **launch-ready**: the FROZEN scorer and the experiment hooks are
+implemented, `--selftest` passes, exp 000's prediction is on file, and the driver's preflight was
+green at handoff (any exception — something only the user could stage — was handed over by name).
+The authoritative answer is always mechanical, never a table to maintain:
 
 ```
 python scripts/run_campaign.py --preflight
 ```
 
-It refuses to launch while anything is missing and names each item with its fix. Downstream of a
+It refuses to launch while anything is missing and names each item with its fix — run it first on
+any imported, relocated, or hand-built tree, which lacks all of the above by default. Downstream of a
 first launch, the gates hold the rest: experiment 000 must measure the baseline and the trivial
 reference before any comparison means anything, and promotion stays blocked until the correctness
-suite is green and the noise model is confirmed empirically. Campaign-specific setup tasks (a solver
-to wire in, data to stage) live as the opening `results/JOURNAL.md` **NEXT** items — the loop's
-working list — not in a separate ledger.
+suite is green and the noise model is confirmed empirically. Setup tasks preflight cannot know about
+(data only the user can stage, an instrument to connect) live as the opening `results/JOURNAL.md`
+**NEXT** items — the loop's working list — not in a separate ledger.
 
 ## Environment & quick start
 

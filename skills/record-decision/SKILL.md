@@ -67,9 +67,9 @@ Keep notation and links consistent with the rest of the work; reference related 
 Pick the tier by what the decision outlives. Every tier is an append-only record: one entry per decision,
 never rewrite history, and supersede an old entry with a new one that links to it.
 - **Campaign:** `campaign.md` §Decision record — the append-only tail below the signed-off contract;
-  separate from the project's `PROJECT_ORIENTATION.md` §Standing constraints (the rules) and the
+  separate from the project overview's §Standing constraints (the rules) and the
   experiment `JOURNAL` (what happened).
-- **Project:** the project root's `PROJECT_ORIENTATION.md` §Durable decisions — a decision that outlives
+- **Project:** the project overview's (`PROJECT.md`) §Durable decisions — a decision that outlives
   one campaign (a project-wide convention, a shared-physics or instrument choice) and that sibling
   campaigns inherit.
 - **Ad-hoc session:** the session's `sessions/<date>_<slug>/NOTES.md`; graduates to the project record once

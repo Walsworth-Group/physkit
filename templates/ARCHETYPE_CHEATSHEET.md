@@ -189,7 +189,7 @@ doctrine lives in the **`discovery-loop` skill** — this is the selection-guide
   *independent* method certifies; **state certified vs conjectured** scope. Re-discover the known SOTA as a
   validation gate; require **generalization/extrapolation across regimes**; **credit explanatory (mechanism)
   over descriptive (metric) discovery**; deliver an **interpretable artifact** and extract its design rule
-  into `PROJECT_ORIENTATION.md`. (Full loop, memory modes, and checklist: the `discovery-loop` skill;
+  into `PROJECT.md`. (Full loop, memory modes, and checklist: the `discovery-loop` skill;
   simulator-scored search: `docs/SIMULATION_VALIDATION.md` §5; budget: `docs/reference/expensive-evaluation.md`.)
 
 ## H. Active / optimal experimental design (sequential experiment selection)
@@ -233,7 +233,7 @@ Operational doctrine: the **`model-selection`** skill.*
   adequacy** (front-runner residuals unstructured), not just relative ranking; **one model's
   misspecification masquerading as discrimination** → `debug`/`verify` each candidate's implementation
   before declaring a mechanism refuted; **prior sensitivity** → confirm the verdict survives reasonable
-  prior changes; **descriptive-not-explanatory** → credit the recovered *mechanism* (update `PROJECT_ORIENTATION.md`),
+  prior changes; **descriptive-not-explanatory** → credit the recovered *mechanism* (update `PROJECT.md`),
   not just the fit. A campaign can pull **H and I together** (actively design experiments to discriminate)
   or either alone.
 
@@ -275,4 +275,4 @@ simple; (2) design a protocol the user runs to measure their real magnets' imper
 the arrangement of the *imperfect* magnets, building on (1) and the data from (2).
 
 The setup skill plans and proposes the staging; each loop becomes a **sibling campaign** in the project —
-its own `campaigns/<NN>_<slug>/` with its own charter, ledger, and `LINEAGE.md` row.
+its own `campaigns/<NN>_<slug>/` with its own charter, ledger, and lineage row (`PROJECT.md` §Lineage).

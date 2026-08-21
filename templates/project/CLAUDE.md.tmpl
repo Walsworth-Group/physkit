@@ -1,37 +1,50 @@
 # {{PROJECT_TITLE}} — project rules (always on)
 
 This folder is a **Project**: one investigation into {{PHYSICAL_SYSTEM}}, hosting many **campaigns** (versioned
-attempts) and **sessions** (ad-hoc work). These rules bind every agent working anywhere under this tree. Read
-`PROJECT.md` for the goal, `PROJECT_ORIENTATION.md` for what we know about the system, and `LINEAGE.md` for
-what has been done. (Each campaign also has its own `CLAUDE.md` with the loop spine; this file adds the
-project-level rules on top.)
+attempts) and **sessions** (ad-hoc work). These rules bind every agent working anywhere under this tree.
+`PROJECT.md` is the overview — the mission, everything known about the system, the durable decisions, and
+§Lineage, the index of what has been done; `README.md` is the short directory map. (Each campaign also has its
+own `CLAUDE.md` with the loop spine; this file adds the project-level rules on top.)
 
 ## Structure
 `Project → Campaign → Experiment` (+ ad-hoc `sessions/`). Campaigns live in `campaigns/<name>/`; ad-hoc work in
-`sessions/<YYYY-MM-DD>_<slug>/`; shared data/docs at the project root; one `reports/`.
+`sessions/<YYYY-MM-DD>_<slug>/`; the canonical data in `data/`; promoted shared artifacts in purpose-named
+project-level dirs (`scripts/`, `models/`, …, created on demand); one `reports/`.
 
 ## Non-negotiable rules
-1. **Shared data and docs are referenced, never copied.** Use `../../data`, `../../PROJECT_ORIENTATION.md`,
-   and `../../shared` (relative). **Never copy the data or any part of the orientation document into a
-   campaign, never write into `data/`.** Copies are what break paths and fork the record — don't create them.
-2. **Everything is indexed in `LINEAGE.md`.** A campaign gets a row; a session gets a row; a within-campaign
-   version bump gets a one-line change-record. Nothing significant happens off the ledger.
+1. **Shared data and docs are referenced, never copied.** Use `../../data`, `../../PROJECT.md`, and the
+   promoted project-level dirs (`../../scripts`, `../../models`, …) by relative path. **Never copy the data
+   or any part of the overview into a campaign, never write into `data/`.** Copies are what break paths and
+   fork the record — don't create them.
+2. **Everything is indexed in `PROJECT.md` §Lineage.** A campaign gets a row; a session gets a row; a
+   within-campaign version bump and an artifact promotion each get a one-line change-record. Nothing
+   significant happens off the ledger.
 3. **Campaign vs session.** One optimizable **frozen metric driving a loop** → a **campaign** (`new-campaign`).
    Exploration / debugging / a one-off analysis with no frozen metric → a **session** (a `sessions/<…>/` folder
    with a `NOTES.md`). When unsure, start a session; promote later.
-4. **Findings at their true tier.** A session finding, or an unverified result, is recorded as such — it is
-   **not** a verified DISCOVERY unless it passed `verify`. Do not let ad-hoc conclusions be trusted like
-   campaign results.
+4. **Findings at their true tier.** A session finding, or an unverified result, is recorded as such — it does
+   **not** enter `PROJECT.md` §Updates from discoveries unless it passed `verify`, and every entry there cites
+   the source campaign's verdict artifact by path. The full evidence stays in the campaign that produced it
+   (`results/JOURNAL.md` §Findings + `results/verdicts/`); the project holds the synthesis and the pointer,
+   never a copy trusted on its own.
 5. **Invalidating updates fork-and-archive — they do not silently carry forward.** If a change (e.g. a fixed
    forward-model bug, a corrected dataset) **invalidates or makes misleading** a campaign's prior findings,
-   **fork a fresh-ledger campaign and archive the old one** (`campaigns/_archive/`, frozen, still in LINEAGE).
+   **fork a fresh-ledger campaign and archive the old one** (`campaigns/_archive/`, frozen, still in §Lineage).
    The old `results/`/`JOURNAL` do NOT become the new effort's working documents; carry forward only findings
    that survive **re-verification**, with provenance. A journal built on a known-bad model must never steer the
    next effort silently.
-6. **Consumed artifacts come from `shared/`.** If a sibling campaign froze something you depend on (a forward
-   model, a training set), reference the **promoted** copy in `../../shared/`, not the sibling's working folder;
-   and declare the FROZEN/MUTABLE relationship in your campaign's `campaign.md`.
+6. **Consumed artifacts come from the promoted project-level dirs.** If a sibling campaign froze something you
+   depend on (a forward model, a training set), reference the **promoted, versioned** copy at the project level
+   (`../../models/<artifact>_<ver>`, …) — never the sibling's working folder. A promoted artifact has a
+   `PROJECT.md` §Lineage promotion line; an artifact without one is a working file, not a dependency. Declare
+   the FROZEN/MUTABLE relationship in your campaign's `campaign.md`.
+7. **`PROJECT.md` is edited by tier.** OPEN sections (the system/instrument/equations depth, gotchas,
+   references, appends to §Updates from discoveries and §Lineage): edit when new information arrives, citing
+   the evidence. GUARDED sections (§Mission, §Standing constraints, closed §Durable decisions entries):
+   append/supersede, never rewrite; every change carries a §Durable decisions entry; a change that alters what
+   a **running** campaign is held to needs the user. §Standing constraints is delivered into every spawned
+   prompt of every campaign — treat editing it like editing a frozen gate.
 
 ## Portability
 All internal references are relative; the whole `<project>/` tree relocates as one unit. The only absolute path
-is the resolved `data_path` (in `PROJECT.md`) when the canonical data lives off-tree.
+is the resolved `data_path` (in `PROJECT.md` §Mission) when the canonical data lives off-tree.

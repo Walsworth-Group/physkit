@@ -75,11 +75,24 @@ PREDICTIONS = ROOT / "predictions"       # a-priori predictions, one JSON per ex
 VERDICTS = RESULTS / "verdicts"          # verify-skill verdict artifacts (promotion gate reads these)
 CORRECTNESS_STATE = RESULTS / "correctness_state.json"
 CHECKS = RESULTS                         # results/checks_<NN>.json - one mechanical verdict per experiment
-# Every campaign lives at <project>/campaigns/<slug>/ (no bare-campaign mode), so the project's ONE
-# background document is two levels up. Its §Standing constraints is delivered into every spawned
-# prompt (see build_prompt). The campaign's own landmines need no injection: they live in campaign.md,
-# which both roles are contractually required to re-read every cycle.
-ORIENTATION = ROOT.parent.parent / "PROJECT_ORIENTATION.md"
+# Every campaign lives at <project>/campaigns/<slug>/ (no bare-campaign mode), so the project
+# overview is two levels up: PROJECT.md carries the '## Standing constraints' delivered into every
+# spawned prompt (see build_prompt). A pre-consolidation project keeps that section in
+# PROJECT_ORIENTATION.md instead (ADR-0015), so both names are tried, new first - a new campaign
+# scaffolded into an old-layout project must still launch. The campaign's own landmines need no
+# injection: they live in campaign.md, which both roles are contractually required to re-read every
+# cycle.
+ORIENTATION_CANDIDATES = (ROOT.parent.parent / "PROJECT.md",
+                          ROOT.parent.parent / "PROJECT_ORIENTATION.md")
+
+
+def _orientation_file():
+    """The project file actually carrying '## Standing constraints'; the new-layout name when
+    neither does (so error messages point at the current convention)."""
+    for p in ORIENTATION_CANDIDATES:
+        if _md_section(p, "Standing constraints") is not None:
+            return p
+    return ORIENTATION_CANDIDATES[0]
 
 
 class _Tee:
@@ -237,7 +250,7 @@ def snapshot_experiment(cfg: dict, config_path: Path | None = None, props: dict 
     prop_lines = "".join(f"{k}: {props.get(k)}\n" for k in
                          ("prediction_mode", "noise_model", "noise_floor", "tolerance",
                           "metric_version", "data_version") if k in props)
-    # The delivered context (PROJECT_ORIENTATION.md Standing constraints + the landmines table) is a
+    # The delivered context (the project overview's Standing constraints + the landmines table) is a
     # LIVING document pulled into every spawned prompt, so two experiments in one campaign can run
     # under different constraints. Hashing the assembled worker prompt here answers "what did this
     # experiment run under" from the frozen record. Recomputed at snapshot time (inbox notes, which
@@ -1183,8 +1196,8 @@ def _md_section(path: Path, heading: str) -> str | None:
 
 def _delivered_context() -> str:
     """The living context every spawned agent carries: the project's §Standing constraints
-    (PROJECT_ORIENTATION.md) - the one document OUTSIDE the per-cycle read set that must still be
-    guaranteed present.
+    (PROJECT.md; a pre-consolidation project keeps it in PROJECT_ORIENTATION.md) - the one document
+    OUTSIDE the per-cycle read set that must still be guaranteed present.
 
     Delivered by VALUE, not by pointer: a pointed-at constraint is read only when an agent chooses
     to look, and these are the constraints that must not depend on that choice. (The campaign's own
@@ -1197,10 +1210,11 @@ def _delivered_context() -> str:
     delivery that degrades to nothing recreates the recorded-but-unread failure this mechanism
     exists to close. Preflight refuses to launch without the constraints section at all.
     """
-    constraints = _md_section(ORIENTATION, "Standing constraints")
-    return ("\n\n== STANDING CONSTRAINTS (../../PROJECT_ORIENTATION.md - project background; "
+    src = _orientation_file()
+    constraints = _md_section(src, "Standing constraints")
+    return (f"\n\n== STANDING CONSTRAINTS (../../{src.name} - the project overview; "
             "equations, methods, instrument and durable decisions live below this section) ==\n"
-            + (constraints or "[MISSING: ../../PROJECT_ORIENTATION.md has no '## Standing "
+            + (constraints or f"[MISSING: ../../{src.name} has no '## Standing "
                "constraints' section. Report this in the journal; do not guess the constraints.]"))
 
 
@@ -1823,10 +1837,11 @@ def preflight(smoke: bool = False) -> list[str]:
     # 4a. the delivered context: every spawn carries the project's Standing constraints by value, so a
     # launch without them would run the whole night on prompts missing the constraints the project
     # recorded - the recorded-but-unread failure, mechanized. Refuse instead.
-    if _md_section(ORIENTATION, "Standing constraints") is None:
-        bad("../../PROJECT_ORIENTATION.md is missing or has no '## Standing constraints' section - "
-            "that section is delivered into every spawned worker/planner prompt. Fix: author it "
-            "(new-project generates it; a pre-merge project migrates via the kit's docs/MIGRATING.md).")
+    if _md_section(_orientation_file(), "Standing constraints") is None:
+        bad("../../PROJECT.md is missing or has no '## Standing constraints' section (also tried the "
+            "pre-consolidation ../../PROJECT_ORIENTATION.md) - that section is delivered into every "
+            "spawned worker/planner prompt. Fix: author it (new-project generates it; an older "
+            "project layout migrates via the kit's docs/MIGRATING.md).")
 
     # 4b. disk budget: a launch that cannot hold a few units of artifacts will fail mid-night
     free_mb = _free_disk_mb()
