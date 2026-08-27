@@ -53,7 +53,8 @@ its **concierge** (the `run-campaign` skill): launch, watch, steer through notes
 | `results/JOURNAL.md` | both roles | every cycle (working window) |
 | `results/scoreboard.tsv` · `results/logbook.md` | both roles; the permanent record | appended every experiment |
 | `predictions/<exp>.json` | the runner's spend gate; written by the worker BEFORE each solve | per experiment |
-| `results/queue.json` | worker takes the next unit; planner rewrites the order | per unit / per planner pass |
+| `results/queue.json` | the driver's unit ledger (driver is its sole writer); planner rewrites the order | per unit / per planner pass |
+| `results/queue_drop/` | worker/verifier drop proposals + declinations here; the driver merges them | per unit |
 | `configs/loop.json` | the driver and its checks | at launch; hot-reloaded |
 | `LITERATURE.md` *(when present)* | planner (idea roadmap) · worker (cite sources) | per the literature rule |
 | `tests/correctness_checks.py` | the runner, every experiment | green-gates promotion |

@@ -211,7 +211,7 @@ root), so the campaign templates carry its path as a literal — `../../PROJECT.
 campaign root, `../../../PROJECT.md` one directory down (`roles/`, `results/`, `docs/`) —
 and there is no placeholder to fill. Never replace a literal with a campaign-local copy (the validator
 rejects one). Promoted frozen artifacts live in purpose-named project-level dirs (`scripts/`,
-`models/`, …), each with a `PROJECT.md` §Lineage promotion line (ADR-0015):
+`models/`, …), each with a `PROJECT.md` §Lineage promotion line:
 
 | Placeholder | Meaning | Value (by file location) |
 |---|---|---|

@@ -6,6 +6,73 @@ All notable changes to the kit are recorded here. Format follows
 Dates are UTC. Each entry cites the run/finding that motivated it (the kit's own
 `campaign-review → improve-kit` loop) so a future reviewer can trace the "why".
 
+## [Unreleased]
+
+## [0.10.2] - 2026-08-27
+
+### Fixed — the supervisor driver's queue is now single-writer, its log flushes, blocks stay contiguous
+
+Motivated by a colleague's bug report from operating a real v0.10.1 campaign through its first four units
+(three orchestration-layer defects; the frozen science layer held under hard adversarial verification).
+Confirmed against current `main`, not just the reported campaign. Sign-off; `BUILD_BACKLOG.md` §2026-08-26.
+
+- **Queue race (high) removed by construction.** The DRIVER is now the sole writer of `results/queue.json`
+  (atomic `os.replace` via `_write_queue`); the worker and verifier no longer edit it in place but drop
+  append-only records into `results/queue_drop/`, which the driver merges at the loop top (`_drain_queue_drops`).
+  Previously both the driver and its own worker did unlocked read-modify-write of the whole file, so a late
+  worker write could clobber the driver's accept (silent ledger corruption; a double-accept was observed).
+  Idempotent accept added as defense-in-depth (a unit already pending verification is not re-counted).
+- **Driver log (medium) is now readable while the loop runs.** `DriverLog`/`_Tee` flush stdout and the log
+  file on every write; backgrounded `--supervise` (pipe stdout, block-buffered) previously left the decision
+  trace at 0 bytes for the whole life of a running loop — worst for an unattended run that hangs.
+- **Block verification order (low) preserved.** A loop-top normalization keeps units sharing a `block` id
+  contiguous in `next`, so a follow-up appended at the tail no longer withholds the block's verification
+  behind unrelated units.
+
+### Added — the worker role now forbids backgrounding a solve under `--supervise`
+
+Motivated by the photophysics10 V_B⁻ level-structure campaign (2026-08-25/26; cross-review
+`case-studies/orchestration_cross-review_2026-08-27.md`, keeper OX-11). A worker launched its solve
+detached (`nohup`/`&`/`Start-Process`/backgrounded tool call), reported success, and exited on the
+belief it would be "re-invoked when it exits" — it is not. In supervisor mode the driver reads worker
+exit as unit completion, so the detached solve loses `results/.run_heartbeat` (the dead-worker signal),
+dies with the session, and the unit fails `saved=False`. This destroyed four unit-attempts (exp000d ×2,
+exp001 ×2, both shelved operational). The rule was absent from `roles/worker.md.tmpl`. Sign-off;
+`BUILD_BACKLOG.md` OX-11.
+
+- `templates/campaign/roles/worker.md.tmpl` §How the loop runs — supervisor mode: added the explicit
+  foreground rule (block in-shell within `iteration_timeout_hours`; a `Monitor` until-loop or a single
+  waiting `Bash` call for long fits; no `echo .` noop-polling). The driver-side live-heartbeat post-exit
+  grace it relies on already exists (`run_campaign.py.tmpl`).
+
+### Added — the hardware campaign option (HW-1): PhysKit drives the instrument directly
+
+Motivated by the NV-NMR commissioning campaigns (2026-06..08), where every hardware lesson reached the
+kit as prose while the loop that obeyed it lived in a separate program (`synthesis/HARDWARE_MODE_PROPOSAL.md`;
+maps and handoff alongside it). The kit now ships the generic layer in code, demonstrated live on
+2026-08-20: two ESR arms gated, emitted, awaited, collected, and quarantine-stamped on the real rig with
+no middle program and zero lab-side code edits (`hardware/nv_nmr/`, the first instrument instance).
+
+- `docs/reference/instrument-contract.md` — the normative lab-side handshake: order schema, sibling
+  markers, provenance-gated auto-load, abort-re-enters-complete, the transport seam, and the conformance
+  checklist. Indexed in `DOCTRINE_INDEX.md` and routed from CORE's archetype-E row.
+- `scripts/hardware/` — the generic machinery, instrument-blind by test: `instrument.py` (the emission
+  gate — reject-don't-fill, range/window guards, cost model; pure functions), `transports.py`
+  (`FileTransport` + the seam, proven by a non-file transport in tests), `serializers.py` (`json_v1`,
+  `coscientist_yaml_v1`), `ingest.py` (declared readers + the quarantine stamp), `dispatch.py` (operator
+  CLI: preflight | gate | emit | wait | ingest | status).
+- `scripts/audits/` — the prompt-surface, input-liveness, and sealed-value leak audits, ported from the
+  commissioning loop and era-tolerant (roles discovered from the driver's own `--show-prompt`; verified
+  on v0.9.0 = 2 roles and v0.10.1 = 3).
+- `new-campaign` Step 3.5 wires archetype-E hooks to the shipped machinery (`instrument.json`,
+  gate/transport/ingest, `dispatch.py preflight` beside the Step 4 gates); Step 0 adds the contract doc
+  to the archetype-E reading list.
+- Tests: `tests/structured_loop/tests/{stub_instrument,check_stub_instrument}.py` (a conforming stub
+  instrument + 31 contract checks) and `tests/hardware/check_hardware_layer.py` (80 checks incl. the
+  genericity grep and the transport seam), both wired into `run_all.py`.
+
+Maintained by the Walsworth-lab hardware-mode owners; the kit's frozen integrity core is untouched.
+
 ## [0.10.1] - 2026-08-20
 
 Two user-driven scaffolding fixes, same day: the project root consolidates to three documents, and

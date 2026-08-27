@@ -163,7 +163,7 @@ Skill: `/physkit:report` (campaigns: `/physkit:final-report`).
 | writing any report or document | `report` skill (+ `cite-check`) |
 | standing up an autoresearch campaign | `new-campaign` skill (campaign layer) — creates its project home (`new-project`) if none exists |
 | launching / watching / steering the campaign loop | `run-campaign` skill (campaign layer) — the cockpit around `--supervise`; never executes units itself |
-| a hardware-in-the-loop (archetype E) campaign | `docs/reference/hardware-in-the-loop.md` (campaign layer) |
+| a hardware-in-the-loop (archetype E) campaign | `docs/reference/hardware-in-the-loop.md` + `docs/reference/instrument-contract.md` (campaign layer; machinery: `scripts/hardware/`) |
 | resuming / checking a campaign | `handoff`, `campaign-status` (campaign layer) |
 | a principle's full statement / rationale | `docs/PRINCIPLES.md` — the relevant section, not the whole file |
 | the map of all files | `docs/DOCTRINE_INDEX.md` |

@@ -20,8 +20,8 @@ in a row, or an integrity condition, halts the loop. Before an iteration ends, i
 | Every failed mechanical check explained, not dismissed. The runner writes them; you answer them | `results/checks_<NN>.json` → the logbook Analysis slot | runner (writes) + `campaign-status` (audits) |
 | A completed logbook entry — narrative slots (Analysis / Expected-vs-found / Verification / NEXT) filled, not stubs | `results/logbook.md` | driver (structural) + `campaign-status` (content) |
 | The JOURNAL working window updated, with any landmine, anomaly, or cross-experiment observation written down; the next iteration reads only what is on disk | `results/JOURNAL.md` | `campaign-status` |
-| Queue state consistent: your unit accepted (removed) or declined (reason appended); new proposals appended with rationales | `results/queue.json` | driver |
-| A declination or ESCALATE, if either happened, with reasons | `results/queue.json` / `results/ESCALATE.md` | driver |
+| Your unit's outcome recorded: if you DECLINE it, or PROPOSE follow-up units, drop a JSON file in `results/queue_drop/` (the driver merges it and removes/updates the queue — you never edit `queue.json`) | `results/queue_drop/` | driver |
+| A declination or ESCALATE, if either happened, with reasons | `results/queue_drop/` (decline) / `results/ESCALATE.md` | driver |
 
 The narrative-quality half of the contract is `campaign-status`'s audit, not the driver's: whether each
 slot is filled well, and whether a landmine is actionable. The driver checks structure; humans and
@@ -81,6 +81,14 @@ The loop above is the per-unit procedure; who repeats it is the mode:
   agent context per unit: you, the worker, execute steps 1–11 for one unit and exit. Nothing carries
   over between units. `CLAUDE.md` auto-loads and the driver assembles this file + `campaign.md` into
   your prompt; everything else you need, you read from the ledger.
+
+  **Run the solve in your own foreground shell — never background or detach it.** The driver reads
+  your exit as the unit's completion: a `nohup` / `&` / `Start-Process` / backgrounded solve loses
+  `results/.run_heartbeat` (the driver's dead-worker signal), dies with your session, and the unit
+  fails `saved=False`. You are **not** re-invoked when a detached run finishes. For a long fit, block
+  on it (a `Monitor` until-loop, or one `Bash` call that waits then greps) within your
+  `iteration_timeout_hours`; do not noop-poll with `echo .` either.
+
   Two rules follow:
   - Mid-unit anomalies: probe through the pattern, not around it. Document the problem + hypothesis
     in the journal and propose a standard probe unit; a claimed major problem needs a verify verdict

@@ -91,7 +91,12 @@ agent writes a work order: a queue file carrying a provenance block that names
 its origin. The instrument side auto-loads work only from directories matching
 the agreed convention, executes, and acknowledges by writing a sibling
 *processed* marker. Rejections get a *rejected* marker with the reason.
-Extensions follow the same idiom (see §6, §7).
+Extensions follow the same idiom (see §6, §7). The normative spec of this
+handshake — order schema, marker semantics, provenance precondition, and the
+conformance checklist a lab program must pass — is
+`docs/reference/instrument-contract.md`; the kit ships a generic implementation
+(gate, transports, serializers, ingest, operator CLI) under `scripts/hardware/`
+with a conforming stub instrument in the deterministic test suite.
 
 Files are the channel because both sides restart independently without losing
 state, every handoff is durably logged for free, a human can inspect, replay, or

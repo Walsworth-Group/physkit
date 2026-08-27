@@ -76,7 +76,8 @@ Read these so your questions and fills are grounded (paths are under the plugin 
   signed-off contract now: goal, metric, levers, §Verification, §Known landmines, and the append-only
   §Decision record tail. For
   archetype E, also read `${CLAUDE_PLUGIN_ROOT}/docs/reference/hardware-in-the-loop.md` (§0 is an example
-  assembled loop).
+  assembled loop) and `${CLAUDE_PLUGIN_ROOT}/docs/reference/instrument-contract.md` (the lab-side
+  protocol the kit's `scripts/hardware/` machinery speaks).
 
 ## Step 0.1 — establish the project home (every campaign lives in one)
 **Every campaign lives inside a project**: the home for one physical system investigated over many
@@ -432,7 +433,7 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   artifact (`results/verdicts/<id>.json`, written by `verify`; CONFIRMED with a named refuter; an
   INCONCLUSIVE kill is denied), and — in a legacy project that still carries one — a project-ledger
   (`../../DISCOVERIES.md`) entry that does not cite its source verdict by path (fail-closed; new
-  projects have no such ledger, per ADR-0015). Fill **`{{PYTHON_CMD}}`** with the python
+  projects have no such ledger). Fill **`{{PYTHON_CMD}}`** with the python
   invocation detected in Step 0.5 (`py -3` on Windows, `python3` on macOS/Linux) so the hook command runs
   on this machine.
 
@@ -505,7 +506,7 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   4. **Keep** the campaign `CLAUDE.md` project-context block.
   5. A verified finding that is a fact about the **system**, rather than a config that scored well, is
      later recorded in `../../PROJECT.md` §Updates from discoveries, citing its verdict artifact by
-     path — the pointer that survives fork-and-archive (ADR-0015; a legacy project's
+     path — the pointer that survives fork-and-archive (a legacy project's
      `../../DISCOVERIES.md` stays hook-gated). Note this in the handoff so the loop agent knows the path.
 - **Literature (per the topic-11 level).** The ongoing-search rule and the `LITERATURE.md` file are decided
   separately:
@@ -563,6 +564,19 @@ fresh session a red preflight. Sub-agents may draft; this session verifies.
    connect, a credential — is left as its named preflight failure, queued as an opening
    `results/JOURNAL.md` **NEXT** item, and handed over by name in Step 5. Never silently, and never as
    an unimplemented hook: code is always this session's to write.
+
+5. **Hardware campaigns (archetype E): wire the hooks to the shipped machinery, never re-implement
+   it.** Write `configs/instrument.json` per the plugin's `docs/reference/instrument-contract.md`
+   (experiment types, `required_keys` vs `defaults`, range tables, cost model, serializer, the two
+   roots) — every cap a constraint, never a lever. Then: `validate_method` calls the emission gate
+   (`${CLAUDE_PLUGIN_ROOT}/scripts/hardware/instrument.py`, `gate()`; reject-don't-fill,
+   teaching-text reasons); `run_experiment` submits through the declared transport and waits on the
+   sibling markers, with ingest — the declared reader plus the quarantine stamp — at its tail;
+   `load_target` stays the metric's reference loader, never the ingest path. Validate the channel
+   with `${CLAUDE_PLUGIN_ROOT}/scripts/hardware/dispatch.py preflight` alongside Step 4's gates —
+   a mis-named order directory is ignored *silently* by the lab side, and preflight catches the
+   naming while the readiness probe (an `emit` of a throwaway unit, then `wait`; the contract's
+   silent-wedge mitigation) proves the channel end to end before the campaign starts.
 
 Do **not** run exp 000 here. It is the first queued unit, and the driver runs it under the gates in the
 fresh session (the loop-gate rationale in Step 5).

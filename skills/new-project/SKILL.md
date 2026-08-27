@@ -111,7 +111,7 @@ Then also confirm:
 - No stray reference to a retired doc the tree does not hold (`PROJECT_ORIENTATION.md`, `LINEAGE.md`,
   `DISCOVERIES.md`, `shared/`, `SYSTEM.md`, a project-root `ENGINEERING_NOTES.md`): all of it lives in
   `PROJECT.md` now, one section each — except verified findings, which live in the campaigns that
-  produced them, pointed at from §Lineage and §Updates from discoveries (ADR-0015).
+  produced them, pointed at from §Lineage and §Updates from discoveries.
 - Report the project root, the data decision (copy vs pointer), and the first campaign created.
 
 ## Composition

@@ -78,7 +78,7 @@ CHECKS = RESULTS                         # results/checks_<NN>.json - one mechan
 # Every campaign lives at <project>/campaigns/<slug>/ (no bare-campaign mode), so the project
 # overview is two levels up: PROJECT.md carries the '## Standing constraints' delivered into every
 # spawned prompt (see build_prompt). A pre-consolidation project keeps that section in
-# PROJECT_ORIENTATION.md instead (ADR-0015), so both names are tried, new first - a new campaign
+# PROJECT_ORIENTATION.md instead (pre-consolidation layout), so both names are tried, new first - a new campaign
 # scaffolded into an old-layout project must still launch. The campaign's own landmines need no
 # injection: they live in campaign.md, which both roles are contractually required to re-read every
 # cycle.
@@ -105,11 +105,22 @@ class _Tee:
 
     def write(self, s):  # noqa: D401
         self._stdout.write(s)
-        self._log.write(s)
+        try:
+            self._stdout.flush()     # flush per write: a killed or hung solve never exits, so a
+        except Exception:            # buffered tee'd log would be empty for exactly the run that needs it
+            pass
+        try:
+            self._log.write(s)
+            self._log.flush()
+        except Exception:
+            pass                     # the console wins; a full disk must not kill the run
 
     def flush(self):
         self._stdout.flush()
-        self._log.flush()
+        try:
+            self._log.flush()
+        except Exception:
+            pass
 
 
 class DriverLog:
@@ -118,8 +129,7 @@ class DriverLog:
     lands in both the console and the log. Doctrine: log every scheduling decision to an append-only run
     log as it is made - post-hoc diagnosis of an unattended system is impossible without the decision
     trace (the physkit plugin's docs/reference/hardware-in-the-loop.md, "Monitor the science").
-# Distinct from _Tee above,
-    which is the per-EXPERIMENT runner log (mode "w", one per run).
+    Distinct from _Tee above, which is the per-EXPERIMENT runner log (mode "w", one per run).
     """
 
     def __init__(self, log_path: Path):
@@ -129,8 +139,18 @@ class DriverLog:
 
     def write(self, s):
         self._stdout.write(s)
+        # FLUSH PER WRITE. --supervise is normally launched backgrounded, so stdout is a pipe (block-
+        # buffered, not line-buffered as it is on a TTY) and the log file was never line-buffered. Without
+        # this, the driver's decision trace stays empty for the whole life of a running loop - and the
+        # worst case, an unattended run that HANGS, never exits to flush, so the one trace that most needs
+        # reading is 0 bytes. print() never passes flush=True, so the flush must live here.
+        try:
+            self._stdout.flush()
+        except Exception:
+            pass
         try:
             self._log.write(s)
+            self._log.flush()
         except Exception:
             pass  # the console wins; a full disk must not kill the loop
 
@@ -1085,9 +1105,17 @@ def check_correctness_suite() -> str:
 # driver waits up to driver.detached_grace_min for the save-set or heartbeat staleness before judging.
 #
 # Channels: results/inbox/*.md = INBOUND user notes, relayed verbatim into the next worker/planner
-# prompt, then archived (the driver never parses them). results/ESCALATE.md stays the loud OUTBOUND
-# halt. results/diagnostics/supervise_<ts>.log = the append-only decision trace for this launch.
+# prompt, then archived (the driver never parses them). results/queue_drop/*.json = append-only proposals
+# and declinations from the worker/verifier (the driver merges them at the loop top - see
+# _drain_queue_drops). results/ESCALATE.md stays the loud OUTBOUND halt.
+# results/diagnostics/supervise_<ts>.log = the append-only decision trace for this launch.
 # results/.driver_alive = the running driver's sentinel (the Stop hook stands down while it is fresh).
+#
+# SINGLE WRITER: the DRIVER is the sole writer of results/queue.json (via _write_queue, atomic os.replace).
+# Agents never edit it in place - the worker and verifier drop proposals/declinations into
+# results/queue_drop/ and the driver merges them; only the planner authors "next" ordering, and it does
+# so fully awaited (no overlap). This removes by construction the read-modify-write race that two
+# concurrent writers to one file otherwise create (silent lost updates; a torn read tripping the halt).
 #
 # results/queue.json:
 #   {"next":    [{"config": "configs/exp<NN>_<slug>.json", "rationale": "...", "proposed_by": "...",
@@ -1096,8 +1124,9 @@ def check_correctness_suite() -> str:
 #                 "failures": [...]}, ...],
 #    "accepted_units": 0, "last_accept_utc": null, "units_since_planner": 0,
 #    "consecutive_operational_failures": 0}
-# Workers may APPEND proposals and DECLINE the head (reasons recorded); only the planner reorders.
-# Two declinations shelve a unit (revivable by the planner) - the loop keeps moving, no human halt.
+# Workers may PROPOSE units and DECLINE the head (both via results/queue_drop/, merged by the driver);
+# only the planner reorders "next". Two declinations shelve a unit (revivable by the planner) - the loop
+# keeps moving, no human halt.
 # ======================================================================================================
 
 QUEUE = RESULTS / "queue.json"
@@ -1105,6 +1134,8 @@ ESCALATE = RESULTS / "ESCALATE.md"
 LOOPCFG = ROOT / "configs" / "loop.json"
 INBOX = RESULTS / "inbox"                    # user notes -> injected into the next spawn, then archived
 INBOX_ARCHIVE = INBOX / "archive"
+DROP = RESULTS / "queue_drop"                # agent proposals/declinations -> merged into queue.json, then archived
+DROP_ARCHIVE = DROP / "archive"
 DRIVER_ALIVE = RESULTS / ".driver_alive"     # fresh mtime = a driver owns the loop (Stop hook stands down)
 # Override with e.g. AUTORESEARCH_AGENT_CMD="claude -p" if the CLI lives elsewhere on this machine.
 # Quote-aware split, not str.split: a Windows interpreter path like "C:\Program Files\...\python.exe"
@@ -1125,9 +1156,16 @@ iteration contract' - what you must persist before you finish, the ledger is the
 work you do not record did not happen).
 EXECUTE-OR-DECLINE: run the assigned unit through the full loop (a-priori prediction in
 predictions/<exp_name>.json FIRST, then the runner - it enforces the gates), OR, if the unit is moot or
-superseded by the latest results, DECLINE it: append your reason to its "declined" list in
-results/queue.json and say why in the journal. Never silently substitute a different experiment.
-You MAY append new proposed units to results/queue.json "next" (with rationales). Mid-unit anomalies:
+superseded by the latest results, DECLINE it and say why in the journal. Never silently substitute a
+different experiment. You do NOT edit results/queue.json - the driver is its sole writer. To decline or
+to propose, drop a small JSON file into results/queue_drop/ (create it if absent); the driver merges it
+at the top of the next iteration:
+  - DECLINE this unit: results/queue_drop/<exp_name>.decline.json =
+    {{"kind": "decline", "config": "{config}", "reason": "<why it is moot/superseded>"}}
+  - PROPOSE a unit: results/queue_drop/<slug>.propose.json =
+    {{"kind": "propose", "unit": {{"config": "configs/exp<NN>_<slug>.json", "rationale": "<why>",
+    "block": "<block-id or omit>", "hypothesis": "<what it tests>"}}}}  (one file per proposal, or a JSON
+    list of such records). Mid-unit anomalies:
 document + propose a probe unit - do not chase them ad hoc (roles/worker.md: probe through the pattern).
 Long solver runs execute in YOUR shell, never inside a background subagent - the runner maintains
 results/.run_heartbeat there, which is how the driver tells a live solve from a dead worker (a
@@ -1135,8 +1173,8 @@ backgrounded solver loses that heartbeat AND risks the platform stall abort). If
 only the user can weigh, write results/ESCALATE.md (what, why, the options) and finish your unit if
 possible. If a USER NOTES section follows this prompt, treat it as input from the user: acknowledge each
 note in results/JOURNAL.md and record what it changed (or why nothing). Before you exit: complete the
-logbook narrative slots for your unit and leave the JOURNAL working window + NEXT consistent with
-queue.json."""
+logbook narrative slots for your unit and leave the JOURNAL working window + NEXT consistent with the
+proposals you dropped (the driver, not you, writes results/queue.json)."""
 
 PLANNER_PROMPT = """You are the strategy planner for the autoresearch campaign in this directory,
 spawned because: {reasons}. CLAUDE.md auto-loads; these two do NOT, so read them first: campaign.md (the
@@ -1170,9 +1208,12 @@ artifact results/verdicts/<exp_id>.json with every field filled and the refuter'
 claim AS RECORDED (the scoreboard row, results/result_<NN>.json, its prediction artifact and
 checks_<NN>.json); verify steering-negatives and kill-claims with the same rigor as wins. Do NOT edit
 the scoreboard or configs/RECOMMENDED.json - the driver stamps the verified column from your
-artifacts, and promotion is the worker's and planner's call, never yours. If a verdict is REFUTED or
-INCONCLUSIVE, append the named control or fix-and-rerun as a proposed unit to results/queue.json
-"next" (one concrete runnable config each, rationale citing the verdict file). Add one line per
+artifacts, and promotion is the worker's and planner's call, never yours. You do NOT edit
+results/queue.json (the driver is its sole writer). If a verdict is REFUTED or INCONCLUSIVE, propose the
+named control or fix-and-rerun by dropping a file into results/queue_drop/ (create it if absent) -
+results/queue_drop/<slug>.propose.json = {{"kind": "propose", "unit": {{"config":
+"configs/exp<NN>_<slug>.json", "rationale": "<control/fix, citing results/verdicts/<id>.json>"}}}} - one
+concrete runnable config each; the driver merges it into "next". Add one line per
 verdict to results/JOURNAL.md. Your turn ends when every verdict artifact above exists on disk."""
 
 
@@ -1664,6 +1705,114 @@ def _read_queue() -> dict:
               "repair the JSON by hand before relaunching; do NOT delete it - it is the queue ledger.")
 
 
+def _write_queue(q: dict) -> None:
+    """The SOLE authoritative write of results/queue.json - the driver is its only writer. Commit through
+    a temp file + os.replace so every write is ATOMIC (on POSIX and Windows): a concurrent reader, or a
+    detached worker tail, can never observe a half-written ledger, which is the torn read that would
+    otherwise trip _read_queue's integrity halt. Agents propose changes via results/queue_drop/ instead of
+    editing this file, so there is never a second writer to race with."""
+    tmp = QUEUE.parent / f".queue.{os.getpid()}.tmp"
+    tmp.write_text(json.dumps(q, indent=2), encoding="utf-8")
+    os.replace(tmp, QUEUE)
+
+
+def _iter_drop_records(obj):
+    """Yield well-formed drop records from a parsed drop file, which may be one record or a list of them.
+    Forgiving on shape (an agent hand-wrote it) but strict on kind - anything else is ignored, not halted."""
+    for it in (obj if isinstance(obj, list) else [obj]):
+        if isinstance(it, dict) and it.get("kind") in ("decline", "propose"):
+            yield it
+
+
+def _has_decline_drop(config: str) -> bool:
+    """True if an un-drained results/queue_drop/ file declines this unit - the grace probe's decline
+    signal, now that the worker drops a file instead of editing queue.json in place. Read-only: the merge
+    and archive happen in _drain_queue_drops after the spawn returns."""
+    try:
+        files = [f for f in DROP.glob("*.json") if f.is_file()]
+    except OSError:
+        return False
+    for f in files:
+        for rec in _iter_drop_records(_read_json(f, None)):
+            if rec.get("kind") == "decline" and rec.get("config") == config:
+                return True
+    return False
+
+
+def _drain_queue_drops(q: dict) -> bool:
+    """Merge append-only agent drop files (results/queue_drop/*.json) into the in-memory queue, then
+    archive each - the ONE point where worker/verifier changes enter the ledger, keeping the driver the
+    sole writer of queue.json. A "decline" appends its reason to the matching queued unit's "declined"
+    list; a "propose" appends a unit to "next". Mirrors _drain_inbox's discipline: archive FIRST and only
+    then apply, so a file that cannot be archived is deferred (never applied twice). Tolerant by design -
+    each drop file is independent, so one malformed file is skipped, not halted (unlike the monolithic
+    queue), and read BOM-tolerant like every other reader here. Returns True if the queue changed."""
+    try:
+        files = sorted((f for f in DROP.glob("*.json") if f.is_file()),
+                       key=lambda f: f.stat().st_mtime)
+    except OSError:
+        return False
+    changed = False
+    for f in files:
+        rec_obj = _read_json(f, None)
+        try:                                    # archive BEFORE applying: a record we cannot move out of
+            DROP_ARCHIVE.mkdir(parents=True, exist_ok=True)   # the drop dir must not be applied, or it
+            f.replace(DROP_ARCHIVE / f"{_utc_stamp()}_{f.name}")   # re-fires and double-applies next pass
+        except OSError:
+            print(f"[supervise] queue_drop: cannot archive {f.name} - deferring (not applied this pass)")
+            continue
+        if rec_obj is None:
+            print(f"[supervise] queue_drop: {f.name} was not valid JSON - archived and skipped")
+            continue
+        for rec in _iter_drop_records(rec_obj):
+            if rec["kind"] == "decline":
+                cfg = rec.get("config")
+                reason = (rec.get("reason") or "; ".join(rec.get("reasons", []) or [])
+                          or "declined (no reason given)")
+                unit = next((u for u in q.get("next", []) if u.get("config") == cfg), None)
+                if unit is not None:
+                    unit.setdefault("declined", []).append(str(reason))
+                    changed = True
+                    print(f"[supervise] queue_drop: decline merged for {cfg}")
+                else:
+                    print(f"[supervise] queue_drop: decline for {cfg!r} matches no queued unit - ignored")
+            else:  # propose
+                unit = rec.get("unit") if isinstance(rec.get("unit"), dict) else {
+                    key: rec[key] for key in ("config", "rationale", "block", "hypothesis", "proposed_by")
+                    if key in rec}
+                if unit.get("config"):
+                    unit.setdefault("proposed_by", "agent")
+                    q.setdefault("next", []).append(unit)
+                    changed = True
+                    print(f"[supervise] queue_drop: proposal merged: {unit.get('config')}")
+                else:
+                    print("[supervise] queue_drop: proposal without a config - ignored")
+    return changed
+
+
+def _normalize_blocks(q: dict) -> bool:
+    """Reorder "next" so units sharing a "block" id are contiguous, WITHOUT moving the head or any block's
+    first member: each unit is grouped under the FIRST-occurrence position of its block, and a block-less
+    unit is its own group in place. A verifier/planner proposal that tagged an existing block but landed at
+    the tail is pulled up beside its block, so the block's verification is not withheld behind unrelated
+    units - the consumer rule (_verification_backlog) releases a block only once no queued unit still
+    shares its id, so a straggler inverts verification order. Stable and idempotent; True if order changed."""
+    nxt = q.get("next", []) or []
+    order, buckets = [], {}
+    for i, u in enumerate(nxt):
+        b = u.get("block")
+        key = ("b", b) if b else ("u", i)      # block-less units get a unique per-position key -> stay put
+        if key not in buckets:
+            buckets[key] = []
+            order.append(key)
+        buckets[key].append(u)
+    new = [u for key in order for u in buckets[key]]
+    if new != nxt:
+        q["next"] = new
+        return True
+    return False
+
+
 def _record_failure(q: dict, config: str, attempt: int, status: str, detail: str) -> None:
     """Append one failure record to the unit's additive "failures" list (queue.json) - the planner and
     the humans read these; the driver itself never interprets them."""
@@ -1927,6 +2076,7 @@ def supervise(smoke: bool = False):
     print(f"[supervise] ==== launch {_utc_stamp()} ==== root={ROOT} agent_cmd={' '.join(AGENT_CMD)}")
     try:
         INBOX.mkdir(parents=True, exist_ok=True)   # the steering mailbox exists from launch, visibly
+        DROP.mkdir(parents=True, exist_ok=True)     # the agent proposal/decline channel, likewise visible
     except OSError:
         pass
     loop_cfg = _read_json(LOOPCFG, None)
@@ -1986,6 +2136,12 @@ def supervise(smoke: bool = False):
                 print("[supervise] configs/loop.json changed - reloaded (logged): " + json.dumps(k))
 
             q = _read_queue()
+            # Merge any agent proposals/declinations dropped since the last pass BEFORE the planner
+            # triggers read the queue - a dropped proposal must count toward the low-queue trigger and be
+            # visible to the planner it may spawn (the planner rewrites "next" from disk, so an un-merged
+            # drop would be lost). Persist so the planner reads the merged ledger.
+            if _drain_queue_drops(q):
+                _write_queue(q)
 
             # ---- planner triggers (spawn before popping so the planner can reorder/refill) ----
             reasons = []
@@ -2024,13 +2180,19 @@ def supervise(smoke: bool = False):
                 _shelve_unit(q, u["config"], "declined", u.get("declined", []))
                 print(f"[supervise] shelved after two declinations: {u['config']}")
             if not q["next"]:
-                QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
+                _write_queue(q)
                 _halt("supervise: HALT - queue empty even after a planner pass. The campaign has run "
                       "out of proposed directions; this is a stopping decision for the user (an "
                       "unfalsified 'done' is INCONCLUSIVE - see CLAUDE.md HARD GATE 5).")
 
+            # Keep each block's units contiguous before popping, so a straggler appended behind unrelated
+            # units cannot invert verification order (Issue: a block is verified only once no queued unit
+            # still shares its id). Does not move the head or any block's first member.
+            if _normalize_blocks(q):
+                print("[supervise] queue: reordered 'next' to keep block ids contiguous")
+
             unit = q["next"][0]
-            QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
+            _write_queue(q)
 
             # ---- one fresh-context worker per unit; retry, then SHELVE and continue (degrade-loud) ----
             cfg_path = Path(unit["config"])
@@ -2038,10 +2200,9 @@ def supervise(smoke: bool = False):
             prompt = build_prompt("worker", config=unit["config"], notes=notes)
 
             def _unit_resolved(u=unit, cp=cfg_path) -> bool:
-                """Grace probe: the unit counts resolved once its save-set exists OR it was declined."""
-                qq = _read_json(QUEUE, {}) or {}
-                head = (qq.get("next") or [{}])[0]
-                return bool(head.get("config") == u["config"] and head.get("declined")) or _unit_saved(cp)
+                """Grace probe: the unit counts resolved once its save-set exists OR the worker declined it
+                (a drop file in results/queue_drop/, since the worker no longer edits queue.json)."""
+                return _unit_saved(cp) or _has_decline_drop(u["config"])
 
             declined = done = False
             st = "unknown"
@@ -2050,14 +2211,15 @@ def supervise(smoke: bool = False):
                 st = _spawn_agent(prompt, w.get("model", ""), f"worker[{unit['config']}]", k,
                                   saved_probe=_unit_resolved)
                 q = _read_queue()
+                _drain_queue_drops(q)          # merge this worker's declinations + proposals (single-writer)
                 head = q["next"][0] if q["next"] else None
                 declined = bool(head and head.get("config") == unit["config"] and head.get("declined"))
                 done = _unit_saved(cfg_path)
                 if declined or done:
-                    break
+                    break                      # the accept/decline block below persists q (merged drops incl.)
                 _record_failure(q, unit["config"], attempt + 1, st,
                                 "unit neither saved nor declined after this attempt")
-                QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
+                _write_queue(q)
                 print(f"[supervise] unit not validated (attempt {attempt + 1}): status={st}, "
                       f"saved={done} - " + ("retrying" if attempt < retries else "out of retries"))
 
@@ -2073,21 +2235,31 @@ def supervise(smoke: bool = False):
             # declining is sanctioned, one declination is below the shelve-at-two threshold, and a later
             # worker may judge the unit runnable. Accepting drops the unit and its stale declinations with it.
             if done:
-                q["next"] = [u for u in q["next"] if u.get("config") != unit["config"]]
-                q["accepted_units"] = int(q.get("accepted_units", 0)) + 1
-                q["last_accept_utc"] = _dt.datetime.now(_dt.timezone.utc).isoformat()
+                stem = _exp_stem(cfg_path)
+                pending_exps = {e.get("exp") for e in (q.get("pending_verification") or [])}
+                already_accepted = bool(stem) and stem in pending_exps
+                q["next"] = [u for u in q["next"] if u.get("config") != unit["config"]]   # always drop it
                 consec_fail = 0
-                print(f"[supervise] accepted unit #{q['accepted_units']}: {unit['config']}")
-                if props["verification"] == "per-block":
-                    # Queue the accepted unit for driver-spawned verification. Its block (a batch of
-                    # related units sharing a "block" id) is verified once, when its last unit lands;
-                    # a block-less unit is a block of one. Persisted in the queue ledger, so
-                    # verification owed by an interrupted run is serviced on relaunch.
-                    try:
-                        stem = json.loads((ROOT / cfg_path).read_text(encoding="utf-8"))["exp_name"]
-                    except Exception:
-                        stem = ""
-                    if stem:
+                if already_accepted:
+                    # IDEMPOTENT ACCEPT (belt-and-braces). Single-writer already removes the resurrected-
+                    # queue-entry race that used to accept one unit twice; this guard means that even if a
+                    # unit's save-set is re-validated a second time, the counters and pending_verification
+                    # are not double-counted. pending_verification is the correct idempotency key here: it
+                    # is appended ONLY at accept (below), so its membership means "already accepted" - unlike
+                    # the scoreboard row, which the runner writes DURING the unit, so it exists on the first,
+                    # legitimate accept too. (Only per-block campaigns populate it; they are the ones that
+                    # own verification, and where the duplicate was observed.)
+                    print(f"[supervise] unit {unit['config']} already accepted (stem {stem} pending "
+                          "verification) - dropping the duplicate without re-counting (idempotent)")
+                else:
+                    q["accepted_units"] = int(q.get("accepted_units", 0)) + 1
+                    q["last_accept_utc"] = _dt.datetime.now(_dt.timezone.utc).isoformat()
+                    print(f"[supervise] accepted unit #{q['accepted_units']}: {unit['config']}")
+                    if props["verification"] == "per-block" and stem:
+                        # Queue the accepted unit for driver-spawned verification. Its block (a batch of
+                        # related units sharing a "block" id) is verified once, when its last unit lands;
+                        # a block-less unit is a block of one. Persisted in the queue ledger, so
+                        # verification owed by an interrupted run is serviced on relaunch.
                         q.setdefault("pending_verification", []).append(
                             {"config": unit["config"], "exp": stem,
                              "block": unit.get("block"), "hypothesis": unit.get("hypothesis")})
@@ -2106,13 +2278,13 @@ def supervise(smoke: bool = False):
                       "can revive it (degrade-loud)")
                 if consec_fail >= k["max_consecutive_failures"]:
                     q["consecutive_operational_failures"] = consec_fail
-                    QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
+                    _write_queue(q)
                     _halt(f"supervise: HALT - {consec_fail} consecutive operational failures is SYSTEMIC "
                           "(the environment, not the units): check the agent CLI, credentials, and disk; "
                           "read the driver log, then relaunch.")
             q["units_since_planner"] = int(q.get("units_since_planner", 0)) + 1
             q["consecutive_operational_failures"] = consec_fail
-            QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
+            _write_queue(q)
 
             # ---- verify-after: service completed blocks (also drains backlog left by a mode flip) ----
             if props["verification"] == "per-block" or (q.get("pending_verification") or []):
@@ -2129,13 +2301,19 @@ def supervise(smoke: bool = False):
         sys.stdout = log.close()
 
 
+def _exp_stem(config_path: Path) -> str:
+    """The exp_name a config declares, or "" if unreadable - the stem every artifact is keyed by.
+    BOM-tolerant, since a config may have been hand-edited on Windows."""
+    try:
+        return json.loads((ROOT / config_path).read_text(encoding="utf-8-sig"))["exp_name"]
+    except Exception:
+        return ""
+
+
 def _unit_saved(config_path: Path) -> bool:
     """Structural validation of what a worker must leave behind (the checkpoint contract's hard core)."""
-    try:
-        stem = json.loads((ROOT / config_path).read_text(encoding="utf-8"))["exp_name"]
-    except Exception:
-        return False
-    exp_id = exp_id_for(stem)
+    stem = _exp_stem(config_path)
+    exp_id = exp_id_for(stem) if stem else ""
     if not exp_id:
         return False                       # an unnameable unit cannot have left a well-named save-set
     return ((RESULTS / f"result_{exp_id}.json").is_file()
@@ -2241,7 +2419,7 @@ def _service_verification(k: dict, model: str, vfail: int) -> int:
             q2 = _read_queue()
             q2["pending_verification"] = [e for e in (q2.get("pending_verification") or [])
                                           if e.get("config") not in bad_cfgs]
-            QUEUE.write_text(json.dumps(q2, indent=2), encoding="utf-8")
+            _write_queue(q2)
             continue
         missing = [s for s in exps if _find_verdict_file(s) is None]
         if missing:
@@ -2276,12 +2454,13 @@ def _service_verification(k: dict, model: str, vfail: int) -> int:
         for s in exps:
             _stamp_verified(s)
         done_cfgs = {e.get("config") for e in group}
-        q2 = _read_queue()                             # re-read: the verifier may have queued follow-ups
+        q2 = _read_queue()
         q2["pending_verification"] = [e for e in (q2.get("pending_verification") or [])
                                       if e.get("config") not in done_cfgs]
-        QUEUE.write_text(json.dumps(q2, indent=2), encoding="utf-8")
+        _write_queue(q2)
         print(f"[supervise] verification complete: {', '.join(exps)} - verdict(s) on record and "
-              "stamped; REFUTED/INCONCLUSIVE follow-ups, if any, were queued by the verifier")
+              "stamped; any REFUTED/INCONCLUSIVE follow-ups the verifier dropped are merged at the next "
+              "loop top (results/queue_drop/)")
     return vfail
 
 
