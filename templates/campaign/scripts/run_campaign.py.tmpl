@@ -1148,6 +1148,15 @@ def _parse_agent_cmd(s: str) -> list[str]:
 AGENT_CMD = _parse_agent_cmd(os.environ.get("AUTORESEARCH_AGENT_CMD") or "claude -p")
 STREAM_FLAGS = ["--output-format", "stream-json", "--verbose"]   # only added per driver.stream policy
 
+
+def _permission_flags(mode: str) -> list[str]:
+    """`--permission-mode <mode>` for spawned worker/planner agents (default 'auto' - see _driver_knobs).
+    Passed ONLY to the default claude CLI: a custom AUTORESEARCH_AGENT_CMD (e.g. the test stub) is handed
+    no permission flag it may not understand. An empty mode disables the flag entirely."""
+    if not mode or "AUTORESEARCH_AGENT_CMD" in os.environ:
+        return []
+    return ["--permission-mode", mode]
+
 WORKER_PROMPT = """You are the iteration worker for the autoresearch campaign in this directory.
 Your assignment is ONE unit: {config}. CLAUDE.md auto-loads; these two do NOT, so re-read them now:
 campaign.md (the campaign definition - mission, the FROZEN metric, the levers, the caps, promotion) and
@@ -1483,6 +1492,16 @@ def _driver_knobs(loop_cfg: dict) -> dict:
         "hb_stale_s": float(d.get("heartbeat_stale_min", 5)) * 60,
         "grace_s": float(d.get("detached_grace_min", 60)) * 60,
         "inactivity_s": float(w.get("inactivity_timeout_min", 30)) * 60,
+        # Worker/planner permission mode. Default "auto" - the standard classifier: it ALLOWS local file
+        # ops in project scope, reads, and killing a subprocess THIS session created by its tracked PID,
+        # and DENIES (cleanly, no prompt in a headless spawn - verified) the dangerous ones: killing a
+        # process it did not create, secret writes, exfiltration, spawning bypass agents. Set
+        # "bypassPermissions" for a campaign that genuinely needs a soft-denied action (an irreversible
+        # overwrite of a pre-existing untracked file, a cross-session kill, a force-push). Env override:
+        # AUTORESEARCH_PERMISSION_MODE. Choices are the claude CLI's: auto, bypassPermissions, acceptEdits,
+        # dontAsk, manual, plan.
+        "permission_mode": (os.environ.get("AUTORESEARCH_PERMISSION_MODE")
+                            or str(d.get("permission_mode", "auto"))).strip() or "auto",
     }
 
 
@@ -1583,7 +1602,7 @@ def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None)
     `saved_probe` to come true or the heartbeat to go stale, instead of instantly failing validation.
     """
     stream = _stream_on(k)
-    cmd = (AGENT_CMD + ["--dangerously-skip-permissions"]
+    cmd = (AGENT_CMD + _permission_flags(k["permission_mode"])
            + (["--model", model] if model else []) + (STREAM_FLAGS if stream else []) + [prompt])
     print(f"[supervise] spawning {label} (model={model or 'default'}, cap={k['absolute_s'] / 3600:.1f}h, "
           f"inactivity window={k['inactivity_s'] / 60:.0f}min, stream={'on' if stream else 'off'})")
@@ -2057,7 +2076,9 @@ def preflight(smoke: bool = False) -> list[str]:
     # 8. opt-in smoke spawn (one real model call)
     if smoke and not fails:
         try:
-            cmd = AGENT_CMD + ["--dangerously-skip-permissions", "Reply with exactly OK and end the turn."]
+            cmd = (AGENT_CMD
+                   + _permission_flags(os.environ.get("AUTORESEARCH_PERMISSION_MODE") or "auto")
+                   + ["Reply with exactly OK and end the turn."])
             proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=300,
                                   env=dict(os.environ, AUTORESEARCH_SUPERVISED="1"))
             if proc.returncode == 0:

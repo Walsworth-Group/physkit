@@ -42,10 +42,11 @@
     "inactivity_timeout_min": 30
   },
   "driver": {
-    "_doc": "Supervisor-driver knobs. All code-defaulted - an older loop.json without this section keeps working. max_consecutive_failures: N operational (unit-scoped) failures in a row = systemic -> hard halt; below N the driver shelves the unit (kind=operational) and continues. stream: auto|on|off - auto adds the stream-json live feed only for the default claude CLI. inbox_max_chars caps the per-spawn USER-NOTES injection from results/inbox/. heartbeat_stale_min / detached_grace_min govern the post-exit wait for a detached runner that is still solving.",
+    "_doc": "Supervisor-driver knobs. All code-defaulted - an older loop.json without this section keeps working. max_consecutive_failures: N operational (unit-scoped) failures in a row = systemic -> hard halt; below N the driver shelves the unit (kind=operational) and continues. stream: auto|on|off - auto adds the stream-json live feed only for the default claude CLI. inbox_max_chars caps the per-spawn USER-NOTES injection from results/inbox/. heartbeat_stale_min / detached_grace_min govern the post-exit wait for a detached runner that is still solving. permission_mode: the --permission-mode spawned workers/planners run under (default 'auto', the standard classifier: allows local file ops in project scope, reads, and killing a subprocess THIS session created by its tracked PID; cleanly denies - no prompt, verified headless - killing a process it did not create, secret writes, exfiltration, and spawning bypass agents). Set 'bypassPermissions' for a campaign that needs a soft-denied action (irreversible overwrite of a pre-existing untracked file, a cross-session kill, a force-push). Env override AUTORESEARCH_PERMISSION_MODE; only applied to the default claude CLI.",
     "max_consecutive_failures": 3,
     "planner_retries": 1,
     "stream": "auto",
+    "permission_mode": "auto",
     "inbox_max_chars": 20000,
     "feed_line_chars": 160,
     "heartbeat_stale_min": 5,

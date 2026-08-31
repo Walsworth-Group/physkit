@@ -93,6 +93,11 @@ The loop above is the per-unit procedure; who repeats it is the mode:
   background it and poll (a `Monitor` until-loop) within your `iteration_timeout_hours`; never exit while
   it is still solving, and do not noop-poll with `echo .`.
 
+  **Kill a subprocess by the PID you captured at launch — never by grepping the process list.** Under the
+  default `auto` permission mode, a `kill`/`taskkill` on a PID found via `tasklist`/`ps` is denied as
+  killing an unowned process (it is how a worker once killed the driver); killing the exact PID you
+  started is allowed. Same for a detached solve — keep its PID in view so the cleanup reads as yours.
+
   Two rules follow:
   - Mid-unit anomalies: probe through the pattern, not around it. Document the problem + hypothesis
     in the journal and propose a standard probe unit; a claimed major problem needs a verify verdict

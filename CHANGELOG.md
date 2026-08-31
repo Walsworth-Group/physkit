@@ -8,6 +8,29 @@ Dates are UTC. Each entry cites the run/finding that motivated it (the kit's own
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-08-27
+
+### Changed — spawned workers/planners now default to `--permission-mode auto`, not full bypass
+
+The supervisor driver spawned every worker and planner with `--dangerously-skip-permissions` (full
+bypass). It now spawns them under a configurable permission mode defaulting to **`auto`** — the standard
+Claude Code classifier — with `bypassPermissions` available as the documented fallback. New knob:
+`loop.json` `driver.permission_mode` (env override `AUTORESEARCH_PERMISSION_MODE`); the flag is passed
+only to the default `claude` CLI, so a custom `AUTORESEARCH_AGENT_CMD` (e.g. the test stub) is unchanged.
+
+Verified empirically (claude 2.1.238) before flipping the default: in a headless `claude -p
+--permission-mode auto` spawn, an allowed action runs, and a `soft_deny` returns as a **clean, fast
+tool-error — it does not stall/hang** (so it cannot deadlock a unit). `auto`'s `allow` set covers the
+research worker's real actions (local file ops in project scope, reads, declared-dependency installs,
+push-to-repo) **including killing a subprocess the worker itself created, by its tracked PID**; its
+`soft_deny` set covers the dangerous ones — killing a process it did *not* create (which is how a worker
+once `taskkill`ed the driver — `PHYSKIT_ISSUES.md` Issue 17, now mitigated for free), secret writes,
+exfiltration, and spawning bypass agents. Residual, documented + configurable: a unit that genuinely
+needs a soft-denied action (an irreversible overwrite of a pre-existing untracked file, a cross-session
+kill, a force-push) fails *cleanly* under `auto` — flip that campaign to `bypassPermissions`. Threaded:
+`run_campaign.py.tmpl` (spawn + liveness probe), `loop.json.tmpl` `driver.permission_mode`, and
+`roles/worker.md.tmpl` (kill-your-own-PID guidance). Sign-off; `BUILD_BACKLOG.md` OX-23.
+
 ## [0.10.3] - 2026-08-27
 
 ### Changed — the worker's never-background rule is now OS-aware (corrects the v0.10.2 OX-11 wording)
