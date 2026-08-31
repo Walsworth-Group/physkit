@@ -82,12 +82,16 @@ The loop above is the per-unit procedure; who repeats it is the mode:
   over between units. `CLAUDE.md` auto-loads and the driver assembles this file + `campaign.md` into
   your prompt; everything else you need, you read from the ledger.
 
-  **Run the solve in your own foreground shell — never background or detach it.** The driver reads
-  your exit as the unit's completion: a `nohup` / `&` / `Start-Process` / backgrounded solve loses
-  `results/.run_heartbeat` (the driver's dead-worker signal), dies with your session, and the unit
-  fails `saved=False`. You are **not** re-invoked when a detached run finishes. For a long fit, block
-  on it (a `Monitor` until-loop, or one `Bash` call that waits then greps) within your
-  `iteration_timeout_hours`; do not noop-poll with `echo .` either.
+  **Keep the solve alive under your own session — never fire-and-forget it.** A single tool call is
+  capped (~10 min on every platform), so a long fit cannot be one blocking call — but the fatal error
+  is *exiting while it is still solving*: the driver reads your exit as the unit's completion, and a
+  solve you backgrounded (`nohup` / `&` / `Start-Process`) then walked away from loses
+  `results/.run_heartbeat` (the driver's dead-worker signal) and never lands its save-set, so the unit
+  fails `saved=False` — and you are **not** re-invoked when it finishes. On Windows a POSIX-backgrounded
+  solve (`nohup`/`&`) does not even survive your exit; it is reaped with your session. So run the solve
+  so it keeps the heartbeat live and **stay alive until the save-set is on disk** — block on it, or
+  background it and poll (a `Monitor` until-loop) within your `iteration_timeout_hours`; never exit while
+  it is still solving, and do not noop-poll with `echo .`.
 
   Two rules follow:
   - Mid-unit anomalies: probe through the pattern, not around it. Document the problem + hypothesis

@@ -8,6 +8,22 @@ Dates are UTC. Each entry cites the run/finding that motivated it (the kit's own
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-08-27
+
+### Changed — the worker's never-background rule is now OS-aware (corrects the v0.10.2 OX-11 wording)
+
+The v0.10.2 rule said "run the solve in your foreground shell — never background or detach it." Empirical
+testing on Windows (cross-review `case-studies/orchestration_cross-review_2026-08-27.md`, OX-11) showed that
+absolute is wrong: a single tool call is capped at ~10 min on **every** platform (harness-inherent), so a
+long fit cannot be one blocking call; and a POSIX-backgrounded solve (`nohup`/`&`) does **not** survive the
+worker process exiting on Windows Git Bash (it is reaped with the session), whereas a Windows-native detach
+(`Start-Process`/WMI) does. The real rule is narrower: never *fire-and-forget-and-exit*; run the solve so it
+keeps `results/.run_heartbeat` live and **stay alive until the save-set is on disk** — block, or background
+and poll. Threaded across both loci a worker reads: `roles/worker.md.tmpl` §How the loop runs and the driver
+`WORKER_PROMPT`. Sign-off; `BUILD_BACKLOG.md` OX-11. A first-class OS-aware `--detach` launch helper
+(Windows `Start-Process`/WMI, POSIX `setsid`/double-fork, heartbeat maintained, consumed by the driver's
+existing post-exit grace path) is filed as OX-22, not yet built.
+
 ## [0.10.2] - 2026-08-27
 
 ### Fixed — the supervisor driver's queue is now single-writer, its log flushes, blocks stay contiguous

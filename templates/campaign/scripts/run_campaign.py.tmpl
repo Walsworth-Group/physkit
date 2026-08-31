@@ -1167,9 +1167,10 @@ at the top of the next iteration:
     "block": "<block-id or omit>", "hypothesis": "<what it tests>"}}}}  (one file per proposal, or a JSON
     list of such records). Mid-unit anomalies:
 document + propose a probe unit - do not chase them ad hoc (roles/worker.md: probe through the pattern).
-Long solver runs execute in YOUR shell, never inside a background subagent - the runner maintains
-results/.run_heartbeat there, which is how the driver tells a live solve from a dead worker (a
-backgrounded solver loses that heartbeat AND risks the platform stall abort). If you hit a genuine fork
+Long solver runs execute under YOUR session, never inside a background subagent, and you STAY ALIVE
+until the save-set lands - the runner maintains results/.run_heartbeat, which is how the driver tells a
+live solve from a dead worker; a solve you background then EXIT on loses that heartbeat and its save-set
+(on Windows it is reaped with your session), so the unit fails saved=False and you are NOT re-invoked. If you hit a genuine fork
 only the user can weigh, write results/ESCALATE.md (what, why, the options) and finish your unit if
 possible. If a USER NOTES section follows this prompt, treat it as input from the user: acknowledge each
 note in results/JOURNAL.md and record what it changed (or why nothing). Before you exit: complete the
