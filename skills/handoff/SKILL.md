@@ -70,12 +70,15 @@ the index of every campaign and session, what each changed and found — is `PRO
   the first resume anchor.
 - **Current state** notes which campaign is active by its lineage row, any sibling coupling in play
   such as a frozen artifact consumed from a promoted project-level dir (`../../models/`, …; old
-  layout: `../../shared/`), and whether a recent change is a
+  layout: `../../shared/` <!-- lint-ok: intentional pre-consolidation path -->), and whether a recent change is a
   `fork-campaign` trigger, meaning it invalidated a sibling's findings, rather than a local matter.
 - **Portability check over the project tree.** The tree must relocate as one unit: every reference relative,
   and the resolved `data_path` the only absolute path. Add the project validator to "run this to confirm
-  state": `python "${CLAUDE_PLUGIN_ROOT}/skills/new-campaign/scripts/validate_campaign.py" <project_root>`
-  checks structure, indexing of every campaign in the lineage, and absence of absolute paths in configs. A
+  state": run the linked
+  [`../new-campaign/scripts/validate_campaign.py`](../new-campaign/scripts/validate_campaign.py) by its
+  resolved absolute path against `<project_root>`. PhysKit resource links are relative to the directory
+  containing this `SKILL.md`, not to the campaign working directory. The validator checks structure,
+  indexing of every campaign in the lineage, and absence of absolute paths in configs. A
   broken path or an un-indexed campaign is a resume landmine.
 
 ## Archive, don't overwrite

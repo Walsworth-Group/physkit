@@ -123,8 +123,10 @@ re-check what a reader will act on, not every digit.
   rests on.
 - **Recompute/confirm each from source** rather than transcribing: re-run or re-read the producing
   computation and confirm it matches the stated value. For a campaign, reconcile against the frozen
-  record (scoreboard/logbook) and require a CONFIRMED verification status. A higher raw score that
-  failed an overfit/sanity guard is not the headline.
+  record (scoreboard/logbook) and require the verification status the campaign's preset owes the
+  headline — a CONFIRMED verdict, or the claim audit's label where the preset promotes stamped
+  `unverified` — and print the label. A higher raw score that failed an overfit/sanity guard is not the
+  headline.
 - **Internal consistency:** totals/sums, units, cross-references, and figures all agree with the numbers
   in the text, and the abstract matches the body.
 - **Citations:** every reference resolves to the real source via `cite-check`: exact title, full author
@@ -136,8 +138,9 @@ re-check what a reader will act on, not every digit.
   result, is marked as such and never presented as settled.
 - **Emit a claim→evidence manifest** (the verification ledger): a table mapping each load-bearing claim to
   the evidence that backs it (experiment id / `result_<NN>.json` / figure / scoreboard row), how
-  it was checked, the result, and any planned-vs-executed delta (what was intended to run vs what
-  ran). Every headline claim must trace to a real artifact; a claim with no entry does not go in
+  it was checked, the result, its verification label (in a campaign: the checks artifact's `label`, or
+  `label_after` from the claim audit where one ran, with "downgraded by audit" said where true), and
+  any planned-vs-executed delta (what was intended to run vs what ran). Every headline claim must trace to a real artifact; a claim with no entry does not go in
   the document. Keep it in full for an internal audience, or as an appendix for a shareable one, so the
   report's own trustworthiness is auditable.
 

@@ -1,6 +1,14 @@
 ---
 name: new-campaign
-description: Interview a researcher and scaffold a new autonomous-research ("autoresearch") campaign in the physical sciences. Use when the user wants to START or SET UP a new campaign, optimization loop, fitting/decoder campaign, forward-model-improvement campaign, generative-design search, ML-training campaign, or hardware-in-the-loop tuning loop — phrasings like "start a new campaign", "set up an autoresearch loop", "scaffold a campaign to optimize X", "I want to build a loop that improves Y", or "create the campaign.md / metric / scoreboard for a new project". Conducts a structured interview (goal, metric, physics, data, levers, constraints, compute, time), co-designs the FROZEN metric, determines which archetype(s) apply, then generates a complete campaign tree (campaign.md, role files, configs, results ledger) from the kit templates, implements the FROZEN scorer and the experiment hooks, and hands off only when the tree passes both the template validator and the driver's own --preflight — scaffold-complete means launch-ready. NOT for running an existing loop, verifying a result (verify), or writing the end-of-campaign report (final-report).
+description: >-
+  Interview a researcher and scaffold a launch-ready autonomous-research campaign in the physical
+  sciences. Use when the user wants to start or set up an optimization, fitting/decoder,
+  forward-model-improvement, generative-design, ML-training, or hardware-in-the-loop campaign. Elicit
+  the goal, metric, physics, data, levers, constraints, compute, and time; co-design the FROZEN metric;
+  choose the applicable archetype; generate the complete project and campaign tree from PhysKit's
+  bundled templates; implement the scorer and experiment hooks; and hand off only after the template
+  validator and driver preflight pass. Not for running an existing loop, verifying one result, or
+  writing the end-of-campaign report.
 ---
 
 # new-campaign — interview, then scaffold a campaign
@@ -62,22 +70,29 @@ Within a session this is shared context; across sessions the persisted artifact 
 interview twice.
 
 ## Step 0 — read the kit before interviewing
-Read these so your questions and fills are grounded (paths are under the plugin root):
-- `${CLAUDE_PLUGIN_ROOT}/docs/PRINCIPLES.md` — the doctrine every campaign inherits, sectioned by 8
+PhysKit resource links in this skill are relative to the directory containing this `SKILL.md`, not to
+the campaign working directory. Resolve them to absolute paths before reads, copies, or commands. If any
+linked package resource is absent, this is a skills-only projection rather than the full PhysKit package:
+stop and ask the user to install the full plugin; never fall back silently to a source checkout.
+
+Read these so your questions and fills are grounded:
+- [`../../docs/PRINCIPLES.md`](../../docs/PRINCIPLES.md) — the doctrine every campaign inherits, sectioned by 8
   contexts. Skim it now. Once the archetype(s) are chosen (Step 1), read in depth only the contexts they
   lean on; the cheatsheet maps each archetype to its disciplines.
-- `${CLAUDE_PLUGIN_ROOT}/docs/CORE.md` — the always-on spine and the general skills it routes to
+- [`../../docs/CORE.md`](../../docs/CORE.md) — the always-on spine and the general skills it routes to
   (`frame-problem`, `verify`, `simulation-design`, `correctness-suite`, `report`, …) that this campaign
   composes.
-- `${CLAUDE_PLUGIN_ROOT}/templates/ARCHETYPE_CHEATSHEET.md` — the campaign archetypes (A–I) and their
+- [`../../templates/ARCHETYPE_CHEATSHEET.md`](../../templates/ARCHETYPE_CHEATSHEET.md) — the campaign archetypes (A–I) and their
   patterns.
-- `${CLAUDE_PLUGIN_ROOT}/templates/PLACEHOLDERS.md` — the fill convention and canonical placeholder list.
-- Skim `${CLAUDE_PLUGIN_ROOT}/templates/campaign/` — what you will fill. `campaign.md` is the whole
+- [`../../templates/PLACEHOLDERS.md`](../../templates/PLACEHOLDERS.md) — the fill convention and canonical placeholder list.
+- Skim [`../../templates/campaign/`](../../templates/campaign/) — what you will fill. `campaign.md` is the whole
   signed-off contract now: goal, metric, levers, §Verification, §Known landmines, and the append-only
   §Decision record tail. For
-  archetype E, also read `${CLAUDE_PLUGIN_ROOT}/docs/reference/hardware-in-the-loop.md` (§0 is an example
-  assembled loop) and `${CLAUDE_PLUGIN_ROOT}/docs/reference/instrument-contract.md` (the lab-side
-  protocol the kit's `scripts/hardware/` machinery speaks).
+  archetype E, also read
+  [`../../docs/reference/hardware-in-the-loop.md`](../../docs/reference/hardware-in-the-loop.md)
+  (§0 is an example assembled loop) and
+  [`../../docs/reference/instrument-contract.md`](../../docs/reference/instrument-contract.md)
+  (the lab-side protocol the kit's `scripts/hardware/` machinery speaks).
 
 ## Step 0.1 — establish the project home (every campaign lives in one)
 **Every campaign lives inside a project**: the home for one physical system investigated over many
@@ -108,6 +123,12 @@ Consequences, unconditional, with no campaign-local variant:
    keep and fill if coupled to a sibling, delete if independent. Coupling decides that one, not project
    membership.
 4. The campaign `CLAUDE.md` **project-context** block is always kept.
+5. A campaign using the managed resume gate requires managed project instructions too. For a pre-existing
+   project with one ordinary unmarked `CLAUDE.md` and no case-insensitive `AGENTS.md` or
+   `AGENTS.override.md`, prepend the inert managed marker and byte-copy the result to exact-case regular
+   `AGENTS.md`. If either candidate already exists, is non-regular, or differs, stop and have the operator
+   choose the authoritative side; never overwrite it by inference. This materializes the project perimeter
+   for the new campaign without changing any older campaign runner.
 
 ## Step 0.5 — harvest sources and detect the environment (before asking anything)
 Collect what already answers the interview, so you only ask about real gaps:
@@ -155,9 +176,10 @@ already answer and ask only the gaps.** Use the **AskUserQuestion** tool for cat
 free-form dialogue for the metric and physics narrative. Capture every answer; you will need it to fill the
 templates.
 
-**Always ask these, even if you think you could infer them:** the internet/literature level (topic 11) and
-the user's own ideas to try or avoid (topic 12). Two more are effectively always-ask because you cannot
-measure them: the time budget (topic 8) and the environment (topic 9).
+**Always ask these, even if you think you could infer them:** the internet/literature level (topic 11),
+the user's own ideas to try or avoid (topic 12), and which harness will launch first (topic 9). The time
+budget (topic 8) and environment (topic 9) are also effectively always-ask because you cannot measure
+them.
 
 **Always determine, for every project, whether there is a simulation component:** a forward model,
 device-performance simulation, synthetic or simulated training data, an evaluator or simulator, or a
@@ -182,10 +204,14 @@ control, or training or fitting purely on real experimental data). If there is o
    discipline. Then the baseline (exp 000) value and method, any theoretical ceilings, the guardrail
    (necessary but not sufficient), and diagnostics. Pin down what feeds the metric and what is FROZEN.
 
-   **Ask explicitly whether the baseline has already been through `verify`** — that is, the prior work's
-   delivered pipeline or number this campaign will freeze and build on. If not, say so plainly in the
-   campaign spec as an open risk rather than silently trusting it. A campaign optimizes against its
-   baseline, so an unverified baseline is a load-bearing unknown the whole campaign inherits, not a detail.
+   **Measure the baseline and the floor here; never freeze a published number.** The prior work's
+   delivered pipeline or number this campaign will freeze and build on is the load-bearing unknown the
+   whole campaign inherits: the one campaign measured end to end spent most of its loop auditing its own
+   ledger because its contract carried a floor taken from a paper that the data did not support. Before
+   anything is frozen, the setup audit (Step 3.7) reproduces the baseline from its config, measures the
+   floor from replicates run in this tree, and checks that the scorer orders a synthetic pair the way the
+   mission says it should — each as a contract check in the suite. If a number genuinely cannot be
+   measured here, say so plainly in the campaign spec as an open risk rather than silently trusting it.
 
    Capture the hard bounds in both forms while you have the answer: the prose (`{{METRIC_HARD_BOUNDS}}`)
    and the Python literal the FROZEN scorer enforces (`{{PLAUSIBILITY_BOUNDS}}`, e.g.
@@ -219,7 +245,9 @@ control, or training or fitting purely on real experimental data). If there is o
 
    Finally, set `{{METRIC_VERSION}}` / `{{DATA_VERSION}}` (default `v1` / `v1`). The runner stamps them
    onto every scoreboard row and result, and they are bumped whenever the FROZEN scorer or the evaluation
-   data changes.
+   data changes — a `metric_version` bump is a metric epoch (`roles/worker.md` §Metric epochs). Say in one
+   sentence that `campaign.metric_revision` ships `cautious`: a revision the loop wants raises
+   `ESCALATE.md` and waits; the user moves that dial, never the loop.
 
    The primary, guardrail, and diagnostics, plus the experiment-type **run numerics** (e.g. epochs and best
    epoch for ML; iterations, wall-clock, and n_free_params for fits), plus a `tier` column
@@ -318,15 +346,46 @@ control, or training or fitting purely on real experimental data). If there is o
    **From the same unit-cost assessment, derive the supervisor loop knobs** (`configs/loop.json`, which the
    driver reads; PLACEHOLDERS §Loop configuration): planner cadence *k*, plateau threshold *m*
    (dual-denominated: units and wall-clock, whichever trips first), the outstanding-units cap (default
-   *k*), the iteration timeout (greater than the Extended cap), the verify full-reproduction threshold, and
-   the planner and worker models. Seed sensible defaults for the models; they are the user's to change,
-   because model tiers shift with every release. **The cadence inverts with unit cost:** expensive units
+   *k*), and the iteration timeout (greater than the Extended cap). Also record `campaign.reproducible`
+   (whether one unit can be independently re-executed from its config alone: seeded, not a one-shot
+   measurement, not hardware-in-the-loop). There is no verification threshold to set: the runner decides
+   re-execution per unit from its measured solve time against the iteration timeout and that flag, and
+   records the decision in each `results/checks_<NN>.json`. The harness-specific planner/worker model
+   and effort selections are topic 9. **The cadence inverts with unit cost:** expensive units
    mean planning often, with a small *k*, since the planner is nearly free next to a day-long solve and a
    wasted solve is the real cost; cheap units mean planning in strides, with a large *k*, which keeps
    planner overhead a small fraction of loop compute. Propose the values with their reasoning; the user
    confirms them with the spec.
-9. **Environment & version control.** Ask which environment the user wants, and **default to proposing a
-   fresh virtual environment** (a new venv or conda env). Record the choice and setup commands in the
+8b. **Autonomy and verification — one step, two choices.** Both are the user's decisions about how far to
+   trust the loop on THIS problem, so ask them together and record both in `configs/loop.json`.
+   - **Metric revision** (`campaign.metric_revision`, `{{METRIC_REVISION}}`): "If the loop finds the
+     frozen metric itself is wrong, may it revise it on its own — declaring, verifying, and re-baselining a
+     metric epoch without stopping (`autonomous`) — or must it stop and ask (`cautious`, the default)?"
+   - **Verification preset** (`verify.preset`, `{{VERIFICATION_PRESET}}`): "How hard is this problem, and
+     how much of the budget should go to checking? Choose by how likely a plausible-looking result is
+     wrong here." Then present the four presets **verbatim** from the plugin's
+     `docs/reference/verification-presets.md` — the *summary* and *when to choose it* fields of `minimal`
+     · `light` (the default) · `moderate` · `intensive`. Do not paraphrase them: that file is the single
+     description, and the driver prints the same table at preflight. Record the choice, and one line on
+     why, in the campaign spec.
+9. **Active harness, role models/effort, environment & version control.** Ask which harness will launch
+   this campaign first: **Claude Code**, **Codex**, or **switchable**. If switchable, also ask which one
+   launches first. This choice does not prune the dual-compatible scaffold; it sets
+   `{{AGENT_BACKEND}}`, decides which role settings to ask for, chooses the Step 4 preflight, and tailors
+   the handoff. A later switch uses `--backend` after stopping the current supervisor.
+
+   For each harness the user plans to use, ask for the planner and worker model and effort independently.
+   Explain that blank means inherit that harness's configured default, which is the least maintenance but
+   is not a reproducible pin. Claude uses `model` + `claude_effort`; Claude effort may be `low`, `medium`,
+   `high`, `xhigh`, or `max`, subject to the selected model and Claude Code version. Codex
+   uses `codex_model` + `codex_reasoning_effort`; Codex effort may be `minimal`, `low`, `medium`, `high`,
+   or `xhigh`. The direct Codex verifier follows the worker's Codex pair; the established Claude nested
+   verifier follows the planner's Claude pair. Fill the unused harness's fields with empty strings when
+   the user chose only one. Seed sensible model defaults for the selected harness, but let the user confirm
+   them because model tiers shift with every release; leave effort blank unless the user chooses it.
+
+   Ask which environment the user wants, and **default to proposing a fresh virtual environment** (a new
+   venv or conda env). Record the choice and setup commands in the
    README Environment / Quick-start. **Offer git, do not impose it:** recommend it for shared, large, or
    long-lived projects, but make clear that the **per-experiment snapshot is the reproducibility baseline
    either way**. A small solo campaign can skip git without losing reproducibility
@@ -365,7 +424,8 @@ control, or training or fitting purely on real experimental data). If there is o
 Before generating anything, write a concise **campaign spec**: the archetype(s) that apply, the FROZEN
 metric with bounds and a-priori range, baseline, guardrail and diagnostics, levers,
 FROZEN/READ-ONLY/MUTABLE, constraints, caps and whether tiering applies, the data plan, the detected
-compute and chosen environment, the multi-stage plan if any, and the values you will use for the key
+compute, first-launch harness and role model/effort settings, chosen environment, the multi-stage plan if
+any, and the values you will use for the key
 placeholders. Cite the source for any value pulled from a document, paper, or dataset, with its provenance
 tag (PINNED / REPORTED / INFERRED / RECALLED) from the Step 0.6 ledger, and call out every load-bearing
 fact still at INFERRED or RECALLED as an open question for the user to resolve before the baseline run.
@@ -373,7 +433,8 @@ Show the spec to the user and get explicit sign-off or corrections. This is the 
 build aligned with the original intent.
 
 ## Step 3 — generate the campaign tree
-Copy `${CLAUDE_PLUGIN_ROOT}/templates/campaign/` into the target directory and fill it from the spec,
+Copy the linked PhysKit package directory [`../../templates/campaign/`](../../templates/campaign/) into
+the target directory and fill it from the spec,
 obeying `PLACEHOLDERS.md`. **The copy is what creates the tree: take the whole directory, not a hand-picked
 subset.** The bullets below say what to fill; they are not the file list. Files the copy brings that no
 bullet dwells on must still survive the fill. Five are checked by the Step 4 validator:
@@ -404,8 +465,9 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
 - **Resolve every `[PROPOSED]` tag:** present each speculative discipline to the user to keep or cut; drop
   the tag on kept ones, and delete cut ones.
 - **Strip the `.tmpl` suffix** on write (`campaign.md.tmpl` → `campaign.md`, and so on).
-- **Always-on context.** Generate **`CLAUDE.md`** (from `CLAUDE.md.tmpl`) in the campaign root.
-  Claude Code auto-loads it every session, and it is the only reliable always-on context: a plugin's
+- **Always-on context.** Render `CLAUDE.md.tmpl` once, write **`CLAUDE.md`**, then byte-copy that
+  rendered file to exact-case regular **`AGENTS.md`** in the campaign root. Claude Code and Codex
+  auto-load their respective identical twin; never edit only one. A plugin's
   `docs/` are not auto-loaded, so the always-loaded rules live here per campaign. Every line of it is
   re-injected every turn, so it carries only what the running loop acts on — the integrity core, the
   research reflexes, the hard gates, and the routing table: no kit-design rationale, no
@@ -415,30 +477,47 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   not ride in every worker's context on every turn.
 - **Stamp the kit version — the campaign's doctrine and tooling provenance.** Fill
   **`{{PHYSKIT_VERSION}}`** (it appears in `campaign.md`'s header and atop `results/logbook.md`) as
-  `vX.Y.Z (<ref>, YYYY-MM-DD)`: the version from `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json`,
-  `<ref>` from `git -C "${CLAUDE_PLUGIN_ROOT}" rev-parse --short HEAD` when the plugin is a git
-  checkout (omit it otherwise), and the scaffold date. Every kit release is tagged, so this pin
+  `vX.Y.Z (<ref>, YYYY-MM-DD)`: read the version from the active harness manifest under the resolved
+  PhysKit package root (`.codex-plugin/plugin.json` on Codex, `.claude-plugin/plugin.json` on Claude;
+  require equality when both are present). Obtain `<ref>` with `git -C "<resolved PhysKit package root>"
+  rev-parse --short HEAD` when that root is a Git checkout (omit it otherwise), and add the scaffold date.
+  Every kit release is tagged, so this pin
   recovers the exact skills, reference docs, and templates the campaign was generated under — the
   whole kit, not just a doctrine excerpt. It is a record: never update it to a newer version, which
   does not retroactively govern a run that already happened (invalidated results fork instead —
   `fork-campaign`).
-- **The enforcement layer.** Generate **`.claude/settings.json`** (from its `.tmpl`) and
-  **`scripts/loop_heartbeat.py`**, the Stop hook guarding attended sessions in a live campaign. That hook
+- **The enforcement layer.** Generate **`.claude/settings.json`** and **`.codex/hooks.json`** (from
+  their `.tmpl` files) and
+  **`scripts/loop_heartbeat.py`**, the Stop hook guarding attended sessions in a live campaign, plus
+  **`scripts/supervisor_lock.py`**, the process-held cross-platform lock that permits only one live
+  `--supervise` owner, **`scripts/guard_promotion_codex.py`**, the Codex `apply_patch` perimeter adapter,
+  **`scripts/codex_verifier.py`**, the Codex-only direct-refuter policy, and
+  **`scripts/sync_agent_instructions.py`**, the read-only resume gate and
+  explicit twin reconciler. That hook
   refuses an end-of-turn that is not the human's `results/STOP` or a recorded `results/stop_request.json`,
   and its block message routes toward launching the driver; it stands down for driver-spawned
   supervisor-mode workers, whose per-unit end-of-turn is earned, and for any attended session while the
   driver's `results/.driver_alive` sentinel is fresh. Also generate **`scripts/guard_promotion.py`**, the
   PreToolUse hook that denies an unverified promotion write — a `configs/RECOMMENDED.json` update or a
-  scoreboard edit introducing a `CONFIRMED`/`NEW BEST` token without a recent promotable verdict
+  scoreboard edit introducing a `CONFIRMED`/`NEW BEST` token without a subject-matched promotable verdict
   artifact (`results/verdicts/<id>.json`, written by `verify`; CONFIRMED with a named refuter; an
   INCONCLUSIVE kill is denied), and — in a legacy project that still carries one — a project-ledger
   (`../../DISCOVERIES.md`) entry that does not cite its source verdict by path (fail-closed; new
-  projects have no such ledger). Fill **`{{PYTHON_CMD}}`** with the python
-  invocation detected in Step 0.5 (`py -3` on Windows, `python3` on macOS/Linux) so the hook command runs
+  projects have no such ledger because verified findings remain in their source campaigns). Fill **`{{PYTHON_CMD}}`** with the python
+  invocation detected in Step 0.5 (`py -3` on Windows, `python3` on macOS/Linux) so both harness hook commands run
   on this machine.
 
+  Codex project hooks are trust-gated by the host. At handoff, tell the user to open a fresh Codex task
+  from the campaign root, run `/hooks`, and review/trust the exact `.codex/hooks.json` definition before
+  relying on it. The validator checks the file, matcher, command, and synchronous mode; it cannot prove
+  host trust. This adapter covers canonical `apply_patch`; do not claim that specialized mutation paths
+  which opt out of standard hooks are guarded. A protected promotion must be its own single-file patch:
+  atomic co-mutation could otherwise invalidate the verdict, correctness state, or frozen core after the
+  guard inspected their pre-patch state.
+
   Generate **`configs/loop.json`**: its `campaign` block from topic 3 (prediction mode, noise model, the
-  resolution knob, the version tags) and its loop knobs from topic 8. Fill **`configs/_template.json`**,
+  resolution knob, the version tags), its loop knobs from topic 8, and its initial backend plus role
+  model/effort settings from topic 9. Fill **`configs/_template.json`**,
   the do-not-run per-experiment config every unit is copied from, with its input paths, lever fields, and
   run and cost fields from topics 5–8. Fill **`configs/RECOMMENDED.json`**, the current-best pointer,
   mirroring exp 000 until the first promotion. Create the artifact-gate directories **`predictions/`** (the
@@ -456,6 +535,7 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   "pending_verification": []}`.
 
   **Verify the layer is wired** before handoff: `.claude/settings.json` registering `guard_promotion`,
+  `.codex/hooks.json` registering the synchronous canonical `apply_patch` adapter,
   both gate directories present, and `loop.json` and `queue.json` parsing. A tree without them runs with no
   gates at all, and a tree assembled by hand rather than by this skill is the case where that happens;
   `campaign-status` asserts all of it.
@@ -467,8 +547,12 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   forward model from topic 6, declare them in `configs/frozen_core.json` instead.
   **`tests/correctness_checks.py`**, the **correctness suite**, ships as skip-stubs. From
   `campaign.md` §Verification, seed at least the analytic-limit and invariant checks for the frozen forward
-  model; see the `correctness-suite` skill. It is green-gated: `run_campaign` warns on red under
-  `--selftest`, and `verify` blocks promotion on it.
+  model; see the `correctness-suite` skill. Declare each check's row (`@check(row=...)`: `invariants` —
+  cheap output properties, every unit; `machinery` — fixed-input checks of the code; `gates` — expensive
+  per-result gates): the runner schedules by row under the verification preset and meters what fires
+  every unit. The four **contract checks** the template ships (`baseline_reproduces`,
+  `noise_floor_measured`, `metric_discriminates`, `synthetic_recovery`) are the setup audit's (Step 3.7).
+  It is green-gated: `run_campaign` records its status before every unit, and the promotion guard reads it.
 - **Author the goal, verification, and engineering content.** The campaign's orienting answers live in
   **`campaign.md`** now: §Mission carries the goal, the decision it serves, and what "done" looks like
   (`{{DECISION_SERVED}}` / `{{DONE_CRITERIA}}`); §Loosely-held expectations carries the hypotheses the
@@ -506,7 +590,7 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   4. **Keep** the campaign `CLAUDE.md` project-context block.
   5. A verified finding that is a fact about the **system**, rather than a config that scored well, is
      later recorded in `../../PROJECT.md` §Updates from discoveries, citing its verdict artifact by
-     path — the pointer that survives fork-and-archive (a legacy project's
+     path — the pointer that survives fork-and-archive under the consolidated project layout (a legacy project's
      `../../DISCOVERIES.md` stays hook-gated). Note this in the handoff so the loop agent knows the path.
 - **Literature (per the topic-11 level).** The ongoing-search rule and the `LITERATURE.md` file are decided
   separately:
@@ -520,7 +604,7 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
     as a static reference: keep the summaries and references, and drop the roadmap and next-search sections.
 - **Simulation validation (conditional on topic 4).** If the campaign has a simulation aspect, author
   `docs/SIMULATION_VALIDATION.md` for it, a tailored V&V&UQ plan from
-  `${CLAUDE_PLUGIN_ROOT}/docs/SIMULATION_VALIDATION.md`, and wire its gates into the core docs: a
+  [`../../docs/SIMULATION_VALIDATION.md`](../../docs/SIMULATION_VALIDATION.md), and wire its gates into the core docs: a
   **verify-before-validate gate**, under which the simulator must pass code and solution verification
   before any simulator-based result is trusted, plus the **sim-to-experiment guardrail** in `campaign.md`
   §Mind the simulation-to-experiment gap. Record the simulator's assumptions, domain of validity, and V&V
@@ -537,6 +621,11 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   Scaffold each by re-running this skill in the project, with a new lineage row per sibling. The
   retired `_<NAME>`-suffix-in-one-tree form is not an option: that was the bare-campaign fallback, and
   every campaign now has a project home.
+- The co-designed metric IS the campaign's first metric epoch, and it needs no record of its own: the
+  runner binds the scorer's hash on the first experiment, and from then on a scorer change with no new
+  epoch (a `metric_version` bump plus an entry in `configs/loop.json` `campaign.metric_epochs`) refuses to
+  spend. `campaign.metric_revision` ships `cautious` (a metric revision the loop wants raises `ESCALATE.md`
+  and waits); say so in one sentence at handoff — the user moves the dial, never the loop.
 - Seed `results/scoreboard.tsv` with its header. Leave `results/logbook.md` (append-only full record)
   and `results/JOURNAL.md` (the working window + the empty §Findings record) with their intros and the
   first **NEXT** pointer, queueing exp 000. The logbook, scoreboard, and `diagnostics/` logs are append-only and
@@ -552,7 +641,8 @@ fresh session a red preflight. Sub-agents may draft; this session verifies.
 1. **Implement `scripts/metric.py` for real** — the topic-3 co-designed FROZEN scorer, not a
    `NotImplementedError` stub — and run `python scripts/metric.py --selftest` until green. The selftest
    exists to catch sign and convention bugs before they can corrupt the campaign; an unimplemented
-   scorer defers exactly those bugs. The scorer is FROZEN from here on.
+   scorer defers exactly those bugs. The scorer is FROZEN from here on: locked against quiet change — a
+   later revision is a declared metric epoch, never an in-place edit.
 2. **Implement the three campaign hooks** in `scripts/run_campaign.py` — `validate_method` (the lever
    contract), `run_experiment` (the experiment dispatcher), `load_target` (the target/data loader) —
    wiring the topic-5 data paths and the topic-10 existing code. Implement `save_figure()` so it
@@ -566,14 +656,18 @@ fresh session a red preflight. Sub-agents may draft; this session verifies.
    an unimplemented hook: code is always this session's to write.
 
 5. **Hardware campaigns (archetype E): wire the hooks to the shipped machinery, never re-implement
-   it.** Write `configs/instrument.json` per the plugin's `docs/reference/instrument-contract.md`
+   it.** Write `configs/instrument.json` per the linked
+   [`../../docs/reference/instrument-contract.md`](../../docs/reference/instrument-contract.md)
    (experiment types, `required_keys` vs `defaults`, range tables, cost model, serializer, the two
    roots) — every cap a constraint, never a lever. Then: `validate_method` calls the emission gate
-   (`${CLAUDE_PLUGIN_ROOT}/scripts/hardware/instrument.py`, `gate()`; reject-don't-fill,
+   ([`../../scripts/hardware/instrument.py`](../../scripts/hardware/instrument.py), `gate()`;
+   reject-don't-fill,
    teaching-text reasons); `run_experiment` submits through the declared transport and waits on the
    sibling markers, with ingest — the declared reader plus the quarantine stamp — at its tail;
    `load_target` stays the metric's reference loader, never the ingest path. Validate the channel
-   with `${CLAUDE_PLUGIN_ROOT}/scripts/hardware/dispatch.py preflight` alongside Step 4's gates —
+   with the resolved
+   [`../../scripts/hardware/dispatch.py`](../../scripts/hardware/dispatch.py) `preflight` command
+   alongside Step 4's gates —
    a mis-named order directory is ignored *silently* by the lab side, and preflight catches the
    naming while the readiness probe (an `emit` of a throwaway unit, then `wait`; the contract's
    silent-wedge mitigation) proves the channel end to end before the campaign starts.
@@ -581,22 +675,47 @@ fresh session a red preflight. Sub-agents may draft; this session verifies.
 Do **not** run exp 000 here. It is the first queued unit, and the driver runs it under the gates in the
 fresh session (the loop-gate rationale in Step 5).
 
+## Step 3.7 — the setup audit (before anything is frozen)
+The cheapest verification a campaign can buy is the one that happens before the first unit: a contract
+error — a floor taken from a paper, a baseline nobody re-ran, a metric that does not measure the mission —
+is paid for on every unit afterwards, and no per-unit verification preset reaches it. Fill the four
+contract checks the suite template ships as real checks, and run the suite until they are green:
+- **`baseline_reproduces`** — exp 000 re-scored from its config equals the recorded baseline within the
+  measured noise;
+- **`noise_floor_measured`** — the floor or plausibility threshold in `campaign.md` derives from
+  replicates run in this tree (three or more seeds), not from a published number; the check asserts the
+  config value against the measured spread;
+- **`metric_discriminates`** — a pair of synthetic inputs the mission says should order one way; the
+  FROZEN scorer orders them so (the judgement "the metric measures the mission" made executable);
+- **`synthetic_recovery`** — for a fitter, decoder, or model-improvement campaign: data generated from
+  known parameters under the campaign's noise model fits back within tolerance; any other archetype
+  returns `skip: not a fitter`.
+Leave one line in `results/JOURNAL.md` §Findings: `Setup audit: baseline 000 = … ± … (N seeds); floor …;
+metric discriminates; recovery ± …; contract checks green`. The validator (Step 4) refuses a suite that
+lacks the four names unless `tests/CORRECTNESS_NA.md` records why; preflight prints their status with
+the rest of the suite.
+
 ## Step 4 — validate (two deterministic gates)
 Run both gates on the generated tree and fix anything they flag:
 1. The bundled validator:
 ```
-python "${CLAUDE_PLUGIN_ROOT}/skills/new-campaign/scripts/validate_campaign.py" <target_dir>
+python "<resolved path to this skill>/scripts/validate_campaign.py" <target_dir>
 ```
+Resolve the executable path from the linked [`scripts/validate_campaign.py`](scripts/validate_campaign.py);
+the shell's current directory is not the resource base.
 It fails if any literal `{{…}}`, dangling `[[OPTIONAL`, or stray `[PROPOSED]` remains, or if a required
 file is missing.
-2. The driver's own launch check, from the campaign root, with the Step 0.5 python:
+2. The driver's own launch check, from the campaign root, with the Step 0.5 python and the first-launch
+   harness selected in topic 9:
 ```
-<python> scripts/run_campaign.py --preflight
+<python> scripts/run_campaign.py --preflight --backend <active harness: codex|claude>
 ```
 This is the same check `--supervise` runs at launch, so passing it here makes scaffold-complete and
 launch-ready the same bar by construction — any future preflight check automatically becomes a
 scaffolding obligation. Fix every failure (each names its fix); the only failures allowed to survive to
 handoff are the Step 3.5.4 kind this session genuinely cannot resolve, each named in the handoff.
+For a switchable campaign, run both backend preflights when both CLIs are available. If the alternate CLI
+is unavailable, record that its preflight remains unverified rather than claiming both launch paths passed.
 
 A campaign with an unresolved token, a failing selftest, or an unexplained red preflight is not done.
 
@@ -604,12 +723,14 @@ A campaign with an unresolved token, a failing selftest, or an unexplained red p
 Tell the user what was created — including that setup is finished: the scorer and hooks are implemented,
 `--selftest` passes, and preflight is green (or name each handed-over failure and its fix). **Name the
 destination up front: the loop runs in supervisor mode, launched and watched through the `run-campaign`
-skill.** The fresh session's job is `/physkit:run-campaign`, never executing the loop by hand.
+skill.** The fresh session's job is `physkit:run-campaign` (`$physkit:…` in Codex, `/physkit:…` in
+Claude), never executing the loop by hand.
 
-The **critical handoff rule: do not start the loop in this setup session.** The campaign's `CLAUDE.md`
-(always-on doctrine and hard gates) and the enforcement hooks only take effect in a session that starts in
-the campaign folder. This setup session was already open when they were written, so it has loaded neither.
-Instruct the user to launch a fresh session from the campaign directory:
+The **critical handoff rule: do not start the loop in this setup session.** The campaign's managed
+instruction twin and enforcement hooks only take effect in a task/session that starts in the campaign
+folder. This setup session was already open when they were written, so it has loaded neither. If Claude is
+the first-launch harness (or the alternate in a switchable campaign), hand over this established launch
+command:
 ```
 cd "<absolute path to campaign dir>"
 claude --dangerously-skip-permissions
@@ -620,17 +741,23 @@ point at the wrong place, or nowhere, in the new terminal. Resolve the campaign 
 handing over the command.
 *(add `--plugin-dir "<KIT_DIR>"` if running the kit per-session rather than installed).*
 
+If Codex is the first-launch harness (or the alternate in a switchable campaign), tell the user to open a
+fresh task with that absolute campaign directory as its root, confirm `AGENTS.md` is active, and run
+`/hooks` to review/trust `.codex/hooks.json` before the first launch.
+
 In that fresh session, the sequence is:
-1. **Confirm the session, clear any handed-over items:** confirm with `/context` that `CLAUDE.md` is
-   loaded; if Step 4 handed over preflight failures this session could not resolve (staged data, an
+1. **Confirm the session, clear any handed-over items:** confirm the active instruction twin is loaded
+   (`/context` and `CLAUDE.md` in Claude; `AGENTS.md` in Codex); if Step 4 handed over preflight failures this session could not resolve (staged data, an
    instrument, a credential), clear them — they are named in the handoff and as the opening JOURNAL
    **NEXT** items, and `run-campaign`'s preflight will name them again until they are fixed.
-2. **Invoke `/physkit:run-campaign`.** That session becomes the loop's cockpit: it runs the driver's
-   preflight and translates any failure into its fix, launches `--supervise` in the background, narrates
+2. **Invoke the harness's `physkit:run-campaign` skill.** That session becomes the loop's cockpit: it runs the driver's
+   launch-settings confirmation (a concierge/role mismatch is informational), runs the driver's preflight
+   and translates any failure into its fix, launches `--supervise` in the background, narrates
    progress from the driver log, and relays the user's steering into `results/inbox/`. Experiment 000 —
    the baseline gate, whose expected floor is in `campaign.md` §Baseline gate — is the first queued unit,
    run by the driver under the same gates as every other unit. Fallback, if no
-   skill is available: hand over `<python> scripts/run_campaign.py --preflight`, then `--supervise`,
+   skill is available: hand over `<python> scripts/run_campaign.py --preflight --backend <harness>`,
+   then `--supervise --backend <harness>`,
    writing out the actual python command detected in Step 0.5, e.g. `py -3`, and never the literal
    placeholder.
 
@@ -674,5 +801,7 @@ re-read, premature stops, and verification decay — the failure record that mot
   and the driver are then all absent, and the doctrine prose in `CLAUDE.md` is decorative. Re-run the Step
   3 enforcement-layer wiring for any such tree, and lift it into a project home per Step 0.1;
   `campaign-status` asserts the whole set.
-- The metric and core physics you scaffold are FROZEN by construction. Say so to the user, and make the
-  `--selftest` real before exp 000 so a convention or sign slip cannot corrupt the whole campaign.
+- The metric and core physics you scaffold are FROZEN by construction — locked against quiet change; a
+  later revision is a declared metric epoch (`roles/worker.md` §Metric epochs), never an in-place edit.
+  Say so to the user, and make the `--selftest` real before exp 000 so a convention or sign slip cannot
+  corrupt the whole campaign.

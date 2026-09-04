@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""Translate Codex ``apply_patch`` hook input for the unchanged promotion guard."""
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+FILE_HEADER = re.compile(r"^\*\*\* (Add|Delete|Update) File: (.+)$")
+MOVE_HEADER = re.compile(r"^\*\*\* Move to: (.+)$")
+LOOSE_TARGET = re.compile(r"^\*\*\* (?:Add|Delete|Update) File\s*:?\s*(.+)$")
+LOOSE_MOVE = re.compile(r"^\*\*\* Move to\s*:?\s*(.+)$")
+
+class PatchError(ValueError):
+    pass
+
+def _deny(reason: str) -> None:
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse", "permissionDecision": "deny",
+        "permissionDecisionReason": reason,
+    }}))
+    raise SystemExit(0)
+
+def _protected(raw: str) -> bool:
+    base = str(raw).strip().strip('"').replace("\\", "/").rsplit("/", 1)[-1].upper()
+    return ((base.startswith("RECOMMENDED") and base.endswith(".JSON"))
+            or base == "SCOREBOARD.TSV"
+            or (base.startswith("DISCOVERIES") and base.endswith(".MD"))
+            or base == "LOOP.JSON")        # the metric_revision dial + the metric_epochs record
+
+def _control_targets(command: str) -> list[str]:
+    matches = (LOOSE_TARGET.match(line) or LOOSE_MOVE.match(line)
+               for line in command.splitlines())
+    return [match.group(1).strip() for match in matches if match]
+
+def _update_edits(body: list[str]) -> list[dict[str, str]]:
+    edits, index = [], 0
+    def flush(old: list[str], new: list[str]) -> None:
+        if old or new:
+            edits.append({"old_string": "\n".join(old), "new_string": "\n".join(new)})
+
+    while index < len(body):
+        if not body[index].startswith("@@"):
+            raise PatchError("Update body is not divided into @@ hunks")
+        index += 1
+        old, new, changed = [], [], False
+        while index < len(body) and not body[index].startswith("@@"):
+            line = body[index]
+            index += 1
+            if line == "*** End of File":
+                flush(old, new); old, new = [], []
+                break
+            if line.startswith("+"):
+                new.append(line[1:]); changed = True
+            elif line.startswith("-"):
+                if new:
+                    flush(old, new); old, new = [], []
+                old.append(line[1:]); changed = True
+            elif line.startswith(" ") or line == "":
+                flush(old, new); old, new = [], []
+            else:
+                raise PatchError("Update hunk contains an unmarked line")
+        if not changed:
+            raise PatchError("Update hunk contains no change")
+        flush(old, new)
+    return edits
+
+def parse_patch(command: str) -> list[dict]:
+    lines = command.splitlines()
+    if len(lines) < 3 or lines[0] != "*** Begin Patch" or lines[-1] != "*** End Patch":
+        raise PatchError("missing exact Begin/EndPatch framing")
+    operations, index = [], 1
+    while index < len(lines) - 1:
+        header = FILE_HEADER.match(lines[index])
+        if not header:
+            raise PatchError("expected an Add/Delete/Update file header")
+        kind, path = header.group(1), header.group(2).strip()
+        if not path:
+            raise PatchError("empty file path")
+        index += 1
+        body = []
+        while index < len(lines) - 1 and not FILE_HEADER.match(lines[index]):
+            body.append(lines[index]); index += 1
+        operation = {"kind": kind, "path": path, "move_to": None}
+        if kind == "Add":
+            if not body or any(not line.startswith("+") for line in body):
+                raise PatchError("Add body must contain only + lines")
+            operation["tool_input"] = {"content": "\n".join(line[1:] for line in body)}
+        elif kind == "Delete":
+            if body:
+                raise PatchError("Delete operation must not contain a body")
+            operation["tool_input"] = {"content": ""}
+        else:
+            if body and (move := MOVE_HEADER.match(body[0])):
+                operation["move_to"], body = move.group(1).strip(), body[1:]
+            if any(MOVE_HEADER.match(line) for line in body):
+                raise PatchError("Move to must be the first Update control line")
+            if not body and not operation["move_to"]:
+                raise PatchError("Update has no hunk or Move to")
+            operation["tool_input"] = {"edits": _update_edits(body) if body else []}
+        operations.append(operation)
+    if not operations:
+        raise PatchError("patch contains no file operation")
+    return operations
+
+def _native_path(raw: str, cwd: Path) -> Path:
+    text = str(raw).strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
+        text = text[1:-1]
+    path = Path(text)
+    return (path if path.is_absolute() else cwd / path).resolve(strict=False)
+
+def _log_gap(cwd: Path, reason: str) -> None:
+    root = next((p for p in (cwd, *cwd.parents)
+                 if (p / "scripts").is_dir() and (p / "configs").is_dir()), None)
+    if root is None:
+        print(f"guard_promotion_codex FAIL-OPEN (not logged): {reason}", file=sys.stderr)
+        return
+    try:
+        log = root / "results" / "gate_failures.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open("a", encoding="utf-8") as stream:
+            stream.write(f"{datetime.now(timezone.utc).isoformat()}\tFAIL-OPEN\tCodex adapter: {reason}\n")
+    except Exception:
+        pass
+
+def _delegate(tool_input: dict, path: Path, cwd: Path) -> None:
+    normalized = dict(tool_input)
+    normalized["file_path"] = str(path)
+    inputs = [normalized]
+    if path.name.upper() == "SCOREBOARD.TSV" and "edits" in normalized:
+        inputs = []
+        for edit in normalized["edits"]:
+            new, old = str(edit.get("new_string", "")), str(edit.get("old_string", ""))
+            if not any(token in new and token not in old for token in ("CONFIRMED", "NEW BEST")):
+                continue
+            subjects = set(re.findall(r"exp[\w\-]*\d[\w\-]*", new, re.I))
+            if len(subjects) != 1:
+                _deny("Codex promotion gate requires each promoted scoreboard change to name exactly one experiment")
+            inputs.append({**normalized, "edits": [edit]})
+    guard = Path(__file__).with_name("guard_promotion.py")
+    for current in inputs:
+        payload = {"tool_name": "MultiEdit" if "edits" in current else "Write", "tool_input": current}
+        result = subprocess.run([sys.executable, str(guard)], input=json.dumps(payload), text=True,
+                                capture_output=True, cwd=str(cwd))
+        if result.stderr:
+            sys.stderr.write(result.stderr)
+        if result.returncode:
+            _deny(f"Codex promotion gate could not run the shared guard (exit {result.returncode})")
+        if result.stdout:
+            sys.stdout.write(result.stdout)
+            raise SystemExit(0)
+
+def main() -> None:
+    try:
+        data = json.load(sys.stdin)
+        if not isinstance(data, dict) or data.get("tool_name") != "apply_patch":
+            return
+        cwd = Path(str(data.get("cwd") or os.getcwd())).resolve(strict=False)
+        command = (data.get("tool_input") or {}).get("command")
+        if not isinstance(command, str):
+            raise PatchError("tool_input.command is missing")
+        operations = parse_patch(command)
+    except PatchError as exc:
+        command = command if "command" in locals() and isinstance(command, str) else ""
+        if any(_protected(path) for path in _control_targets(command)):
+            _deny(f"Codex promotion gate cannot safely parse a protected patch ({exc})")
+        _log_gap(cwd if "cwd" in locals() else Path.cwd(), str(exc))
+        return
+    except Exception as exc:
+        _log_gap(Path.cwd(), f"could not parse hook input ({exc})")
+        return
+
+    if len(operations) > 1 and any(
+            _protected(path) for operation in operations
+            for path in (operation["path"], operation.get("move_to") or "")):
+        _deny("Codex promotion gate requires a protected promotion to be a separate single-file patch; "
+              "an atomic co-mutation could invalidate the evidence being checked")
+    for operation in operations:
+        paths = [operation["path"]]
+        if operation["move_to"]:
+            paths.append(operation["move_to"])
+            if any(_protected(path) for path in paths):
+                _deny("Codex promotion gate cannot validate a move involving a protected surface; "
+                      "write the protected destination explicitly so its complete content can be checked")
+        for raw_path in paths:
+            if _protected(raw_path):
+                _delegate(operation["tool_input"], _native_path(raw_path, cwd), cwd)
+
+if __name__ == "__main__":
+    main()

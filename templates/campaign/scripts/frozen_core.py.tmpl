@@ -14,6 +14,7 @@ campaign — that forks the one authority; use the override file.
 """
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 from pathlib import Path
@@ -21,6 +22,9 @@ from pathlib import Path
 # Root-relative. The minimal defensible core: the FROZEN scorer and the standing suite that certifies it.
 CORE_FILES_DEFAULT = ("scripts/metric.py", "tests/correctness_checks.py")
 CORE_OVERRIDE = "configs/frozen_core.json"
+# The suite is core for STALENESS (a green must match the code it certified) but not for EPOCHS: adding a
+# regression check must never read as a metric change, so the epoch ledger binds to the core MINUS this file.
+SUITE_FILE = "tests/correctness_checks.py"
 
 
 def resolve_core_files(root) -> list[Path]:
@@ -49,7 +53,54 @@ def core_hash(root) -> str | None:
     cannot be read. None means 'cannot determine' — callers must treat it as 'do not enforce staleness',
     never as 'unchanged'."""
     root = Path(root)
-    files = resolve_core_files(root)
+    return _hash_files(root, resolve_core_files(root))
+
+
+def scorer_hash(root) -> str | None:
+    """The core hash WITHOUT the correctness suite: the FROZEN scorer plus any declared frozen-physics
+    files — what a metric EPOCH (configs/loop.json campaign.metric_epochs) is bound to. The runner binds it on the
+    first experiment under an epoch and refuses to spend when the scorer on disk no longer matches and no
+    new epoch declares the change. None = cannot determine = do not enforce.
+
+    Hashes the scorer's CODE, not its bytes (_normalized_source): a comment, a docstring, or a reformat
+    is not a metric change and must not raise the alarm — only a change to the scoring logic does."""
+    root = Path(root)
+    suite = (root / SUITE_FILE)
+    files = [p for p in resolve_core_files(root) if p != suite]
+    return _hash_files(root, files, _normalized_source)
+
+
+def _normalized_source(p: Path) -> bytes | None:
+    """A Python file's code with comments, docstrings, and formatting removed (its AST dump); a non-Python
+    or unparseable file hashes as its bytes. None if unreadable."""
+    try:
+        raw = p.read_bytes()
+    except OSError:
+        return None
+    if p.suffix != ".py":
+        return raw
+    try:
+        tree = ast.parse(raw)
+    except Exception:
+        return raw
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if (isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+                and body and isinstance(body[0], ast.Expr)
+                and isinstance(getattr(body[0], "value", None), ast.Constant)
+                and isinstance(body[0].value.value, str)):
+            node.body = body[1:] or [ast.Pass()]
+    return ast.dump(tree, include_attributes=False).encode("utf-8")
+
+
+def _read_bytes(p: Path) -> bytes | None:
+    try:
+        return p.read_bytes()
+    except OSError:
+        return None
+
+
+def _hash_files(root: Path, files: list[Path], reader=_read_bytes) -> str | None:
     if not files:
         return None
     h = hashlib.sha256()
@@ -60,9 +111,9 @@ def core_hash(root) -> str | None:
             rel = p.name
         h.update(rel.encode("utf-8"))
         h.update(b"\0")
-        try:
-            h.update(p.read_bytes())
-        except OSError:
+        content = reader(p)
+        if content is None:
             return None   # a core file we cannot read -> we cannot vouch for the hash
+        h.update(content)
         h.update(b"\0")
     return h.hexdigest()

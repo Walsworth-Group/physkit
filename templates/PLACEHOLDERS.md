@@ -121,7 +121,7 @@ filled by that skill and documented by it, not here.
 | `{{PROMOTION_CONFIRM_RULE}}` | Extra confirmation needed to promote (e.g. "confirm with a 2nd seed"). |
 | `{{SPREAD_NOUN}}` | Name for the replicate spread (e.g. "seed/param", "seed-to-seed"). |
 | `{{VERIFY_SKILL}}` | The verify skill to invoke (e.g. `/physkit:verify`). |
-| `{{PHYSKIT_VERSION}}` | The kit-version pin, `vX.Y.Z (<ref>, YYYY-MM-DD)`: version from `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json`, `<ref>` from `git -C "${CLAUDE_PLUGIN_ROOT}" rev-parse --short HEAD` where the plugin is a git checkout (omit otherwise), plus the scaffold date. Appears in `campaign.md`'s header and atop `results/logbook.md` — the campaign's doctrine and tooling provenance (every release is tagged, so the pin recovers the whole kit). A record: never updated to a newer version. |
+| `{{PHYSKIT_VERSION}}` | The kit-version pin, `vX.Y.Z (<ref>, YYYY-MM-DD)`: version from the active harness manifest under the PhysKit package root (`.codex-plugin/plugin.json` on Codex or `.claude-plugin/plugin.json` on Claude; require equality when both exist), `<ref>` from `git -C "<resolved PhysKit package root>" rev-parse --short HEAD` where that root is a Git checkout (omit otherwise), plus the scaffold date. Appears in `campaign.md`'s header and atop `results/logbook.md` — the campaign's doctrine and tooling provenance (every release is tagged, so the pin recovers the whole kit). A record: never updated to a newer version. |
 | `{{VERIFY_EXTRA_CHECKS}}` | Archetype-specific extra checks the verifier must do, as a clause fragment appended to "checks for metric contamination" (e.g. ", recomputes the ceilings, and checks the ceiling-vs-gap trap"). Do not repeat "metric contamination". |
 | `{{SYSTEMATIC_AXIS_NOTE}}` | A standalone sentence on the dominant systematic-error axis for this campaign. It follows "…find and fix the cause)."; do not repeat that phrase. |
 | `{{OVERFIT_MODE}}` | The campaign's characteristic overfit mode (e.g. "sim-to-real / val overfit"). |
@@ -192,7 +192,7 @@ filled by that skill and documented by it, not here.
 | Placeholder | Meaning |
 |---|---|
 | `{{ENVIRONMENT_NOTES}}` | Environment/dependency notes. |
-| `{{PYTHON_CMD}}` | The python invocation for hook commands, from Step 0.5 detection (e.g. `py -3` on Windows, `python3` on macOS/Linux). Used in `.claude/settings.json`. |
+| `{{PYTHON_CMD}}` | The python invocation for hook commands, from Step 0.5 detection (e.g. `py -3` on Windows, `python3` on macOS/Linux). Used in `.claude/settings.json` and `.codex/hooks.json`. |
 | `{{QUICKSTART_COMMANDS}}` | Quick-start commands. |
 | `{{EXTRA_BACKGROUND_DOC_LINKS}}` | Extra links to setup-authored reference docs. |
 | `{{NN}}` / `{{SLUG}}` | Experiment number & slug in config `exp_name`. |
@@ -211,7 +211,7 @@ root), so the campaign templates carry its path as a literal — `../../PROJECT.
 campaign root, `../../../PROJECT.md` one directory down (`roles/`, `results/`, `docs/`) —
 and there is no placeholder to fill. Never replace a literal with a campaign-local copy (the validator
 rejects one). Promoted frozen artifacts live in purpose-named project-level dirs (`scripts/`,
-`models/`, …), each with a `PROJECT.md` §Lineage promotion line:
+`models/`, …), each with a `PROJECT.md` §Lineage promotion line; that line is the durable provenance record:
 
 | Placeholder | Meaning | Value (by file location) |
 |---|---|---|
@@ -286,7 +286,7 @@ and a deterministic one mislabelled stochastic is held to a spread test it can n
 | `{{NOISE_MODEL}}` | `stochastic` (default — repeated runs differ, so a win must clear the replicate spread) / `deterministic` (repeated runs are identical, so the test is a numerical tolerance). Decide it by re-running one experiment twice, not from intuition about the method. |
 | `{{NOISE_FLOOR}}` | JSON **number or `null`**: the once-estimated replicate spread for a stochastic campaign (`verify` §Clear the noise floor), re-estimated only when something that could move it changes. `null` means not yet estimated, which makes the noise-floor check report `unavailable` rather than silently pass. |
 | `{{METRIC_TOLERANCE}}` | JSON **number or `null`**: the numerical equality tolerance for a deterministic campaign. `null` means not yet set, and the check reports `unavailable`. |
-| `{{METRIC_VERSION}}` | Comparability tag for the FROZEN metric (e.g. `v1`). Stamped onto every scoreboard row and result JSON. **Bump it whenever the scoring math changes**, and re-score saved contenders before comparing: a number carried across a metric change is not a comparison. |
+| `{{METRIC_VERSION}}` | Comparability tag for the FROZEN metric (e.g. `v1`). Stamped onto every scoreboard row and result JSON. **Bump it whenever the scoring math changes**, and re-score saved contenders before comparing: a number carried across a metric change is not a comparison. A bump is a metric epoch: declare it in `campaign.metric_epochs` (the first epoch is implicit). |
 | `{{DATA_VERSION}}` | Comparability tag for the dataset/version scored against (e.g. `v1`, `v2_corrected`). Same rule: bump on any change to the evaluation data. |
 
 > Both `{{NOISE_FLOOR}}` and `{{METRIC_TOLERANCE}}` are JSON **numbers**, not prose: a fallback string
@@ -303,14 +303,22 @@ in wall-clock, whichever trips first.
 | `{{UNIT_COST_CLASS}}` | One word for a unit's cost scale: `seconds` / `minutes` / `hours` / `days`. |
 | `{{UNIT_COST_S}}` | Typical wall-clock seconds for one unit (number, order-of-magnitude is fine). |
 | `{{UNIT_COST_DISK_MB}}` | Megabytes one unit adds to `results/` (number; save-set + snapshot + bulk artifacts). Derived from the artifact plan, not asked. Arms the driver's disk floor (refuses to launch / halts below ~3 units of headroom); `0` disables it. Human-readable twin: `{{DISK_PER_EXP}}`. |
+| `{{AGENT_BACKEND}}` | Harness that will launch first: `claude` or `codex`. A switchable campaign still records its first launcher here; `--backend` overrides it later. |
 | `{{PLANNER_CADENCE_K}}` | Spawn the planner every k accepted units (also the default outstanding-units cap). |
-| `{{PLANNER_MODEL}}` | Model for the planner agent (judgment role — heavier tier; user-owned thereafter). |
+| `{{PLANNER_MODEL}}` | Claude model for the planner agent (judgment role — heavier tier); blank inherits Claude Code's configured default. |
+| `{{PLANNER_CLAUDE_EFFORT}}` | Claude planner effort: blank (inherit), `low`, `medium`, `high`, `xhigh`, or `max`; support is model/version dependent. |
+| `{{PLANNER_CODEX_MODEL}}` | Codex model for the planner agent; blank inherits Codex's configured default. |
+| `{{PLANNER_CODEX_REASONING_EFFORT}}` | Codex planner reasoning effort: blank (inherit), `minimal`, `low`, `medium`, `high`, or `xhigh`. |
 | `{{PLATEAU_M_UNITS}}` | Plateau trigger: no accepted result in m units. |
 | `{{PLATEAU_M_HOURS}}` | Plateau trigger: no accepted result in this much wall-clock (whichever trips first). |
 | `{{MAX_OUTSTANDING_UNITS}}` | Max units queued beyond planner review (default = `{{PLANNER_CADENCE_K}}`). |
-| `{{WORKER_MODEL}}` | Model for iteration workers (lightest that reliably does the task; user-owned). |
-| `{{ITERATION_TIMEOUT_HOURS}}` | Hard wall-clock cap on one worker iteration (> the Extended-tier run cap). |
-| `{{VERIFY_REPRO_THRESHOLD_S}}` | The verification tier boundary: unit cost at/below → full re-execution in verify; above → judgment + cheapest discriminating spot-check. |
+| `{{WORKER_MODEL}}` | Claude model for iteration workers (lightest that reliably does the task); blank inherits Claude Code's configured default. |
+| `{{WORKER_CLAUDE_EFFORT}}` | Claude worker effort: blank (inherit), `low`, `medium`, `high`, `xhigh`, or `max`; support is model/version dependent. |
+| `{{WORKER_CODEX_MODEL}}` | Codex model for iteration workers; blank inherits Codex's configured default. |
+| `{{WORKER_CODEX_REASONING_EFFORT}}` | Codex worker reasoning effort: blank (inherit), `minimal`, `low`, `medium`, `high`, or `xhigh`. The direct Codex verifier follows the worker pair. |
+| `{{ITERATION_TIMEOUT_HOURS}}` | Hard wall-clock cap on one worker iteration (> the Extended-tier run cap). Also the yardstick for verification depth: a unit whose measured solve time is within a quarter of this cap (and whose campaign is `reproducible`) is re-executed by the verifier; the rest are reviewed from the frozen record. |
+| `{{VERIFICATION_PRESET}}` | The campaign's verification preset — `minimal` · `light` (the default) · `moderate` · `intensive` — the one user-facing choice of how much verification the campaign buys and of what kind (new-campaign topic 8b; the descriptions are `docs/reference/verification-presets.md`, presented verbatim). Rendered into `configs/loop.json` `verify.preset` only; never embedded in prose. |
+| `{{METRIC_REVISION}}` | The metric-revision dial — `cautious` (the default: a metric revision raises ESCALATE and waits) or `autonomous` (the loop may enact a verified revision as a pending epoch and continue). Asked in the same interview step as the preset (topic 8b). Rendered into `configs/loop.json` `campaign.metric_revision`. |
 
 > **Alias note (near-synonyms across docs).** A few tokens name the same quantity in different docs; fill
 > them consistently. The a-priori bound appears as `{{APRIORI_BOUND}}` (PROJECT.md §Standing constraints),

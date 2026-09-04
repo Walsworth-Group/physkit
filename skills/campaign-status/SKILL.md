@@ -1,6 +1,14 @@
 ---
 name: campaign-status
-description: Periodic health-check, journal consolidation, and N-experiment checkpoint for a running autoresearch campaign — and, at a project root, a cross-campaign checkpoint. Use when the user asks for campaign status, a health check, a checkpoint, "where do we stand", project status / "how's the whole investigation", or to consolidate/trim a long journal — or automatically every N experiments per the loop. In a campaign it reads the scoreboard, journal, discoveries, and campaign.md to summarize progress against the baseline and trivial references, flag plateaus and unverified current-bests, run hygiene checks (every result saved, disputes preserved, the metric self-test passing), consolidate the journal when it grows long, and queue the next orthogonal directions as the NEXT pointer. At a PROJECT root it reads the lineage (PROJECT.md §Lineage; old layout: LINEAGE.md) to report across campaigns and checks cross-campaign FROZEN/MUTABLE (sibling-coupling) consistency. Read-mostly — it never edits the scoreboard, results, or the frozen scorer/physics. NOT for scaffolding a campaign (new-campaign) or project (new-project), process-level loop questions — launching, "is the loop still running", "why did it halt", steering (run-campaign), forking an invalidated campaign (fork-campaign), verifying a single finding (verify), or writing the end-of-campaign report (final-report).
+description: >-
+  Run a periodic health check, journal consolidation, or experiment checkpoint for an autoresearch
+  campaign, or a cross-campaign checkpoint at a project root. Use for campaign or project status,
+  "where do we stand", plateau and current-best review, hygiene checks, or trimming a long journal. In a
+  campaign, summarize progress against baselines, flag unverified bests and plateaus, check records and
+  the metric self-test, consolidate working memory, and point to orthogonal next directions. At a project
+  root, report across the lineage and check sibling FROZEN/MUTABLE consistency. Read-mostly; never edit
+  the scoreboard, results, or frozen physics. Not for scaffolding, loop-process control, forking,
+  verifying one finding, or final reporting.
 ---
 
 # campaign-status — the operator's checkpoint
@@ -9,6 +17,9 @@ A running campaign drifts. The journal grows, an unverified result becomes the c
 over-mined while an orthogonal one sits untried, and a plateau goes unnamed. This skill is the periodic step
 back: it reports where the campaign stands, fixes hygiene, trims the journal, and re-points the loop at the
 most promising orthogonal directions.
+
+PhysKit resource links in this skill are relative to the directory containing this `SKILL.md`, not to
+the campaign working directory. Resolve them to absolute paths before invoking a bundled script.
 
 **Read-mostly.** Its only writes are: consolidating the JOURNAL, updating the **NEXT** pointer, appending
 a dated checkpoint note, and snapshotting the session transcript to `transcripts/` for provenance. It never
@@ -34,7 +45,7 @@ At a project root, step back over the whole investigation, not one loop:
    *Relationship to sibling campaigns* block (route to it via that campaign's own `CLAUDE.md` — siblings
    may not share a layout), confirm the declarations are mutually consistent. What campaign
    A freezes and promotes to a project-level purpose dir (`../../models/`, …; old layout:
-   `../../shared/`), campaign B must treat as fixed and must consume from that promoted copy — with
+   `../../shared/` <!-- lint-ok: intentional pre-consolidation path -->), campaign B must treat as fixed and must consume from that promoted copy — with
    its lineage promotion line — never from A's working folder. **Flag a consumed artifact that has no
    promotion line**: without the mark, promoted and working files are indistinguishable. A lever A
    froze must not be mutated by B. Surface any
@@ -49,7 +60,9 @@ At a project root, step back over the whole investigation, not one loop:
    (project `CLAUDE.md` rule 7). Archived(forked) campaigns
    carry a `FROZEN.md` and stay listed in the lineage.
 4. **Run the project validator** for the deterministic structure and portability checks, and fold its flags in:
-   `python "${CLAUDE_PLUGIN_ROOT}/skills/new-campaign/scripts/validate_campaign.py" <project_root>` (it
+   run the linked
+   [`../new-campaign/scripts/validate_campaign.py`](../new-campaign/scripts/validate_campaign.py) by its
+   resolved absolute path against `<project_root>` (it
    auto-detects the project tree and its layout: required files, every campaign indexed in the
    lineage, no local copy
    of the project background, no absolute paths in configs).
@@ -76,11 +89,11 @@ points to is this skill; the per-unit iteration contract is in `roles/worker.md`
 is step 3 of this skill; it no longer has a separate protocol file.)
 Also read `campaign.md` §Mission (goal, the decision served, done-criteria), §Loosely-held
 expectations, and §Verification. The checkpoint re-checks orientation against these, not
-only against the metric. *(A pre-merge campaign keeps these in `docs/PROJECT_ORIENTATION.md` and
+only against the metric. *(A pre-merge campaign keeps these in `docs/PROJECT_ORIENTATION.md` <!-- lint-ok: intentional pre-consolidation path --> and
 `docs/VERIFICATION_PLAN.md` — lint-ok: names the retired layout on purpose.)*
 
 **A campaign with no scoreboard rows yet is in setup, not stalled.** Its status IS the mechanical
-check: run `python scripts/run_campaign.py --preflight` and report its output verbatim — the
+check: run `python scripts/run_campaign.py --preflight --backend <active harness>` and report its output verbatim — the
 authoritative list of what is unbuilt and how to fix it. Do not reconstruct setup state from the
 docs; `new-campaign` hands off preflight-green, so a red preflight here means an incomplete or
 imported/hand-built scaffold, and preflight is the one source that cannot be stale.
@@ -137,6 +150,14 @@ Flag anything wrong; do not silently fix it.
     been silently unavailable for forty runs is worth more attention than one that failed once.
   - a check that is **absent entirely** (no `checks_<NN>.json` beside a `result_<NN>.json`) means that
     experiment predates this artifact or bypassed the runner. Say which.
+  - the **`self_check`** block is the worker's own record (written through `--self-check`, never by
+    hand): report how many experiments have it `recorded` versus `absent`, and, for the recorded ones,
+    whether every change the runner listed under `changes` was considered (`changes_unconsidered`
+    empty). A campaign whose workers never record a self-check is one whose lightest label is
+    `unverified` on every row; a self-check that ignores what the unit changed is decoration.
+  - the **`label`** on each artifact (`unverified` · `self-checked` · `<verdict>/review` ·
+    `<verdict>/re-execution`) is what every exported claim carries: tally them, and name any promoted
+    row whose label is below what its preset requires.
   Do not fix a flag by editing the checks file — it is the runner's output, not a worksheet.
 - **The campaign's declared properties still match what it is doing.** `configs/loop.json` `campaign`
   records `prediction_mode` and `noise_model`. Both are setup-time decisions, so a change is a real
@@ -156,10 +177,15 @@ Flag anything wrong; do not silently fix it.
     coverage as n/N (the runner's spend gate makes new gaps impossible; a gap means the tree predates the
     gate or bypassed the runner);
   - `results/verdicts/` exists and **every journal Findings entry cites a verdict artifact that resolves**
-    (exists, CONFIRMED, named refuter; kill entries carry a graduating tier). The Findings section is not
+    (exists, CONFIRMED, named refuter; kill entries carry a graduating tier) — except a metric-epoch
+    line (`metric epoch <version> opened …`), whose evidence is its `campaign.metric_epochs` entry.
+    The Findings section is not
     hook-gated — this audit is its enforcement, so an uncited entry is a loud flag, not a note;
-  - `configs/loop.json` `campaign.verification` is `per-block`, or `promotion-only` **with a recorded
-    `verification_reason`** — an unrecorded downgrade of routine verification is an unowned control;
+  - `configs/loop.json` `verify.preset` is one of `minimal` · `light` · `moderate` · `intensive` (the
+    driver's preflight line prints the table it resolves to, and every `checks_<NN>.json` stamps the
+    preset it ran under — report a mid-campaign change of preset as a fact about the record, with the
+    units on each side). An older file without `verify.preset` is read through its
+    `campaign.verification` (`per-block`, or `promotion-only` with a recorded reason); say so;
   - `results/queue.json` `pending_verification` is not accumulating: entries there are accepted
     experiments the driver has not yet gotten verified, so a growing backlog means verification is
     failing while science continues — read the driver log's `verifier[...]` lines and flag loudly;
@@ -187,6 +213,8 @@ Flag anything wrong; do not silently fix it.
   scoreboard `verified: CONFIRMED` / `NEW BEST` mark and `RECOMMENDED.json`: a token-marked promotion needs
   a recorded CONFIRMED verdict. A current-best asserted without those tokens can still slip past, and a
   current-best or DISCOVERY-backed row whose `verified` column is blank is a hygiene failure to surface.
+  The current-best also carries its metric epoch: its `metric_version` is the campaign's current one, and
+  that epoch is not rolled back.
 - **The load-bearing upstream step is non-degenerate** (promotion check). Whatever transform feeds the
   current-best before the metric sees it — registration, pose fitting, normalization, resampling — validate
   the *transform* on the data it is applied to, not just the score it produces. A degenerate upstream step
@@ -212,14 +240,26 @@ Flag anything wrong; do not silently fix it.
   "current best" ranks rows scored under different versions. The runner fills both from
   `configs/loop.json` `campaign`, so a blank tag now means the row was written by hand or by a runner
   older than that, and the checks artifact for that experiment will have flagged it. A cross-version comparison is a silent error:
-  re-score contenders under the current version first. If a version change invalidates prior findings
-  (rankings no longer hold, or an approach was scored on wrong infrastructure), as opposed to a
-  rank-preserving bump, that is a `fork-campaign` clean break, not a quiet bump: archive, fresh ledger,
-  re-verified carry-forward.
+  re-score contenders under the current version first. A metric-version change is a **metric epoch**
+  (`campaign.md` §The ONE metric is the rule): when the ruler was wrong but the save-sets are valid and
+  re-scorable, the ledger survives — a new `metric_version` with its `campaign.metric_epochs` entry,
+  evidence, and standing, earlier rows keeping their version, the contenders re-scored. Only when the
+  artifacts themselves are tainted (a forward-model bug, corrupted data) is it a `fork-campaign` clean
+  break: archive, fresh ledger, re-verified carry-forward.
+- **Metric epochs are declared, bound, and moving toward ratification.** List every
+  `configs/loop.json` `campaign.metric_epochs` entry with its kind, direction, and standing. A `pending`
+  epoch is owed a user decision: surface it — an `easier` one first, with its evidence — rather than
+  letting it age. Confirm the current `metric_version` is declared (or is the implicit first epoch) and
+  its scorer hash is bound (`results/correctness_state.json` `scorer_hash_by_version`); the runner
+  refuses an undeclared scorer change, so a `METRIC EPOCH` refusal in the driver log is a finding.
+  Confirm the re-baseline happened: after an epoch, the retained contenders have rows under the new
+  version and the newest checks artifacts no longer report an epoch boundary
+  (`checks.comparability.excluded`). The JOURNAL's Findings carries one line per epoch.
 - **No premature "done / blocked / at-ceiling."** If the JOURNAL (its Findings included) declares the campaign
   finished, optimal, or blocked on new data, confirm an adversarial attempt to beat it was made:
   an orthogonal lever tried, or a reasoned argument that any further gain is non-physical. An unfalsified
-  "we're done" is a flag to resume, not to accept. Surface it loudly and queue the orthogonal directions.
+  "we're done" is a flag to resume, not to accept. Surface it loudly and queue the orthogonal directions
+  (the claim audit asks the same question of a finished campaign as its search-adequacy check).
   A plateau with the guardrail still moving is generalization-limited, not capacity-limited, and means
   keep going.
 - **Resume anchors reflect the latest session (stale-digest guard).** The source of truth for resuming is
@@ -243,15 +283,17 @@ Flag anything wrong; do not silently fix it.
   manifest). A result without one is not saved.
 
 ### 2.5 Snapshot the session transcript (provenance)
-Preserve this session's Claude Code transcript with the campaign before retention pruning removes it. It is
+On Claude Code, preserve this session's transcript with the campaign before retention pruning removes it. It is
 the provenance record, and primary data for any write-up. From the campaign dir, run:
 ```
-python "${CLAUDE_PLUGIN_ROOT}/skills/campaign-status/scripts/archive_transcript.py"
+python "<resolved path to this skill>/scripts/archive_transcript.py"
 ```
+Resolve the command from the linked [`scripts/archive_transcript.py`](scripts/archive_transcript.py).
 Use the campaign's python (`py -3` on Windows). It copies this session's `.jsonl` into `./transcripts/`
 with a MANIFEST. It is idempotent: re-run it each checkpoint to refresh as the session grows, and it never
 blocks the checkpoint if it errors. The transcript holds the full conversation and tool I/O, so treat
-`transcripts/` as sensitive.
+`transcripts/` as sensitive. This helper is Claude-specific; on Codex, skip this substep without treating
+the checkpoint as failed. A Codex transcript export is not claimed until a native source is defined.
 
 ### 3. Consolidate the journal (if long)
 If the JOURNAL exceeds ~150 lines (or the campaign's stated trigger):

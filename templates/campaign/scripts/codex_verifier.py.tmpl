@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+"""Codex-only direct-refuter policy; the established Claude verifier remains in the driver."""
+from __future__ import annotations
+import datetime as _dt, json, os, secrets
+from pathlib import Path
+STRATEGIES = ("auto", "legacy-nested", "driver-direct")
+VERDICTS = ("CONFIRMED", "PROVISIONAL", "QUESTIONABLE ASSUMPTION", "REFUTED", "INCONCLUSIVE")
+KILL_TIERS = (None, "REFUTED", "EVIDENCE_AGAINST", "INCONCLUSIVE")
+REQUIRED_FIELDS = frozenset(("claim", "exp_id", "verdict", "kill_tier", "refuter", "confounded_levers", "disentangler", "resolves_confounded", "utc", "summary"))
+LEGACY_FRAGMENT = """Your ONE job: for EACH experiment above, run {{VERIFY_SKILL}} in campaign mode -
+it spawns an independent refuter that never saw the generating reasoning and writes the verdict
+artifact results/verdicts/<exp_id>.json with every field filled and the refuter's id named."""
+class PolicyError(RuntimeError): pass
+def strategy(loop_cfg: dict, backend_name: str) -> str:
+    verify = loop_cfg.get("verify") or {}
+    if not isinstance(verify, dict): raise PolicyError("configs/loop.json verify must be an object")
+    raw = verify.get("strategy", "auto")
+    if not isinstance(raw, str) or raw.strip().lower() not in STRATEGIES:
+        raise PolicyError("configs/loop.json verify.strategy must be auto | legacy-nested | driver-direct")
+    selected = raw.strip().lower()
+    if selected == "auto": return "driver-direct" if backend_name == "codex" else "legacy-nested"
+    if selected == "driver-direct" and backend_name != "codex":
+        raise PolicyError("verify.strategy=driver-direct requires the Codex backend")
+    return selected
+def strategy_errors(loop_cfg: dict, backend_name: str) -> list[str]:
+    try: strategy(loop_cfg, backend_name)
+    except PolicyError as exc: return [str(exc)]
+    return []
+def pending_problem(q: dict) -> str:
+    pending = q.get("pending_verification")
+    if not isinstance(pending, list): return "pending_verification must be a list"
+    return next((f"pending_verification[{i}] lacks config/exp or Codex worker provenance" for i, entry in enumerate(pending)
+                 if not isinstance(entry, dict) or any(not isinstance(entry.get(k), str) or not entry[k].strip()
+                 for k in ("config", "exp")) or (entry.get("worker_backend") == "codex" and
+                 not str(entry.get("worker_thread_id") or "").strip())), "")
+def direct_prompt(legacy_prompt: str, nonce: str,
+                  subjects: list[tuple[str, str]] | None = None) -> str:
+    if legacy_prompt.count(LEGACY_FRAGMENT) != 1:
+        raise PolicyError("legacy verifier prompt drifted; refusing an unsafe direct-refuter rewrite")
+    replacement = f"""Your ONE job: for EACH experiment above, apply {{VERIFY_SKILL}} in campaign mode directly.
+This fresh Codex thread IS the independent refuter and has not seen the generating reasoning; the skill's
+nested-agent step is already fulfilled by this fresh process. Do not spawn or delegate another agent.
+Write each candidate to results/verdicts/.codex-pending/{nonce}/<exp_id>.json with all ten required fields
+and refuter exactly {nonce!r}. The driver validates the evidence and atomically publishes the canonical
+results/verdicts/<exp_id>.json with this Codex thread ID after the turn completes.
+Before finishing each subject, update only its existing `results/logbook.md` entry: set `**Verification**`
+to `<VERDICT> (results/verdicts/<exp_id>.json)`; put each refuter `Concern:` and concrete `Response:`
+action on the existing one-line `**Disputes & responses**` field, semicolon-delimiting multiple pairs and
+never adding nested bullets; set `**Status**` to `refuted` for REFUTED, `open` for INCONCLUSIVE, otherwise
+the verdict token. Leave every other field in that logbook entry, including `**NEXT**`, byte-identical;
+then complete the legacy prompt's one-line `results/JOURNAL.md` verdict record with the
+experiment, verdict, and canonical `results/verdicts/<exp_id>.json` path. Whenever this verification
+proposes a follow-up through `results/queue_drop/` - including every REFUTED or INCONCLUSIVE - in that
+subject line's outcome/next text write the literal label `Follow-up: queued`, then one space, then that
+proposal's exact `config` path as Markdown inline code. Make this a standalone clause starting at the
+outcome/next field beginning or
+immediately after a period or semicolon; end it immediately after the inline-code path.
+After the path, allow only an optional period/semicolon before any other text; add or update exactly
+one subject line, never duplicate it, and preserve every other logbook/JOURNAL line."""
+    if subjects is not None:
+        exact = "\n".join(
+            f"- Experiment {json.dumps(stem)}: write exactly "
+            f"`results/verdicts/.codex-pending/{nonce}/{eid}.json`; set JSON `\"exp_id\"` "
+            f"exactly to {json.dumps(eid)}; cite the published verdict in queue/JOURNAL exactly as "
+            f"`results/verdicts/{eid}.json`. In `results/logbook.md`, anchor the edit to the exact "
+            f"section-header prefix `## {eid} - {stem} -`; its field labels repeat in other entries, "
+            "so never use an unanchored field-only or global replacement."
+            for stem, eid in subjects)
+        replacement += ("\nThe shared skill's generic `<exp_id_or_slug>.json` option does not apply to this "
+                        "driver-managed turn. Use these exact subject contracts:\n" + exact
+                        + "\nFor logbook edits, preserve every byte outside the union of the exact subject "
+                          "sections listed above, including line endings.")
+    return legacy_prompt.replace(LEGACY_FRAGMENT, replacement, 1)
+def _json(path: Path):
+    try: return json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError): return None
+def _session_rows(root: Path) -> list[dict]:
+    path = root / "results" / "diagnostics" / "agent_sessions.jsonl"
+    try:
+        lines = path.read_text(encoding="utf-8-sig").splitlines()
+    except OSError:
+        return []
+    rows = []
+    for line in lines:
+        try: row = json.loads(line)
+        except json.JSONDecodeError: continue
+        if isinstance(row, dict): rows.append(row)
+    return rows
+def _worker_ids(root: Path, entries=()) -> set[str]:
+    ids = {str(row.get("thread_id")) for row in _session_rows(root)
+           if row.get("backend") == "codex" and str(row.get("label", "")).startswith("worker[")
+           and row.get("thread_id")}
+    ids.update(str(entry.get("worker_thread_id")) for entry in entries if entry.get("worker_thread_id"))
+    for manifest in (root / "results" / "snapshots").glob("*/manifest.txt"):
+        fields = {}
+        try:
+            for line in manifest.read_text(encoding="utf-8-sig").splitlines():
+                if ": " in line:
+                    key, value = line.split(": ", 1)
+                    fields[key] = value.strip()
+        except OSError:
+            continue
+        if fields.get("agent_backend") == "codex" and fields.get("agent_thread_id"):
+            ids.add(fields["agent_thread_id"])
+    return ids
+def _trusted_verifier(root: Path, thread_id: str, label: str | None = None) -> bool:
+    return any(row.get("backend") == "codex" and row.get("thread_id") == thread_id
+               and (row.get("label") == label if label else
+                    str(row.get("label", "")).startswith("verifier["))
+               for row in _session_rows(root))
+def _nonempty_strings(value) -> bool:
+    return isinstance(value, list) and all(isinstance(v, str) and v.strip() for v in value)
+def _kill_tier(value): return value if value is None else str(value).strip().upper().replace(" ", "_").replace("-", "_")
+def _verdict_path(root: Path, eid: str, refuter: str) -> Path:
+    base = root / "results" / "verdicts"
+    return base / ".codex-pending" / refuter / f"{eid}.json" if refuter.startswith("driver-nonce-") else base / f"{eid}.json"
+def _evidence_problem(root: Path, entry: dict, exp_id_for) -> str:
+    stem, rel = str(entry.get("exp", "")), str(entry.get("config", ""))
+    eid = exp_id_for(stem)
+    if not stem or not rel or not eid:
+        return "pending verification entry lacks a canonical experiment/config subject"
+    try:
+        config_path = (root / rel).resolve()
+        config_path.relative_to(root.resolve())
+    except (OSError, ValueError):
+        return f"config path escapes the campaign: {rel}"
+    required = ((config_path, "exp_name"),
+                (root / "predictions" / f"{stem}.json", "exp_name"),
+                (root / "results" / f"result_{eid}.json", "exp_name"),
+                (root / "results" / f"checks_{eid}.json", "exp_name"))
+    for path, field in required:
+        payload = _json(path)
+        if not isinstance(payload, dict) or str(payload.get(field, "")) != stem:
+            return f"missing or wrong-subject evidence: {path.relative_to(root)}"
+    checks = _json(root / "results" / f"checks_{eid}.json")
+    if str(checks.get("exp_id", "")) != eid:
+        return f"checks_{eid}.json does not carry exp_id {eid}"
+    if not (root / "results" / "snapshots" / stem).is_dir():
+        return f"missing snapshot for {stem}"
+    try:
+        rows = [line for line in (root / "results" / "scoreboard.tsv").read_text(
+            encoding="utf-8-sig").splitlines() if line and not line.startswith("#")]
+        header = rows[0].split("\t")
+        index = header.index("exp_id")
+        if not any(len(cells := row.split("\t")) > index and cells[index].strip() == eid for row in rows[1:]):
+            return f"scoreboard has no row for exp_id {eid}"
+    except (OSError, IndexError, ValueError):
+        return "scoreboard is unreadable or lacks exp_id"
+    return ""
+def validate_verdict(root: Path, entry: dict, expected_refuter: str,
+                     worker_thread_ids: set[str], exp_id_for) -> str:
+    stem, eid = str(entry.get("exp", "")), exp_id_for(str(entry.get("exp", "")))
+    expected_label = f"verifier[block {entry['block']}]" if entry.get("block") else f"verifier[{stem}]"
+    path = _verdict_path(root, eid, expected_refuter)
+    payload = _json(path)
+    if not eid or not isinstance(payload, dict):
+        return f"canonical verdict {path.name} is missing or malformed"
+    errors = []
+    def reject(condition, message):
+        if condition: errors.append(message)
+    if missing := REQUIRED_FIELDS - payload.keys():
+        errors.append("missing required fields: " + ", ".join(sorted(missing)))
+    reject(not isinstance(payload.get("claim"), str) or not payload["claim"].strip(),
+           "claim must be a nonempty string")
+    reject(payload.get("exp_id") != eid, f"exp_id must be canonical subject {eid}")
+    reject(payload.get("verdict") not in VERDICTS, "verdict is outside the five-value vocabulary")
+    reject(_kill_tier(payload.get("kill_tier")) not in KILL_TIERS, "kill_tier is invalid")
+    refuter = payload.get("refuter")
+    reject(not isinstance(refuter, str) or not refuter.strip() or refuter != expected_refuter,
+           "refuter does not match this verification attempt")
+    confounded = payload.get("confounded_levers")
+    reject(not _nonempty_strings(confounded), "confounded_levers must be a list of nonempty strings")
+    disentangler = payload.get("disentangler")
+    reject(confounded and (not isinstance(disentangler, str) or not disentangler.strip()),
+           "confounded verdict requires a disentangler")
+    reject(not confounded and disentangler is not None, "unconfounded verdict requires disentangler=null")
+    reject(not _nonempty_strings(payload.get("resolves_confounded")),
+           "resolves_confounded must be a list of nonempty strings")
+    try:
+        stamp = _dt.datetime.fromisoformat(str(payload.get("utc", "")).replace("Z", "+00:00"))
+        if stamp.utcoffset() is None:
+            raise ValueError
+    except ValueError:
+        errors.append("utc must be a timezone-aware ISO timestamp")
+    reject(not isinstance(payload.get("summary"), str) or not payload["summary"].strip(),
+           "summary must be a nonempty string")
+    if problem := _evidence_problem(root, entry, exp_id_for):
+        errors.append(problem)
+    if expected_refuter and not expected_refuter.startswith("driver-nonce-"):
+        reject(payload.get("_physkit_driver_finalized") != [eid, refuter, expected_label],
+               "verdict lacks the matching Codex driver-finalization stamp")
+        reject(refuter in worker_thread_ids, "refuter is a recorded worker thread")
+        reject(not _trusted_verifier(root, str(refuter), expected_label),
+               "refuter is not a recorded Codex verifier thread")
+    return "; ".join(errors)
+def _finalize(root: Path, entries: list[dict], nonce: str, thread_id: str, label: str,
+              exp_id_for) -> str:
+    workers = _worker_ids(root, entries)
+    if not thread_id or thread_id in workers or not _trusted_verifier(root, thread_id, label):
+        return "successful turn lacks a distinct, recorded Codex verifier thread"
+    problems = [validate_verdict(root, entry, nonce, workers, exp_id_for) for entry in entries]
+    if any(problems):
+        return " | ".join(problem for problem in problems if problem)
+    for entry in entries:
+        source = _verdict_path(root, exp_id_for(entry["exp"]), nonce)
+        path = _verdict_path(root, exp_id_for(entry["exp"]), thread_id)
+        payload = _json(source)
+        payload["refuter"] = thread_id
+        payload["kill_tier"] = _kill_tier(payload.get("kill_tier"))
+        payload["_physkit_driver_finalized"] = [exp_id_for(entry["exp"]), thread_id, label]
+        temporary = path.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        os.replace(temporary, path)
+        if problem := validate_verdict(root, entry, thread_id, workers, exp_id_for):
+            return problem
+        source.unlink(missing_ok=True)
+    return ""
+def _update_debt(group: list[dict], read_queue, write_queue, halt, restore: bool) -> None:
+    q = read_queue()
+    if problem := pending_problem(q): halt("supervise: HALT - verifier damaged queue debt: " + problem)
+    configs = {entry["config"] for entry in group}
+    q["pending_verification"] = [entry for entry in q["pending_verification"]
+                                     if entry["config"] not in configs] + (group if restore else [])
+    write_queue(q)
+def service(root: Path, groups: list[list[dict]], k: dict, model: str, vfail: int,
+            *, build_prompt, spawn, stamp, exp_id_for, read_queue, write_queue, log, halt,
+            mode_line=None) -> int:
+    for group in groups:
+        entries = group
+        workers = _worker_ids(root, entries)
+        due = [entry for entry in entries
+               if (stored := str((_json(root / "results" / "verdicts" /
+                                        f"{exp_id_for(entry['exp'])}.json") or {}).get("refuter", ""))).startswith("driver-nonce-")
+               or validate_verdict(root, entry, stored, workers, exp_id_for)]
+        exps = [entry["exp"] for entry in due]
+        label_text = ("block " + str(group[0].get("block"))
+                      if group[0].get("block") else entries[0]["exp"])
+        problem = ""
+        if due:
+            log(f"[supervise] verification due for {label_text}: {', '.join(exps)}")
+            hypothesis = next((entry.get("hypothesis") for entry in group if entry.get("hypothesis")), "")
+            mode = mode_line(group) if mode_line else ""
+            legacy = build_prompt("verifier", exps=", ".join(exps), hypothesis=str(hypothesis or ""),
+                                  **({"mode": mode} if mode else {}))
+            spawn_label = f"verifier[{label_text}]"
+            retries = int(k.get("verifier_retries", k.get("planner_retries", 1)))
+            for attempt in range(1 + retries):
+                if attempt and problem:
+                    # The retry is told what the last attempt failed to deliver (driver-authored).
+                    legacy = build_prompt("verifier", exps=", ".join(exps), hypothesis=str(hypothesis or ""),
+                                          retry_note=f"attempt {attempt} failed ({problem})",
+                                          **({"mode": mode} if mode else {}))
+                nonce = "driver-nonce-" + secrets.token_hex(16)
+                (root / "results" / "verdicts" / ".codex-pending" / nonce).mkdir(parents=True, exist_ok=True)
+                subjects = [(str(entry["exp"]), exp_id_for(str(entry["exp"]))) for entry in due]
+                prompt = direct_prompt(legacy, nonce, subjects)
+                probe = lambda es=due, n=nonce: all(not validate_verdict(
+                    root, entry, n, _worker_ids(root, es), exp_id_for) for entry in es)
+                try:
+                    status, thread_id = spawn(prompt, model, spawn_label, k, probe)
+                    problem = (f"status={status}" if status != "ok" else
+                               _finalize(root, due, nonce, thread_id, spawn_label, exp_id_for))
+                finally:
+                    _update_debt(group, read_queue, write_queue, halt, True)
+                if not problem:
+                    break
+                log(f"[supervise] verifier attempt {attempt + 1} failed for {', '.join(exps)} "
+                    f"({problem})" + (" - retrying" if attempt < retries else ""))
+        if problem:
+            vfail += 1
+            log(f"[supervise] VERIFICATION failure #{vfail}/{k['max_consecutive_failures']}: "
+                f"{', '.join(exps)} still unverified - pending debt is retried before more science")
+            if vfail >= k["max_consecutive_failures"]:
+                halt("supervise: HALT - consecutive Codex verification failures are SYSTEMIC; "
+                     "pending verification remains on record for relaunch.")
+            continue
+        vfail = 0
+        for entry in entries:
+            stamp(entry["exp"])
+        _update_debt(group, read_queue, write_queue, halt, False)
+        log(f"[supervise] verification complete: {', '.join(entry['exp'] for entry in entries)} - "
+            "verdict(s) validated, provenance-stamped, and recorded")
+    return vfail

@@ -152,7 +152,8 @@ value:
 - **Bigger and hotter is not always better.** Test model size and temperature; a smaller, cooler model can
   win on constraint satisfaction and consistency.
 - **Reward shaping is load-bearing.** The metric dominates success and is not automatic. Design it with
-  frozen-metric care so the loop cannot win by gaming a degenerate optimum.
+  frozen-metric care so the loop cannot win by gaming a degenerate optimum; an evaluator found wrong
+  mid-campaign is revised as a declared metric epoch (`campaign.md` §The ONE metric), never quietly.
 
 ## Audit artifacts
 - A **breakthrough plot** (best score vs number of evaluations) and the **saved search tree / lineage** of

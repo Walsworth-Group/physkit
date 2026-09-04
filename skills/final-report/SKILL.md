@@ -31,8 +31,9 @@ only new artifacts you create are explanatory visualizations and the report itse
 stage, shareable audience, LaTeX format, with two campaign-specific additions. The first is the campaign
 harvest, which discovers the campaign layout and pulls the selected config, evidence ledger, discoveries,
 and disputes. The second is the REVTeX/PDF packaging. Read
-`${CLAUDE_PLUGIN_ROOT}/skills/report/SKILL.md` first and apply its machinery rather than re-deriving it
-here:
+the linked general [`report` skill](../report/SKILL.md) first and apply its machinery rather than
+re-deriving it here. PhysKit resource links are relative to the directory containing this `SKILL.md`;
+resolve them to absolute paths before copying assets:
 - the five standards (evidence-backed · honest · verified · traceable/reproducible · polished) are the
   rubric; this skill supplies the campaign sources for each;
 - the report-time verification step (Standard 3: recompute load-bearing values from the frozen record,
@@ -56,10 +57,24 @@ below are `report`'s five, expanded with where the campaign supplies each:
   append-only verifier and user challenges) and how they were resolved, and mark PROVISIONAL findings as
   provisional. A report that hides a live disagreement is not honest.
 - **Verified.** Run `report`'s report-time check. Recompute the headline result and key deltas from the
-  frozen record (scoreboard/logbook). The current-best's `verify` status must be CONFIRMED, not merely
-  high. Confirm internal consistency (abstract ↔ body, totals, units). Run `cite-check` on every
+  frozen record (scoreboard/logbook). Every exported claim carries its label (`results/checks_<NN>.json`
+  `label`: `unverified` · `self-checked` · `<verdict>/review` · `<verdict>/re-execution`; and, from the
+  claim audit's artifact, `label_after`, which may be `<verdict>/audit`), and the report prints it. A
+  shareable report needs the **current-best's** label to be independent — a CONFIRMED verdict, or the
+  claim audit's label; a headline the audit downgraded is reported as downgraded, never as the best —
+  and prints every other exported claim's label, `unaudited` included. Run `claim-audit` first (the
+  campaign-scale checks: inherited assumptions, selection bias, ledger reconciliation, narrative against
+  evidence, search adequacy, plausibility against the literature, the stranger test) and take each
+  claim's `label_after` from its artifact; where the audit downgraded the headline, the report says so
+  in plain text rather than blocking. While the current-best's label is non-independent and no audit
+  covers it, the report may be an internal draft only, never shareable.
+  Confirm internal consistency (abstract ↔ body, totals, units). Run `cite-check` on every
   reference, taking claim-support from the full text rather than the abstract; abstract-only support is
-  PROVISIONAL. Flag anything PROVISIONAL or resting on a QUESTIONABLE ASSUMPTION.
+  PROVISIONAL. Flag anything PROVISIONAL or resting on a QUESTIONABLE ASSUMPTION. Name the metric epoch
+  the headline rests on — its `metric_version`, kind, direction, and standing (`configs/loop.json`
+  `campaign.metric_epochs`; the first epoch is implicit and ratified). A headline under a `pending`
+  epoch says so in plain text; a number from a rolled-back epoch is not a headline; and no two numbers
+  are compared across epochs without saying the ruler changed.
 - **Reproducible.** A stranger with the repo must be able to rerun the headline result: exact configs,
   commands, data provenance, environment, and the file pointers to find everything (the per-experiment
   snapshot). If they cannot, the report has failed its primary job.
@@ -81,7 +96,8 @@ fall back to `docs/charter*.md` (or `docs/program.md` in the oldest trees — li
 spelling is the point of a fallback). So do non-kit campaigns.
 
 - **The campaign definition** (`campaign.md`) defines the goal, the primary metric, what is FROZEN (physics,
-  geometry, data, the metric itself), and which levers were explored. The report's thesis follows from
+  geometry, data, the metric itself — and, if the metric was revised, the epochs it went through), and
+  which levers were explored. The report's thesis follows from
   it: given the frozen setup and the goal, here is the best lever combination and the evidence for it.
   (Often a `charter*.md` / `README` / a docs folder.)
 - **The experiment ledger** is the per-experiment record of what was tried and what it scored: the primary
@@ -91,7 +107,7 @@ spelling is the point of a fallback). So do non-kit campaigns.
 - **The journal / narrative** holds the reasoning behind each experiment: hypotheses, what was expected,
   what happened. Mine it for why a lever was tried and how a choice was reached. (Often a `JOURNAL*.md`.)
 - **The verified findings** are results that survived verification and graduated to established. These
-  are the selected, high-confidence claims; cite their verification status. (The journal's Findings
+  are the selected, high-confidence claims; cite their verification status and metric epoch. (The journal's Findings
   section in current campaigns; often a `DISCOVERIES*.md` in older or non-kit ones.)
 - **The configs** are the exact knob settings per experiment, including the selected configuration.
   (Often `configs*/exp*.json` or similar.)
@@ -115,18 +131,21 @@ The report centers on one configuration. From the ledger and the discoveries, de
 
 - **The selected/best configuration is `configs/RECOMMENDED.json`** — the campaign's own recorded
   current-best. **Read it; do not re-derive it.** That file is a *gated* artifact: a write to it is a
-  promotion, and the PreToolUse hook refuses one without a CONFIRMED verdict from an independent
-  refuter. Inferring a winner from the scoreboard instead re-decides, by a different rule and with no
+  promotion, and the PreToolUse hook refuses one without the verification its preset requires — a
+  CONFIRMED verdict from an independent refuter, or, under `minimal`, the word `unverified` in the
+  write. Inferring a winner from the scoreboard instead re-decides, by a different rule and with no
   gate, something the campaign already decided under one — and a report that names a configuration
   the campaign never promoted is asserting a result nobody verified. Route to it via the campaign's
   `CLAUDE.md` §Where things live ("The current best configuration"), not by assuming the path.
   - **If the user names a specific config, use theirs** — and if it differs from `RECOMMENDED.json`,
     say so in the report with both, rather than silently overriding the gated record.
-  - **If `RECOMMENDED.json` is absent, empty, or stale** (its `exp_id` has no scoreboard row, or the
-    row's `verified` column is blank), that is a **finding to report, not a gap to paper over**: the
-    campaign has no verified current-best. Say that plainly, then infer a candidate from the ledger
-    and label it as inferred, with its basis and its verification status. Never present an inferred
-    winner as the selected configuration.
+  - **If `RECOMMENDED.json` is absent, empty, or stale** (its `exp_id` has no scoreboard row), that is
+    a **finding to report, not a gap to paper over**: the campaign has no current-best. Say that
+    plainly, then infer a candidate from the ledger and label it as inferred, with its basis and its
+    label. Never present an inferred winner as the selected configuration. A current-best whose
+    `verified` cell is blank is not a defect under a preset that promotes stamped `unverified`: its
+    label is `unverified` (or `self-checked`), which the report prints as such; a blank cell under a
+    preset that required a verdict is the defect `campaign-status` flags.
   - A higher raw score that fails the overfit flag is not the winner, and saying so is part of an
     honest report.
 - **The contenders** are 2–4 runner-ups that were promising: a different lever that nearly
@@ -135,6 +154,16 @@ The report centers on one configuration. From the ledger and the discoveries, de
   taken and why.
 
 Keep that asymmetry: the selected configuration is explained in detail, the contenders are summarized.
+
+## Run the claim audit first (the campaign-scale check)
+
+Before the evidence ledger, read the latest `results/verdicts/audit_<NN>.json` or run `claim-audit` at
+the level the campaign's preset names (`configs/loop.json` `verify.preset`: `panel` under `intensive`,
+`default` under `minimal`, `light`, and `moderate`; no preset turns the capstone off). It is claim-directed: it enumerates what this report will export, ranks by
+load-bearing weight and label weakness, and spends its budget top-down. Take every claim's
+`label_after` from the artifact; list the `unaudited` ones as such. The audit never edits the
+current-best, so a downgraded headline stays in `RECOMMENDED.json` with its downgraded label printed
+beside it — promote-and-label, never a silent swap.
 
 ## Build the evidence ledger (the heart of the report)
 
@@ -244,7 +273,7 @@ reproducible report is.
 
 1. **Title, authors/lab, date, abstract** — the abstract states the headline result with its number
    and the one or two key evidence deltas.
-2. **Introduction & objective** — the problem, the goal, what's frozen, the headline finding.
+2. **Introduction & objective** — the problem, the goal, what's frozen (and any metric epochs), the headline finding.
 3. **The selected configuration (in depth)** — what it is, every component, and why.
 4. **Physical & model parameters** — the master table + per-parameter prose for the important ones.
 5. **Methods: data pipeline & forward model** — end-to-end pipeline + campaign-specific derivations.
@@ -273,14 +302,14 @@ reproducible report is.
 - [ ] A figure shows the evidence/ablation; a figure shows the headline result; figures have takeaway captions.
 - [ ] The reproducibility section gives exact commands + configs a stranger could run.
 - [ ] Broader implications stated honestly, with no overclaiming: applicability range, what it newly enables/predicts, open problems it bears on.
-- [ ] A claim→evidence manifest maps every headline claim to its backing artifact (experiment id / `result_<NN>.json` / figure), with planned-vs-executed deltas noted.
+- [ ] A claim→evidence manifest maps every headline claim to its backing artifact (experiment id / `result_<NN>.json` / figure), with its verification label (`label_after` from the claim audit where one ran, "downgraded by audit" said where true) and planned-vs-executed deltas noted.
 - [ ] No placeholder text, no "TODO", no invented numbers.
 
 Then tell the user where the `.tex`, the `.pdf`, and the generated figures live, and give a 3–4 line
 summary of the headline result and the strongest evidence for it.
 
 ## Assets — use the shared `report` assets
-Use the general `report` skill's vendored assets (`${CLAUDE_PLUGIN_ROOT}/skills/report/assets/`), not a
+Use the general `report` skill's linked vendored [`assets/`](../report/assets/), not a
 bespoke template: `report_skeleton.tex` (REVTeX `revtex4-2`, APS/PRX, the capstone form, verified to
 compile), `report-macros.sty` (portable, siunitx/physics/braket-free), the vendored `revtex4-2.cls` +
 `apsrev4-2.bst` + size configs (so no package-install approval is needed), `refs.bib`, and the

@@ -3,8 +3,8 @@
 A guide from a research idea to a running, autonomous research campaign. It covers setup, the
 interview, and launching the loop.
 
-> The kit is a Claude Code plugin named `physkit`. Its skills appear as `/physkit:<name>` once the
-> plugin is loaded.
+> PhysKit installs as a full plugin in Claude Code or Codex. Skills appear as `/physkit:<name>` in
+> Claude Code and `$physkit:<name>` in Codex; both harnesses may also select them automatically.
 
 The kit has two layers. The **general science toolkit** (`frame-problem`, `verify`,
 `simulation-design`, `correctness-suite`, `debug`, `derive`, `report`, and others) applies in any
@@ -21,9 +21,31 @@ setup beyond installing the plugin; the full list is at the bottom.
 
 ## 1. Install the kit
 
-Installing the plugin makes its skills available as `/physkit:<skill>` in every session on that
-machine. `<KIT_DIR>` below is the full path to the `kit` folder; quote it if the path contains
-spaces. Pick the option that fits your setup.
+`<KIT_DIR>` below is the full path to the `kit` folder; quote it if the path contains spaces. Campaigns
+need the full plugin package—not a copy of `skills/` alone—because scaffolding reads bundled templates,
+doctrine, scripts, and validators.
+
+### Codex
+
+Register the local marketplace and install the full package:
+
+```
+codex plugin marketplace add "<KIT_DIR>"
+codex plugin add physkit@physkit
+```
+
+Confirm with `codex plugin list`, then start a new Codex task so it loads the refreshed plugin. The
+skills-only `~/.agents/skills` projection is suitable for general science work but is not a
+campaign-capable install.
+
+After changing or updating the local package, rerun `codex plugin add physkit@physkit`, confirm with
+`codex plugin list --marketplace physkit`, and start another new task. Marketplace registration is only
+needed the first time.
+
+### Claude Code
+
+Installing the plugin makes its skills available as `/physkit:<skill>` in every Claude Code session on
+that machine. Pick the option that fits your setup.
 
 Option A — quick test, no install, per session. It reads the files live and needs no marketplace,
 which suits iterating on the kit:
@@ -55,19 +77,19 @@ changes. Option A always reads live and avoids this step.
 > press Enter. The quoted form works only when the whole `/plugin marketplace add "…"` line is typed
 > at once.
 
-Confirm any install with `/plugin list`, then `/reload-plugins` to activate immediately.
+Confirm a Claude install with `/plugin list`, then `/reload-plugins` to activate immediately.
 `/physkit:new-campaign` and the other skills are then available in all projects.
 
-Make the doctrine always-on (recommended for everyday use). The plugin makes the skills available,
-but Claude Code does not auto-load the kit's doctrine docs, and a doc read once falls out of context
-over a long session. Put the spine in your project's `CLAUDE.md`, which Claude Code re-injects every
-turn: either add the import line `@<path-to-kit>/docs/CORE.md`, or copy the body of `docs/CORE.md`
-into a `CLAUDE.md` in your project folder. The import stays current automatically; the copy is the
-fallback when imports do not resolve on your setup. `CORE.md` is the single source for this spine.
+Make the doctrine always-on (recommended for everyday use). The plugin makes the skills available, but
+does not automatically inject the doctrine docs into an ordinary project. In Claude Code, put the spine
+in `CLAUDE.md`: either add `@<path-to-kit>/docs/CORE.md`, or copy the body of `docs/CORE.md`. In Codex,
+copy that body into `AGENTS.md`. If the project is used with both harnesses, author once and materialize
+identical `CLAUDE.md` and `AGENTS.md` files; a scaffolded campaign does this and checks consistency for
+you. `CORE.md` is the single source for the spine.
 Campaigns work the other way round: `new-campaign` stamps the kit **version** into the campaign
 (`campaign.md`'s header and the top of `results/logbook.md`) — its doctrine and tooling provenance,
 since every release is tagged and the pin recovers the whole kit, not a live import (see §4). The
-campaign's own `CLAUDE.md` stays light: always-on carries what binds a turn (the integrity core, the
+campaign's own `CLAUDE.md`/`AGENTS.md` twins stay light: always-on carries what binds a turn (the integrity core, the
 reflexes, the hard gates, the file map), and the reasoning behind those rules is the plugin's
 `docs/CORE.md` at the stamped version rather than in every turn's context.
 
@@ -107,7 +129,8 @@ topic, asking only about gaps:
   forward-model, generative design, ML training, inverse-problem/reconstruction, hardware-in-the-loop,
   discovery loop, active experimental design, model discrimination; full set A–I in
   `ARCHETYPE_CHEATSHEET.md`),
-- the metric, co-designed with you; it governs everything downstream and becomes FROZEN,
+- the metric, co-designed with you; it governs everything downstream and becomes FROZEN — locked
+  against quiet change: a revision is a declared metric epoch, never an in-place edit —
 - the physics/system (geometry, materials, orientations, governing equations),
 - the data, the levers versus what is frozen, any experimental or hardware constraints,
 - your compute and time budget, the environment to use, and whether to include literature search,
@@ -131,7 +154,8 @@ your-project/
                         equations depth · §Updates from discoveries — verified findings, each citing
                         its campaign's verdict · §Durable decisions · §Lineage — every campaign and
                         session, what it changed, what it found
-  CLAUDE.md             the project's always-on rules, auto-loaded anywhere in the tree
+  CLAUDE.md             the project's always-on rules for Claude Code
+  AGENTS.md             exact managed twin, auto-loaded by Codex
   data/                 the canonical data, read-only — or a DATA_PATH.txt pointer to where it lives
   scripts/ models/ …    promoted frozen artifacts, in purpose-named dirs created at first promotion
   sessions/             ad-hoc work — one <date>_<slug>/NOTES.md each, no frozen metric
@@ -139,8 +163,9 @@ your-project/
   campaigns/01_<slug>/  the campaign the interview generates (siblings get 02_, 03_, …)
     README.md             the front door for anyone new to the tree: purpose, how the loop runs,
                           who reads what when, and §Setup status — what is not built yet
-    CLAUDE.md             always-on: integrity core + reflexes + the hard gates + §Where things live,
+    CLAUDE.md             Claude always-on: integrity core + reflexes + gates + §Where things live,
                           this campaign's map of itself
+    AGENTS.md             exact managed twin for Codex; resume/spawn checks enforce consistency
     campaign.md           THE campaign definition and the ONE human sign-off surface — mission +
                           done-criteria + expectations, metric, levers, FROZEN, §Known landmines, caps,
                           §Verification (this campaign's own checks), promotion, and the append-only
@@ -153,7 +178,14 @@ your-project/
       _template.json      copy this per experiment
       exp000_*.json …     one config per experiment   ·   RECOMMENDED.json  the current-best config
       loop.json           the driver's knobs + the campaign properties every check branches on —
-                          prediction mode, noise model, comparability tags
+                          prediction mode, noise model, comparability tags, metric_revision (who
+                          may revise the FROZEN metric: cautious asks you first; autonomous enacts a
+                          verified revision as a pending epoch for you to ratify), and verify.preset
+                          (how much verification the campaign buys, and of what kind: minimal · light
+                          · moderate · intensive — docs/reference/verification-presets.md). A campaign that has
+                          revised its metric also carries metric_epochs here — one entry per
+                          metric_version with its evidence and standing; a scorer change no epoch
+                          declares refuses to run
     predictions/          one per experiment, written BEFORE the solve — the runner refuses to spend
                           an experiment without it
     results/
@@ -161,17 +193,22 @@ your-project/
       JOURNAL.md          the working window + NEXT pointer + §Findings, the settled verdict-cited record
       logbook.md          the full narrative record (append-only; never read whole)
       result_<NN>.json    what one experiment produced   ·   checks_<NN>.json  its mechanical checks,
-                          each pass / fail / unavailable, and what an unavailable one would need
-      verdicts/           independent-verification verdicts   ·   correctness_state.json  the standing
-                          suite's status — the promotion gate reads both
+                          each pass / fail / unavailable, what an unavailable one would need, what the
+                          experiment changed, the worker's self-check, and its verification label
+      verdicts/           independent-verification verdicts + audit_<NN>.json (the claim audit)   ·
+                          correctness_state.json  the standing suite's per-check status — the
+                          promotion gate reads both
       queue.json          the loop's worklist — the driver pops a unit at a time, the planner refills it
       snapshots/ images/ data/ diagnostics/    per-experiment artifacts
     scripts/
       metric.py           the FROZEN scorer (+ --selftest)   ·   run_campaign.py  the experiment runner
-      guard_promotion.py    the hook that blocks a promotion write with no recent verification
+      guard_promotion.py    the shared hook policy that blocks an unverified, subject-mismatched promotion
+      guard_promotion_codex.py  the Codex apply_patch adapter for that unchanged policy
       loop_heartbeat.py     the Stop hook guarding attended sessions (stands down while the driver runs)
-    tests/                correctness_checks.py — the standing checks, green before a result is trusted
-    .claude/settings.json   the hook wiring
+    tests/                correctness_checks.py — the standing checks, each declaring its row (invariants
+                          every unit · machinery on setup / code change · gates at promotion), plus the
+                          setup audit's four contract checks; green before a result is trusted
+    .claude/settings.json   Claude hook wiring   ·   .codex/hooks.json  Codex promotion-hook wiring
     LITERATURE.md         only if you enabled literature search or provided sources
 ```
 
@@ -183,8 +220,13 @@ campaign), the experiment hooks are wired, and experiment 000 — the baseline g
 the data and scoring pipeline — is queued as the loop's first unit. Confirm at any time with:
 
 ```
-python scripts/run_campaign.py --preflight
+python scripts/run_campaign.py --preflight --backend codex   # from Codex
+python scripts/run_campaign.py --preflight --backend claude  # from Claude Code
 ```
+
+For Codex, open a fresh task from the campaign root and run `/hooks` to review/trust the exact
+project-local `.codex/hooks.json` definition before relying on the promotion gate. The scaffold
+validator can check the file and command, but host trust is deliberately not inferred.
 
 If scaffolding handed over anything it could not finish (data only you can stage, an instrument to
 connect), it is named in the handoff message and in `results/JOURNAL.md` **NEXT** — clear those first;
@@ -197,7 +239,12 @@ The campaign runs in supervisor mode: a deterministic driver pops one experiment
 campaign definition by construction, context does not accumulate across experiments, and the gates
 are enforced in code. Your session supervises; the driver runs the experiments.
 
-Open a fresh Claude session from inside the campaign folder:
+Open a fresh task/session from inside the campaign folder. In Codex, confirm `AGENTS.md` is loaded,
+run `/hooks` once to review and trust the campaign hook, then invoke:
+
+> $physkit:run-campaign
+
+In Claude Code, start the established trusted session:
 
 ```
 cd "E:\path\to\your\campaign"
@@ -215,8 +262,9 @@ Then say:
 
 > /physkit:run-campaign
 
-The skill checks the campaign is launch-ready with the driver's `--preflight`, which reports every
-failure translated and with its fix, starts `scripts/run_campaign.py --supervise` in the background,
+The skill checks the campaign is launch-ready with the driver's `--preflight --backend <active harness>`,
+which reports every failure translated and with its fix, starts
+`scripts/run_campaign.py --supervise --backend <active harness>` in the background,
 and stays in the session as the loop's concierge:
 
 - Watch. Ask what the loop is doing; it narrates from the driver's live log
@@ -233,6 +281,14 @@ and stays in the session as the loop's concierge:
 Why `--dangerously-skip-permissions`: the loop runs unattended and makes many edits, runs, and file
 writes. Without it you would have to approve each one and the loop would stall. Run it from the campaign's
 own folder, in a project you trust, so the agent's actions stay scoped to the work.
+
+Codex workers instead use native `codex exec` with the `workspace-write` sandbox; PhysKit adds neither
+dangerous Codex bypass flag. Prompts travel through UTF-8 stdin and the driver records each Codex thread
+ID. If Windows resolves `codex` to an inaccessible app alias, preflight asks for the absolute executable
+in `AUTORESEARCH_CODEX_EXE`. In `configs/loop.json`, each role's Claude launch reads `model` +
+`claude_effort`, while its Codex launch reads `codex_model` + `codex_reasoning_effort`. Leave any field
+blank to inherit that harness's configured default. Codex's direct verifier follows the worker Codex pair;
+Claude's established nested verifier follows the planner Claude pair.
 
 Why not chat the loop into running in this session? A single growing context degrades the loop in
 four ways: the campaign definition is eventually pushed out of the window; agents stop re-reading
@@ -268,13 +324,14 @@ doing now.
 
 ## Troubleshooting
 
-- `/physkit:…` skills don't appear after install → run `/reload-plugins`, and confirm with
-  `/plugin list` that `physkit` is enabled.
+- Claude `/physkit:…` skills do not appear after install → run `/reload-plugins`, and confirm with
+  `/plugin list` that `physkit` is enabled. Codex `$physkit:…` skills do not appear → confirm
+  `physkit@physkit` is installed and enabled with `codex plugin list`, then start a new task.
 - `scripts/metric.py --selftest` fails → the metric isn't implemented yet, or there is a sign or
   units bug. Fix it before experiment 000; the self-test exists to catch this early.
 - The loop keeps pausing for permission → it wasn't launched with `--dangerously-skip-permissions`,
   or not from the campaign folder. Restart it as in §4.
-- The launch fails or nothing happens → run `python scripts/run_campaign.py --preflight`, which the
+- The launch fails or nothing happens → run `python scripts/run_campaign.py --preflight --backend <active harness>`, which the
   concierge does automatically. Every problem it finds is printed with its fix: a missing agent CLI,
   an unfilled loop knob, a corrupt queue, an unimplemented metric.
 - The driver halted overnight → read the tail of the newest `results/diagnostics/supervise_*.log`, or
@@ -284,14 +341,18 @@ doing now.
   credentials, or disk.
 - The loop won't stop → create `results/STOP` (graceful) or `Ctrl-C` the driver (immediate). To
   disable the Stop-hook heartbeat for a debugging session, set `AUTORESEARCH_LOOP_HEARTBEAT=off`.
-- You want to change something the agent froze, such as the metric or the core physics → those need
-  your explicit sign-off. Tell the agent; it will not change them on its own.
+- You want to change something the agent froze, such as the metric or the core physics → the metric is
+  revised only as a declared metric epoch, never edited in place. Under `cautious` (the default) the
+  loop proposes in `results/ESCALATE.md` and waits for you; under `autonomous` it enacts a verified
+  revision as a *pending* epoch that you ratify afterwards. Core physics still needs your explicit
+  sign-off.
 - A generated file still shows `{{PLACEHOLDER}}` → generation didn't finish cleanly. Ask the agent to
   re-run the new-campaign validation step; it has a checker that flags leftover placeholders.
 
 ---
 
-*The kit ships two layers of skills, all namespaced `/physkit:<name>`. **General science toolkit**
+*The kit ships two layers of skills, namespaced `/physkit:<name>` in Claude Code and
+`$physkit:<name>` in Codex. **General science toolkit**
 (usable in any session): `assess-idea`, `literature-review`, `frame-problem`, `verify`, `simulation-design`,
 `correctness-suite`, `debug`, `dimensional-analysis`, `derive`, `attribute-mechanism`, `record-decision`, `cite-check`, `report`. **Campaign layer**:
 `new-campaign` (scaffold + interview), `run-campaign` (launch/monitor/steer the supervised loop),

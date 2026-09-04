@@ -96,13 +96,34 @@ finished), *multiple comparisons* (selecting the best of many seeds or configs w
 *regression to the mean* (a re-test of an extreme run drifting back). When a result could be one of these,
 run the splitting or correction control before believing it.
 
-## 2 · Make it a suite you can run
-- Organize the checks into a single runnable entry point (a `tests/` suite, a `make check`, or a
-  `--selftest` flag) that prints a clear pass/fail summary and tees output to a log.
-- **Tier by cost.** A cheap tier (limits, invariants, self-test, a coarse MMS) runs after every change and
-  in CI. An expensive tier (full order-of-accuracy sweeps, large convergence studies, validation runs) runs
-  on demand and before a result is promoted. Never conclude correctness from the cheap tier alone for a
-  load-bearing result.
+## 2 · Make it a suite the runner can schedule
+- Organize the checks into one entry point — in a campaign, `tests/correctness_checks.py`'s `CHECKS`
+  list: the runner hosts the run, prints a per-check pass/fail summary, and records each check's cost and
+  the files it executed (`results/correctness_state.json`). Outside a campaign, a `tests/` suite or a
+  `--selftest` flag that prints a clear summary and tees a log.
+- **Declare each check's row** with `@check(row=...)`. The campaign's verification preset
+  (`configs/loop.json` `verify.preset`; `docs/reference/verification-presets.md`) decides when each row
+  runs, and the runner meters everything that fires every unit:
+
+  | row | what it may test | its inputs | when it runs |
+  |---|---|---|---|
+  | `invariants` (the default when undeclared) | a cheap property of this run's OUTPUT: conservation, ranges, no NaN/inf, shapes, sum rules | the result | every unit, under every preset, inside a budget of a tenth of the unit's measured cost (never below thirty seconds) |
+  | `machinery` | the code's own fixed-input checks: a known answer, an analytic limit, parity between two methods, a convergence study, synthetic recovery | its own fixtures — never this run's config or result | at setup, when the code it executed changes, or every unit, by preset; always when the FROZEN core changes |
+  | `gates` | an expensive per-result gate: a leave-one-out refit, a bootstrap, a held-out score | the experiment (the check takes one argument) | after the solve of a promotion candidate, or every unit, by preset |
+
+  Authoring is where a check is judged too slow or too numerous, not cycle forty. An `invariants` check
+  runs in seconds and names the failure the runner's own floor would miss. A `machinery` check that reads
+  this run's config is a result check wearing the wrong row. A check that shells out declares
+  `depends_on=("path", ...)` so what it depends on is seen. `every="<reason>"` pins a check to every unit
+  whatever the preset (still metered). An over-budget every-set is refused at preflight by name; one
+  that grows slow mid-campaign is demoted to promotion-time, loudly, never silently skipped. Never
+  conclude correctness from the every-set alone for a load-bearing result: that is what the machinery
+  and gates rows, and the independent verifier, are for.
+- **The contract checks** are the setup audit's (`new-campaign` Step 3.7), shipped as four `machinery`
+  stubs: `baseline_reproduces`, `noise_floor_measured`, `metric_discriminates`, `synthetic_recovery`.
+  Green before anything is frozen; the validator refuses a suite without them unless
+  `tests/CORRECTNESS_NA.md` records why. A contract error is paid on every unit afterwards, and no
+  per-unit preset reaches it.
 - Record, next to the suite, what each non-obvious check is for (`record-decision`), so a later editor does
   not delete a guard whose purpose is not evident.
 
@@ -112,8 +133,12 @@ run the splitting or correction control before believing it.
   FROZEN and a campaign builds on it. FROZEN means locked, not correct: a frozen but unvalidated model bakes
   its bug into every downstream experiment, and matching a published number can drive reproduction of that
   publication's bug. Validate first, then freeze.
-- **Re-run the suite after any change to core/FROZEN code** — the scoring math, the physics/geometry, the
-  forward model. Do not edit FROZEN code without re-running the suite and, in a campaign, user sign-off.
+- **A change to core/FROZEN code re-runs the suite** — the scoring math, the physics/geometry, the
+  forward model. In a campaign the runner does this: a FROZEN-core change makes every check due, and a
+  `machinery` check re-runs whenever the code it executed last time moves (compared as code, so a
+  comment is not a change). Do not edit FROZEN code and skip the suite; a change to the scorer is a
+  declared metric epoch (`roles/worker.md` §Metric epochs) — the runner binds the scorer's code to its
+  epoch and refuses an undeclared change — and the epoch stays pending until the user ratifies it.
 - **A red suite blocks trust.** Do not promote a result, write a DISCOVERY, or report a number while a
   relevant check is failing. Fix the code or fix the check, and state which.
 - **Stale caches.** Invalidate any cached invariant (a precomputed operator/dictionary) on the inputs that
@@ -123,7 +148,10 @@ run the splitting or correction control before believing it.
 When a bug is found and fixed, add to the standing suite the check that would have caught it: a minimal
 reproducing case asserting the now-correct behavior. When the verification plan turns up a new
 application-specific check, add it. The suite then only grows stronger, and the same bug cannot silently
-return. New checks are appended as the work uncovers them.
+return. New checks are appended as the work uncovers them. A regression check joins the row matching
+what it tests: an output property → `invariants` (most of them); a bug reproduced on fixed inputs →
+`machinery`; a per-result statistical guard → `gates`. A refuted finding that becomes a check costs one
+verifier once and milliseconds every unit after — the reuse a light preset rests on.
 
 When the bug was a **silent failure whose output imitated the effect under study** (`debug`'s gotcha
 catalog: exit 0, no NaNs, an ordinary convergence metric, and a result that reads like the sought
@@ -143,10 +171,11 @@ the case that failed.
 ## Before you rely on the suite — checklist
 - [ ] Every applicable plan check is encoded as an asserting, deterministic, loud-failing test.
 - [ ] MMS and an order-of-accuracy test exist for any discretized solver (not just "error is small").
-- [ ] Conservation/symmetry invariants and a fast frozen self-test are in the cheap tier.
+- [ ] Conservation/symmetry invariants are declared `invariants`; the frozen self-test is the runner's own floor.
+- [ ] The four contract checks exist and are green (or `tests/CORRECTNESS_NA.md` records why not).
 - [ ] A sign/convention round-trip + symmetry self-tests ran and passed before any forward model / data generator was frozen (frozen ≠ validated).
 - [ ] Application-specific checks from the plan are included.
 - [ ] The orthogonal sanity panel (no-skill floor, train↔eval tracking, leakage, stderr scan, shape/param drift) passes for any load-bearing number.
-- [ ] The suite runs from one entry point, tiered by cost, and tees a pass/fail log.
+- [ ] Every check declares its row; preflight shows the every-set's measured cost within budget.
 - [ ] It was re-run after the latest core change and is GREEN (or failures are openly flagged).
 - [ ] Every previously-fixed bug has a regression check guarding it.

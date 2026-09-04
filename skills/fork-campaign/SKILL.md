@@ -76,8 +76,10 @@ and JOURNAL (an empty Findings section included). Carry over, deliberately and e
   Run `correctness-suite`: the sign and convention round-trip plus the symmetry self-tests that would have
   caught the original bug. Add the check that failed as a standing regression gate.
 - the shared data and promoted artifacts from the project level (`../../data`, `../../models/`, …;
-  old layout: `../../shared/`), unchanged: referenced, never copied.
-- the FROZEN metric spec and levers, re-examined for whether the bug touched them.
+  old layout: `../../shared/` <!-- lint-ok: intentional pre-consolidation path -->), unchanged: referenced, never copied.
+- the FROZEN metric spec and levers, re-examined for whether the bug touched them. (A metric that was
+  merely wrong, with the save-sets still valid and re-scorable, is a metric epoch inside the source
+  campaign — `campaign.md` §The ONE metric — not a reason to fork; fork when the artifacts are tainted.)
 
 Do not carry over the old ledger, the old current-best config as "best", or any conclusion. Those are re-earned
 in step 4.
@@ -116,6 +118,6 @@ Update the project index so the history is complete and honest:
 ## Composition & boundaries
 Composes `new-campaign` (the fresh scaffold) and `verify` (the re-validation gate). Pairs with `debug` (which
 diagnoses the invalidating bug) and `correctness-suite` (which re-validates the corrected infrastructure before
-re-freezing). A version bump keeps the ledger because the rankings held; a fork breaks it because they did not.
+re-freezing). A metric epoch keeps the ledger because the save-sets are valid and re-scorable; a fork breaks it because the artifacts themselves are tainted.
 Not for scaffolding a brand-new investigation (`new-project`), a routine fix (a version bump), or a new
 approach (`new-campaign`).

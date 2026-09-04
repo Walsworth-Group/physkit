@@ -17,12 +17,15 @@ skill, step 3); **§Findings is append-only and survives every consolidation.**
 The campaign's accumulated knowledge. An entry lands here only after multiple consistent experiments
 AND a CONFIRMED verdict from `{{VERIFY_SKILL}}`'s independent refuter — **every entry cites its
 `results/verdicts/<id>.json` by name; a claim with no verdict citation is an open thread, not a
-finding, and steers nothing.** A single good run is a Recent-experiments line, not a finding.
+finding, and steers nothing** — the one exception is the metric-epoch line below, whose evidence is its
+`campaign.metric_epochs` entry. A single good run is a Recent-experiments line, not a finding.
 Steering-negatives are findings too (number them N1, N2, …): record the **kill tier** from the
 verdict — REFUTED (mechanism understood → prunes) or EVIDENCE AGAINST (clean single negative →
 shelved in `results/queue.json`, revivable; entries accumulate toward a prune). An INCONCLUSIVE kill
 never lands here; queue a fix-and-rerun unit. Narrative depth stays in the logbook — one to three
-lines per entry, citing exp ids.
+lines per entry, citing exp ids. A metric epoch is one line too — `metric epoch <version> opened
+(<kind>, <direction>) · <verdict or check> · <what the new metric measures>` — the campaign's only
+narrative record of a revision (`roles/worker.md` §Metric epochs).
 
 Disputes and retractions are appended, never resolved by deletion: challenge an entry with a dated
 **DISPUTES Fn** line (what is contested, on what evidence); overturn or narrow one with a dated

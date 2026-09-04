@@ -7,48 +7,104 @@ the `correctness-suite` skill from campaign.md's Verification section. A FRESH s
 EMPTY (exit 2), which does NOT green-light a promotion - fill in >=1 real check. No finding built on
 a RED or EMPTY suite is trustworthy; a genuinely-no-simulator campaign records tests/CORRECTNESS_NA.md.
 
-Each check is a zero-arg function returning one of:
+Each check is a function returning one of:
     "pass"                  the check held
     "skip: <why-not-yet>"   not implemented yet  (does NOT fail the suite)
     "fail: <what broke>"    the check FAILED     (raising is also treated as a failure)
 
+Declare what each check tests with @check(row=...), so the runner can schedule it by cost:
+    "invariants"   a cheap property of this run's OUTPUT (conservation, ranges, no NaN, sum rules);
+                   runs every unit under every preset - keep it to seconds. The default when undeclared.
+    "machinery"    the code's own fixed-input check (a known answer, an analytic limit, parity between
+                   two methods, a convergence study); reads NO experiment config or result; runs at
+                   setup, when the code it executed changes, or every unit, by preset.
+    "gates"        an expensive per-result gate (a leave-one-out refit, a bootstrap, a held-out score);
+                   takes one argument - the experiment name - and runs at promotion time or every unit.
+depends_on= names root-relative files a check reads or shells out to (its code trace cannot see them);
+every="<reason>" pins a check to every unit whatever the preset (it is still metered).
+
 Rules of thumb (see the correctness-suite skill for depth):
-  * cheap/fast checks first; seed every RNG and log the seed (deterministic)
-  * fail loudly with the numbers (expected / actual / tolerance)
-  * re-run after ANY change to core/FROZEN code (/physkit:campaign-status step 2)
-  * every bug you fix earns a new regression check here - a lesson you only pay for once
+  * fail loudly with the numbers (expected / actual / tolerance); seed every RNG and log the seed
+  * every bug you fix earns a new regression check here - a lesson you only pay for once; declare its row
 """
 from __future__ import annotations
 
 
+# --- declaring a check (the runner reads this; see the docstring above) ---------------------------
+
+def check(row="invariants", depends_on=(), every=""):
+    """Declare a check's row (invariants | machinery | gates), the files it depends on beyond its code
+    trace, and an optional reason to run it every unit regardless of preset."""
+    def deco(fn):
+        fn.physkit_check = {"row": row, "depends_on": tuple(depends_on), "every": every}
+        return fn
+    return deco
+
+
 # --- the checks (replace each `skip` stub with a real assertion) ---------------------------------
 
+@check(row="machinery")
 def analytic_limit():
     """Drive the model to a closed-form / asymptotic regime and confirm it reproduces it to tolerance."""
     return "skip: not implemented - assert a known analytic limit"
 
 
+@check(row="invariants")
 def conservation_invariants():
     """Norm/energy/probability conserved; quantities stay in physical range; no NaN/inf; shapes+units OK."""
     return "skip: not implemented - assert the setup's invariants"
 
 
+@check(row="machinery")
 def independent_parity():
     """A second, mechanism-diverse computation agrees on a case both can do, to a stated tolerance."""
     return "skip: not implemented - compare two independent methods"
 
 
+@check(row="machinery")
 def convergence():
     """The answer is stable under further refinement (dt / grid / tol); report the refinement used."""
     return "skip: not implemented - refine until the answer stops moving"
 
 
+@check(row="invariants")
 def regression_gates():
     """Reproduce known/published behavior; add one check per fixed bug (sign/convention round-trip, ...)."""
     return "skip: not implemented - pin known-physics + each past bug"
 
 
-CHECKS = [analytic_limit, conservation_invariants, independent_parity, convergence, regression_gates]
+# --- the setup audit's contract checks (new-campaign Step 3.7): green BEFORE anything is frozen ----
+# A contract error - a floor taken from a paper, a baseline nobody re-ran, a metric that does not measure
+# the mission - is paid for on every unit afterwards, and no per-unit verification preset reaches it.
+
+@check(row="machinery")
+def baseline_reproduces():
+    """Exp 000 re-scored from its config equals the recorded baseline within the measured noise."""
+    return "skip: not implemented - re-score the baseline from its config and compare"
+
+
+@check(row="machinery")
+def noise_floor_measured():
+    """The floor / threshold campaign.md relies on derives from >=3 replicate seeds run in THIS tree, not
+    from a published number; assert the config value against the measured spread."""
+    return "skip: not implemented - measure the replicate spread and assert the config value against it"
+
+
+@check(row="machinery")
+def metric_discriminates():
+    """A pair of synthetic inputs the mission says should order one way; the FROZEN scorer orders them so."""
+    return "skip: not implemented - build the pair and assert the order"
+
+
+@check(row="machinery")
+def synthetic_recovery():
+    """Fitters / decoders / model-improvement: data generated from known parameters under the campaign's
+    noise model fits back within tolerance. Any other archetype returns 'skip: not a fitter'."""
+    return "skip: not implemented - generate from known parameters and fit back (or: not a fitter)"
+
+
+CHECKS = [analytic_limit, conservation_invariants, independent_parity, convergence, regression_gates,
+          baseline_reproduces, noise_floor_measured, metric_discriminates, synthetic_recovery]
 
 
 # --- runner (you shouldn't need to edit below) ---------------------------------------------------

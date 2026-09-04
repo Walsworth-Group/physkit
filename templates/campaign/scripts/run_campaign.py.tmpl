@@ -7,8 +7,8 @@ scoring math (that lives in scripts/metric.py).
 Usage:
     python scripts/run_campaign.py --baseline                       # experiment 000 (the floor gate)
     python scripts/run_campaign.py --config configs/exp007_foo.json # one experiment
-    python scripts/run_campaign.py --preflight [--smoke]            # launch checks only (no spend)
-    python scripts/run_campaign.py --supervise                      # the loop driver (preflight runs first)
+    python scripts/run_campaign.py --preflight --backend <harness> [--smoke] # launch checks (no spend)
+    python scripts/run_campaign.py --supervise --backend <harness>          # loop driver
 
 Every run MUST leave behind, for reproducibility:
     configs/exp<NN>_<slug>.json  ·  a results/scoreboard.tsv row  ·  results/result_<NN>.json
@@ -63,7 +63,14 @@ import numpy as np
 
 import frozen_core  # the FROZEN/core file set + content hash (single source of truth; guard reads it too)
 import metric  # the FROZEN scorer (compute_metric, selftest)
+import codex_backend as _codex_backend
+import supervisor_lock as _supervisor_lock
+import sync_agent_instructions as _agent_instructions
 
+
+def _verifier_policy():
+    import codex_verifier
+    return codex_verifier
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "results"
 DIAG = RESULTS / "diagnostics"
@@ -78,7 +85,7 @@ CHECKS = RESULTS                         # results/checks_<NN>.json - one mechan
 # Every campaign lives at <project>/campaigns/<slug>/ (no bare-campaign mode), so the project
 # overview is two levels up: PROJECT.md carries the '## Standing constraints' delivered into every
 # spawned prompt (see build_prompt). A pre-consolidation project keeps that section in
-# PROJECT_ORIENTATION.md instead (pre-consolidation layout), so both names are tried, new first - a new campaign
+# PROJECT_ORIENTATION.md instead, so both names are tried, new first - a new campaign
 # scaffolded into an old-layout project must still launch. The campaign's own landmines need no
 # injection: they live in campaign.md, which both roles are contractually required to re-read every
 # cycle.
@@ -269,14 +276,16 @@ def snapshot_experiment(cfg: dict, config_path: Path | None = None, props: dict 
     # mutable file, which is the same reason core_hash is stamped beside them.
     prop_lines = "".join(f"{k}: {props.get(k)}\n" for k in
                          ("prediction_mode", "noise_model", "noise_floor", "tolerance",
-                          "metric_version", "data_version") if k in props)
+                          "metric_version", "data_version", "metric_revision") if k in props)
+    vr = _verify_rows(_read_json(LOOPCFG, {}) or {})
+    prop_lines += f"verify_preset: {vr['preset'] or vr['source']}\n"   # how much verification this ran under
     # The delivered context (the project overview's Standing constraints + the landmines table) is a
     # LIVING document pulled into every spawned prompt, so two experiments in one campaign can run
     # under different constraints. Hashing the assembled worker prompt here answers "what did this
     # experiment run under" from the frozen record. Recomputed at snapshot time (inbox notes, which
     # vary per spawn and steer rather than constrain, are not part of the hash).
-    spawn_hash = _hashlib.sha256(
-        build_prompt("worker", config=str(config_path or "<config path>")).encode("utf-8")).hexdigest()
+    spawn_prompt = build_prompt("worker", config=str(config_path or "<config path>"))
+    spawn_hash = _hashlib.sha256((_codex_backend.adapt_prompt(spawn_prompt) if os.environ.get("AUTORESEARCH_ACTIVE_BACKEND") == "codex" else spawn_prompt).encode("utf-8")).hexdigest()
     (dst / "manifest.txt").write_text(
         f"argv: {' '.join(sys.argv)}\npython: {sys.version.split()[0]}\nnumpy: {np.__version__}\n"
         f"core_hash: {frozen_core.core_hash(ROOT)}\n"   # WHICH FROZEN/core code this experiment ran against
@@ -294,10 +303,11 @@ def check_prediction_gate(cfg: dict, props: dict) -> dict:
     because not every campaign can honestly bound its answer and a FABRICATED range is a fake control -
     worse than an honest absence. The FILE is required in every mode; only the bound it must carry changes:
 
-        range      (default)  {"predicted": {"low": <num>, "high": <num>}, "rationale": "<why>"}
-        direction             {"predicted": {"direction": "higher"|"lower"|"unchanged",
-                                             "vs": "<exp_name>"|"baseline"}, "rationale": "<why>"}
-        none                  {"rationale": "<why no bound is honest here>"}
+        range      (default)  {"exp_name": "...", "predicted": {"low": <num>, "high": <num>},
+                              "rationale": "<why>"}
+        direction             {"exp_name": "...", "predicted": {"direction": "higher"|"lower"|"unchanged",
+                              "vs": "<exp_name>"|"baseline"}, "rationale": "<why>"}
+        none                  {"exp_name": "...", "rationale": "<why no bound is honest here>"}
 
     Mode `none` relaxes the BOUND, never the requirement to write something down before spending - a solve
     with no recorded expectation at all is a fishing trip in every mode (roles/worker.md, loop step 1).
@@ -335,6 +345,11 @@ def check_prediction_gate(cfg: dict, props: dict) -> dict:
     if not isinstance(pred, dict):
         sys.exit(f"PREDICTION GATE: {p} parsed, but it is a {type(pred).__name__}, not a JSON object. "
                  "It must be an object carrying at least a \"rationale\".")
+    expected_subject = str(cfg["exp_name"])
+    actual_subject = str(pred.get("exp_name", ""))
+    if actual_subject != expected_subject:
+        sys.exit(f"PREDICTION GATE: {p} has exp_name={actual_subject!r}; expected "
+                 f"{expected_subject!r}. Fix the pre-run artifact; do not relabel it after the solve.")
     if not str(pred.get("rationale", "")).strip():
         sys.exit(f"PREDICTION GATE: {p} has no non-empty \"rationale\". Every mode requires one: the "
                  "reasoning IS the control, and a bound with no basis is a guess wearing a number.")
@@ -536,12 +551,16 @@ def append_logbook(cfg: dict, exp_id: str, label: str, score: float, diags: dict
         predicted_line = cfg.get("_predicted", "(missing - the prediction gate should have caught this)")
     # One bold-labelled field per line, as a Markdown bullet list, so fields render on separate lines
     # (a single newline renders as a space in Markdown, which would collapse them into one paragraph).
+    # The epoch label travels with the narrative too: the row's metric_version is what this result
+    # means, and a later reader of the logbook must not have to cross-reference the scoreboard for it.
+    mv = str(_campaign_props().get("metric_version") or "")
     entry = (
         f"\n## {exp_id} - {label} - {_utc_stamp()}\n"
         f"- **Hypothesis**: {cfg.get('_hypothesis', '(set _hypothesis in the config)')}\n"
         f"- **Predicted**: {predicted_line}\n"
         f"- **Change**: {cfg.get('_comment', '')}\n"
-        f"- **Result**: {{PRIMARY_METRIC}} = {score:.4f}; {{GUARDRAIL_METRIC}} = {diags}\n"
+        f"- **Result**: {{PRIMARY_METRIC}} = {score:.4f}; {{GUARDRAIL_METRIC}} = {diags}"
+        + (f" (metric epoch {mv})" if mv else "") + "\n"
         f"- **Analysis**: \n"
         f"- **Expected vs found**: \n"
         f"- **Verification**: \n"
@@ -605,11 +624,21 @@ def _prior_results(exclude_id: str) -> list[dict]:
     return out
 
 
-def _incumbent(priors: list[dict]) -> dict | None:
+def _incumbent(priors: list[dict], props: dict | None = None) -> dict | None:
     """The best prior result under THIS metric's direction, using the frozen scorer's own comparator so
-    a lower-is-better campaign needs no separate branch here."""
+    a lower-is-better campaign needs no separate branch here.
+
+    With `props`, only rows scored under the CURRENT (metric_version, data_version) compete: a row from
+    another metric epoch is not an incumbent it makes sense to beat (the metric-epoch design), and ranking across the
+    boundary is the silent merge the epoch ledger exists to prevent. check_comparability reports how
+    many rows were set aside. Blank tags (a campaign that predates them) keep the old behaviour.
+    """
+    tags = ((str(props.get("metric_version") or ""), str(props.get("data_version") or ""))
+            if props else ("", ""))
     best = None
     for r in priors:
+        if all(tags) and (r["metric_version"], r["data_version"]) != tags:
+            continue
         if best is None or metric._better(r["score"], best["score"]):
             best = r
     return best
@@ -663,16 +692,24 @@ def check_prediction_outcome(score: float, apriori: dict, props: dict, priors: l
 
 
 def check_noise_floor(score: float, props: dict, incumbent: dict | None,
-                     comparable: bool = True) -> dict:
+                     comparable: bool = True, excluded: int = 0) -> dict:
     """Is the change against the incumbent larger than this campaign's own resolution?
 
     A change smaller than the noise floor (stochastic) or the tolerance (deterministic) is not a result -
-    it is the same number twice. This reports that; it does not decide what to do about it.
+    it is the same number twice. This reports that; it does not decide what to do about it. `excluded`
+    is how many prior rows _incumbent set aside for being scored under another version, so "no
+    incumbent" can say whether the campaign is at its first result or at an epoch boundary.
     """
     deterministic = props.get("noise_model") == "deterministic"
     knob = "tolerance" if deterministic else "noise_floor"
     eps = props.get(knob)
     if incumbent is None:
+        if excluded:
+            return _check("unavailable",
+                          f"no prior result under the current (metric_version, data_version) to compare "
+                          f"against; {excluded} prior row(s) under other versions set aside",
+                          needs="re-score the retained contenders under the current version (the epoch "
+                                "re-baseline) before any delta is a measurement")
         return _check("unavailable", "no prior experiment to compare against (this is the first result)",
                       needs="a second experiment")
     if not comparable:
@@ -712,8 +749,13 @@ def check_noise_floor(score: float, props: dict, incumbent: dict | None,
                   threshold=eps, threshold_name=knob)
 
 
-def check_comparability(props: dict, incumbent: dict | None) -> dict:
-    """A ranking claim is valid ONLY WITHIN one (metric_version, data_version) pair."""
+def check_comparability(props: dict, incumbent: dict | None, priors: list[dict] | None = None) -> dict:
+    """A ranking claim is valid ONLY WITHIN one (metric_version, data_version) pair.
+
+    `priors` lets the check SURFACE an epoch boundary rather than hide it: rows scored under another
+    version are set aside by _incumbent, and this reports how many, so a discontinuity in the record is
+    named in the checks artifact instead of disappearing into a merged ranking (the metric-epoch design).
+    """
     mine = (str(props.get("metric_version") or ""), str(props.get("data_version") or ""))
     if not all(mine):
         return _check("unavailable",
@@ -722,7 +764,18 @@ def check_comparability(props: dict, incumbent: dict | None) -> dict:
                       needs="campaign.metric_version / campaign.data_version in configs/loop.json - a "
                             "campaign scaffolded before these existed sets them once, and never has to "
                             "answer this again")
+    others = [r for r in (priors or []) if (r["metric_version"], r["data_version"]) != mine]
+    other_tags = ", ".join(sorted({f"({r['metric_version'] or '?'}, {r['data_version'] or '?'})"
+                                   for r in others}))
     if incumbent is None:
+        if others:
+            return _check("unavailable",
+                          f"no prior result is scored under ({mine[0]}, {mine[1]}); {len(others)} prior "
+                          f"row(s) under {other_tags} cannot rank against this run - a metric/data "
+                          "version boundary (an epoch) sits between them",
+                          needs="re-score the retained contenders under the current version (the epoch "
+                                "re-baseline) before any ranking claim crosses the boundary",
+                          metric_version=mine[0], data_version=mine[1], excluded=len(others))
         return _check("unavailable", "no prior experiment to compare tags against",
                       needs="a second experiment", metric_version=mine[0], data_version=mine[1])
     theirs = (incumbent["metric_version"], incumbent["data_version"])
@@ -732,12 +785,15 @@ def check_comparability(props: dict, incumbent: dict | None) -> dict:
                       "delta cannot be certified comparable",
                       needs=f"re-score {incumbent['exp_name']} under the current version")
     same = mine == theirs
-    return _check("pass" if same else "fail",
-                  f"this run is ({mine[0]}, {mine[1]}); the incumbent {incumbent['exp_name']} is "
-                  f"({theirs[0]}, {theirs[1]})"
-                  + ("" if same else " - these numbers are NOT comparable. Re-score the incumbent under "
-                                     "the current version before ranking them"),
-                  metric_version=mine[0], data_version=mine[1])
+    detail = (f"this run is ({mine[0]}, {mine[1]}); the incumbent {incumbent['exp_name']} is "
+              f"({theirs[0]}, {theirs[1]})"
+              + ("" if same else " - these numbers are NOT comparable. Re-score the incumbent under "
+                                 "the current version before ranking them"))
+    if same and others:
+        detail += (f" ({len(others)} prior row(s) under {other_tags} set aside - not ranked against "
+                   "this run)")
+    return _check("pass" if same else "fail", detail,
+                  metric_version=mine[0], data_version=mine[1], excluded=len(others))
 
 
 def check_correctness_state() -> dict:
@@ -760,6 +816,115 @@ def check_correctness_state() -> dict:
                               "than the code on disk now. Re-run the suite", suite_status=status)
     return _check("pass", "correctness suite green, certified against the core on disk",
                   suite_status=status)
+
+
+# ---- metric epochs (the metric-epoch design) -------------------------------------------------------------
+# A metric epoch is one metric_version: WHO opened it, on WHAT evidence, its expected direction, and its
+# ratification STANDING (pending | ratified | rolled-back). The declarations live in configs/loop.json
+# beside metric_version, as campaign.metric_epochs keyed by version - and that block exists only once a
+# campaign has revised its metric: with no block, the current metric_version IS the co-designed first epoch
+# (ratified). The one runner-owned fact - the hash of the FROZEN scorer each epoch was bound to - lives with
+# the runner's other state in results/correctness_state.json (scorer_hash_by_version), bound on the first
+# experiment under the epoch and never rewritten. Declarations are hook-guarded (scripts/guard_promotion.py,
+# its loop.json surface): append-only, evidence-checked, ratification attended-only.
+
+EPOCH_KINDS = ("mechanics", "semantics")
+EPOCH_STATUSES = ("pending", "ratified", "rolled-back")
+IMPLICIT_EPOCH = {"kind": "semantics", "status": "ratified", "implicit": True}
+
+
+def _epoch_declaration(props: dict) -> dict | None:
+    """The CURRENT epoch's declaration: the campaign.metric_epochs entry for metric_version; the implicit
+    first epoch when the campaign has declared none, or when the version has no entry but the runner
+    already bound it (only the first epoch can be bound without an entry - a new version is refused by
+    epoch_gate before its suite run could bind it); None when the block names no such version and nothing
+    bound it (an undeclared bump)."""
+    mv = str(props.get("metric_version") or "")
+    block = props.get("metric_epochs") or {}
+    if not isinstance(block, dict) or not block:
+        return dict(IMPLICIT_EPOCH, id=mv)
+    e = block.get(mv)
+    if isinstance(e, dict):
+        return dict(e, id=mv)
+    return dict(IMPLICIT_EPOCH, id=mv) if _scorer_bindings().get(mv) else None
+
+
+def _scorer_bindings() -> dict:
+    """metric_version -> the scorer hash it was bound to, from the runner's own state file."""
+    st = _read_json(CORRECTNESS_STATE, None)
+    b = st.get("scorer_hash_by_version") if isinstance(st, dict) else None
+    return b if isinstance(b, dict) else {}
+
+
+def _bind_scorer_hash(state: dict, metric_version: str, scorer_hash: str | None) -> dict:
+    """Record the scorer hash the epoch `metric_version` is bound to, if it is not bound yet. Called by
+    check_correctness_suite - the state file's only writer - AFTER the selftest passed, so only a scorer
+    that passed its self-test is ever bound. A bound hash is never rewritten."""
+    bindings = dict(state.get("scorer_hash_by_version") or {})
+    if metric_version and scorer_hash and not bindings.get(metric_version):
+        bindings[metric_version] = scorer_hash
+        print(f"[epoch] {metric_version} bound to the FROZEN scorer on disk (scorer_hash {scorer_hash[:12]}...) "
+              "- from here on, a scorer change under this epoch is an undeclared metric change")
+    state["scorer_hash_by_version"] = bindings
+    return state
+
+
+def epoch_gate(props: dict) -> list[str]:
+    """The FROZEN scorer on disk must be the one the CURRENT metric epoch was bound to.
+
+    Returns plain-language failures (empty = clear). This is what makes a metric change impossible to
+    do QUIETLY: a scorer edit with no new epoch declaring it is refused before an evaluation is spent.
+    An epoch not yet bound is clear here and binds in check_correctness_suite. The correctness suite is
+    deliberately NOT part of the bound hash (frozen_core.scorer_hash): adding a regression check is not a
+    metric change. A blank metric_version is not enforced (the comparability check already reports it).
+    """
+    mv = str(props.get("metric_version") or "")
+    if not mv:
+        return []
+    decl = _epoch_declaration(props)
+    if decl is None:
+        declared = ", ".join(str(k) for k in (props.get("metric_epochs") or {})) or "none"
+        return [f"configs/loop.json campaign.metric_version is {mv!r}, but campaign.metric_epochs declares no "
+                f"epoch with that id (declared: {declared}). A metric_version bump IS a metric epoch: add its "
+                "entry (kind, evidence, expected_direction, status 'pending') to campaign.metric_epochs "
+                "before running under it."]
+    if str(decl.get("status", "")) == "rolled-back":
+        return [f"the current metric epoch {mv!r} is ROLLED-BACK in campaign.metric_epochs. Fix: point "
+                "campaign.metric_version at the epoch the campaign reverted to, or open the next epoch."]
+    current = frozen_core.scorer_hash(ROOT)
+    recorded = _scorer_bindings().get(mv)
+    if current is None or not recorded:
+        return []                    # cannot hash, or not bound yet: nothing to enforce, never a false halt
+    if recorded != current:
+        return [f"the FROZEN scorer on disk (scorer_hash {current[:12]}...) is NOT the one metric epoch "
+                f"{mv!r} was bound to ({recorded[:12]}...), and no new epoch declares the change. This is an "
+                "UNDECLARED metric change - the one thing the epoch record exists to make impossible to do "
+                "quietly. Fix: if the change is deliberate, open the next epoch (bump campaign.metric_version "
+                "and add its entry, with evidence, to campaign.metric_epochs in configs/loop.json); if it is "
+                "not, restore scripts/metric.py from results/snapshots/<last experiment>/scripts/."]
+    return []
+
+
+def check_epoch(props: dict) -> dict:
+    """Which metric epoch this run was scored under, its standing, and whether the scorer on disk is the
+    one that epoch was bound to. The row's metric_version is the label; the declaration carries the
+    standing (implicit first epoch = ratified)."""
+    mv = str(props.get("metric_version") or "")
+    if not mv:
+        return _check("unavailable", "campaign.metric_version is blank, so no epoch can be named",
+                      needs="campaign.metric_version in configs/loop.json")
+    problems = epoch_gate(props)
+    if problems:
+        return _check("fail", problems[0])
+    decl = _epoch_declaration(props) or {}
+    bound = bool(_scorer_bindings().get(mv))
+    return _check("pass",
+                  f"scored under metric epoch {mv} ({decl.get('kind', '?')}, standing {decl.get('status', '?')}"
+                  + (", the implicit first epoch" if decl.get("implicit") else "") + "); "
+                  + ("the scorer on disk matches the hash the epoch is bound to" if bound
+                     else "the epoch's scorer hash is not bound yet (binds with this experiment's suite run)"),
+                  epoch=mv, kind=decl.get("kind"), standing=decl.get("status"),
+                  expected_direction=decl.get("expected_direction"), implicit=bool(decl.get("implicit")))
 
 
 def check_guardrail(diags: dict) -> dict:
@@ -800,24 +965,181 @@ def check_hard_bounds(score: float) -> dict:
     return _check("pass", f"within the metric's hard bounds {tuple(bounds)}", bounds=list(bounds))
 
 
+RE_EXECUTION_MAX_FRACTION = 0.25   # a unit is cheap enough to re-execute when its solve is under this
+#                                    fraction of the worker's iteration cap (a runner constant, not a knob)
+
+
+def _re_execution_eligibility(solve_s, loop_cfg: dict, props: dict) -> dict:
+    """Is an independent RE-EXECUTION of this unit affordable and meaningful? Computed, not configured.
+
+    Two facts decide it: the unit's MEASURED solve time against the worker's iteration cap, and whether
+    the campaign declares its units reproducible from their configs (seeded; not one-shot, not
+    hardware-in-the-loop). The verify skill used to read an absolute threshold fixed at scaffold time;
+    in the one campaign measured it sat above nine of ten units' solve times, so full re-execution was
+    the de-facto default whatever the units cost. A legacy verify.full_reproduction_threshold_s still
+    present in loop.json is honoured as an additional cap, never ignored silently."""
+    w = loop_cfg.get("worker") or {}
+    v = loop_cfg.get("verify") or {}
+    try:
+        cap_s = float(w.get("iteration_timeout_hours") or 0) * 3600
+    except (TypeError, ValueError):
+        cap_s = 0.0
+    ceiling = RE_EXECUTION_MAX_FRACTION * cap_s if cap_s > 0 else None
+    legacy = v.get("full_reproduction_threshold_s") if isinstance(v, dict) else None
+    try:
+        legacy = float(legacy) if legacy not in (None, "") else None
+    except (TypeError, ValueError):
+        legacy = None
+    if legacy is not None and legacy > 0:
+        ceiling = legacy if ceiling is None else min(ceiling, legacy)
+    out = {"solve_wall_clock_s": solve_s, "ceiling_s": ceiling,
+           "reproducible": bool(props.get("reproducible", True)),
+           "max_fraction": RE_EXECUTION_MAX_FRACTION, "legacy_threshold_s": legacy}
+    if solve_s is None:
+        out.update(eligible=False, eligibility="solve time not measured for this unit")
+    elif not out["reproducible"]:
+        out.update(eligible=False, eligibility="campaign.reproducible is false (one-shot, "
+                                               "hardware-in-the-loop, or unseeded units)")
+    elif ceiling is None:
+        out.update(eligible=True, eligibility=f"solve {solve_s:.0f}s; no worker.iteration_timeout_hours "
+                                              "to measure against")
+    elif solve_s <= ceiling:
+        out.update(eligible=True, eligibility=f"solve {solve_s:.0f}s within the {ceiling:.0f}s ceiling "
+                                              f"({RE_EXECUTION_MAX_FRACTION:g} x worker.iteration_timeout_hours"
+                                              + (f", capped by the legacy threshold {legacy:.0f}s"
+                                                 if legacy is not None and legacy == ceiling else "") + ")")
+    else:
+        out.update(eligible=False, eligibility=f"solve {solve_s:.0f}s exceeds the {ceiling:.0f}s ceiling "
+                                               f"({RE_EXECUTION_MAX_FRACTION:g} x worker.iteration_timeout_hours"
+                                               + (f", capped by the legacy threshold {legacy:.0f}s"
+                                                  if legacy is not None and legacy == ceiling else "")
+                                               + ") - review from the frozen record instead")
+    return out
+
+
+def _short(v) -> str:
+    s = json.dumps(v, sort_keys=True, default=str)
+    return s if len(s) <= 80 else s[:77] + "..."
+
+
+def _change_manifest(exp_id: str, label: str, props: dict) -> dict:
+    """What THIS experiment changed relative to the last verified unit - the mechanical record a
+    verifier starts from (verify the delta and its interaction with the unchanged parts) and a worker's
+    self-check is directed at. Nobody guesses it: it is read from the frozen snapshots.
+
+    Baseline: the most recent experiment with a CONFIRMED verdict under the current metric_version, else
+    the incumbent, else the campaign baseline (exp 000), else nothing (the first experiment). Files are
+    compared as CODE (frozen_core._normalized_source: comments, docstrings and formatting do not count),
+    config keys by value (underscore-prefixed commentary keys ignored), the version tags by name.
+    `python scripts/run_campaign.py --diff <exp>` prints the full diff from the same two snapshots."""
+    priors = _prior_results(exp_id)
+    mv = str(props.get("metric_version") or "")
+    confirmed = []
+    for r in priors:
+        if mv and r["metric_version"] != mv:
+            continue
+        vf = _find_verdict_file(r["exp_name"])
+        if vf is None:
+            continue
+        v = _read_json(vf, {}) or {}
+        if str(v.get("verdict", "")).strip().upper() == "CONFIRMED":
+            confirmed.append(r)
+    since, why = None, "first experiment"
+    if confirmed:
+        since = max(confirmed, key=lambda r: r["id"])
+        why = f"last CONFIRMED verdict under metric_version {mv or '(untagged)'}"
+    else:
+        inc = _incumbent(priors, props)
+        if inc is not None:
+            since, why = inc, "the incumbent (no CONFIRMED verdict yet under this metric_version)"
+        else:
+            base = next((r for r in priors if r["id"] == "000"), None)
+            if base is not None:
+                since, why = base, "the campaign baseline"
+    out = {"since": since["exp_name"] if since else None, "since_reason": why,
+           "files": [], "config_keys": [], "versions": {}}
+    if since is None:
+        return out
+    mine, theirs = SNAPSHOTS / label, SNAPSHOTS / since["exp_name"]
+
+    def _tree(d: Path) -> dict:
+        m = {}
+        for p in (d / "scripts").rglob("*"):
+            if p.is_file() and "__pycache__" not in p.parts:
+                m[p.relative_to(d).as_posix()] = _hashlib.sha256(
+                    frozen_core._normalized_source(p) or b"").hexdigest()
+        return m
+
+    a, b = _tree(theirs), _tree(mine)
+    for rel in sorted(set(a) | set(b)):
+        if rel not in a:
+            out["files"].append({"path": rel, "kind": "added"})
+        elif rel not in b:
+            out["files"].append({"path": rel, "kind": "removed"})
+        elif a[rel] != b[rel]:
+            out["files"].append({"path": rel, "kind": "modified"})
+    ca = _read_json(theirs / "config.json", {}) or {}
+    cb = _read_json(mine / "config.json", {}) or {}
+    for key in sorted(set(ca) | set(cb)):
+        if key.startswith("_") or key == "exp_name":
+            continue
+        va, vb = ca.get(key), cb.get(key)
+        if json.dumps(va, sort_keys=True, default=str) != json.dumps(vb, sort_keys=True, default=str):
+            out["config_keys"].append({"key": key, "old": _short(va), "new": _short(vb)})
+    for tag in ("metric_version", "data_version"):
+        old, new = str(since.get(tag) or ""), str(props.get(tag) or "")
+        if old != new:
+            out["versions"][tag] = [old, new]
+    return out
+
+
+def _changes_summary(exps: str) -> str:
+    """The verifier's starting point, one line per experiment, read from results/checks_<NN>.json
+    (`changes`): what moved since the last verified unit, and the command for the full diff."""
+    lines = []
+    for stem in [s.strip() for s in exps.split(",") if s.strip()]:
+        eid = exp_id_for(stem)
+        ck = _read_json(CHECKS / f"checks_{eid}.json", None) if eid else None
+        ch = (ck or {}).get("changes") if isinstance(ck, dict) else None
+        if not isinstance(ch, dict):
+            lines.append(f"  {stem}: no change record (predates the manifest) - diff the snapshot yourself")
+            continue
+        if not ch.get("since"):
+            lines.append(f"  {stem}: {ch.get('since_reason', 'first experiment')} - nothing to diff against;"
+                         " verify it whole")
+            continue
+        files = ", ".join(f"{f['path']} ({f['kind']})" for f in ch.get("files") or []) or "none"
+        keys = ", ".join(f"{c['key']} {c['old']} -> {c['new']}" for c in ch.get("config_keys") or []) or "none"
+        vers = ", ".join(f"{k} {v[0]} -> {v[1]}" for k, v in (ch.get("versions") or {}).items())
+        lines.append(f"  {stem}: since {ch['since']} ({ch.get('since_reason', '')}); code changed: {files}; "
+                     f"config keys changed: {keys}" + (f"; versions: {vers}" if vers else "")
+                     + f"; full diff: python scripts/run_campaign.py --diff {stem}")
+    return "\n".join(lines)
+
+
 def write_checks(exp_id: str, label: str, score: float, diags: dict, apriori: dict | None,
-                 props: dict) -> dict:
+                 props: dict, timing: dict | None = None) -> dict:
     """Compute every mechanical check for this experiment and write results/checks_<NN>.json.
 
     Written LAST, after the logbook entry, so `save_set` reports the complete contract rather than the
-    part that happens to exist at scoring time.
+    part that happens to exist at scoring time. `timing` (the runner's measured breakdown) is recorded
+    under `run` so the unit's cost sits beside its verdicts.
     """
     priors = _prior_results(exp_id)
-    inc = _incumbent(priors)
-    comparability = check_comparability(props, inc)
+    inc = _incumbent(priors, props)
+    comparability = check_comparability(props, inc, priors)
+    loop_cfg = _read_json(LOOPCFG, {}) or {}
+    vrows = _verify_rows(loop_cfg)
     checks = {
         "prediction": check_prediction_outcome(score, apriori or {}, props, priors),
         "noise_floor": check_noise_floor(score, props, inc,
-                                         comparable=comparability["status"] != "fail"),
+                                         comparable=comparability["status"] != "fail",
+                                         excluded=int(comparability.get("excluded") or 0)),
         "comparability": comparability,
         "hard_bounds": check_hard_bounds(score),
         "guardrail": check_guardrail(diags),
         "correctness_suite": check_correctness_state(),
+        "epoch": check_epoch(props),
         "save_set": None,   # filled below
     }
     # Re-verified HERE, at record time, over all four artifacts - including the figure, which
@@ -830,6 +1152,18 @@ def write_checks(exp_id: str, label: str, score: float, diags: dict, apriori: di
         "snapshot": (SNAPSHOTS / label).is_dir(),
         "logbook entry": label in LOGBOOK.read_text(encoding="utf-8", errors="replace"),
     }
+    # POST-solve invocation: the per-result gates, and whatever the preset holds back for a promotion
+    # candidate, run now that there is a result to gate - and only for a candidate where the preset
+    # says so. Their outcome lands in this artifact's correctness_suite check.
+    candidate = _is_candidate(checks)
+    post = _due_checks(_read_json(CORRECTNESS_STATE, None), vrows["rows"], props,
+                       candidate=candidate, core_moved=False)
+    _SUITE_LAST["candidate"] = dict(post, candidate=candidate)
+    if post["due"]:
+        print(_suite_line("candidate", post, len(post["due"]) + len(post["skipped"])))
+        check_correctness_suite(str(props.get("metric_version") or ""), select=",".join(post["due"]),
+                                ran_for=label, why="candidate", props=props)
+        checks["correctness_suite"] = check_correctness_state()
     missing = sorted(n for n, ok in present.items() if not ok)
     checks["save_set"] = (
         _check("fail", "missing from the save-set at record time: " + ", ".join(missing), present=present)
@@ -841,11 +1175,35 @@ def write_checks(exp_id: str, label: str, score: float, diags: dict, apriori: di
         "metric": {"name": "{{PRIMARY_METRIC}}", "value": float(score),
                    "higher_is_better": bool(metric.HIGHER_IS_BETTER)},
         "campaign": {k: props.get(k) for k in ("prediction_mode", "noise_model", "noise_floor",
-                                               "tolerance", "metric_version", "data_version")},
+                                               "tolerance", "metric_version", "data_version",
+                                               "metric_revision")},
         "checks": checks,
         "flags": sorted(n for n, c in checks.items() if c["status"] == "fail"),
         "unavailable": sorted(n for n, c in checks.items() if c["status"] == "unavailable"),
+        "run": {"solve_wall_clock_s": (timing or {}).get("solve_s"),
+                "timing": {k: v for k, v in (timing or {}).items() if k != "t_run"}},
+        # The verification this unit ran under (the preset and its resolved table) and what it can
+        # afford (re-execution, decided from its own measured cost) - the verifier reads this rather
+        # than a scaffold-time threshold, and the label every claim carries is built from it.
+        "verification": dict(
+            {k: vrows[k] for k in ("preset", "source", "rows")},
+            re_execution=_re_execution_eligibility((timing or {}).get("solve_s"), loop_cfg, props),
+            # Which checks the preset made due for this unit and why the rest were not: the record
+            # behind the label, per invocation (before the solve; after it, for a candidate).
+            suite={"experiment": _SUITE_LAST.get("experiment"), "candidate": _SUITE_LAST.get("candidate"),
+                   "budget": _SUITE_LAST.get("budget")}),
+        # The worker's own checks land here via `--self-check` (absent until then; off under a preset
+        # that does not record them); the label is what every exported claim carries - honest, and
+        # raised only by artifacts: a recorded self-check, then an independent verdict.
+        "self_check": {"status": "off" if vrows["rows"].get("self_check") == "off" else "absent"},
+        "label": "unverified",
     }
+    # What this experiment changed since the last verified unit - where verification starts.
+    try:
+        payload["changes"] = _change_manifest(exp_id, label, props)
+    except Exception as exc:                         # the manifest must never cost the experiment
+        payload["changes"] = {"since": None, "since_reason": f"manifest failed: {type(exc).__name__}: {exc}",
+                              "files": [], "config_keys": [], "versions": {}}
     (CHECKS / f"checks_{exp_id}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     n_pass = len(checks) - len(payload["flags"]) - len(payload["unavailable"])
     if payload["flags"]:
@@ -863,14 +1221,17 @@ def write_checks(exp_id: str, label: str, score: float, diags: dict, apriori: di
 
 
 def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = None,
-                        props: dict | None = None) -> dict:
+                        props: dict | None = None, timing: dict | None = None) -> dict:
     """Score with the FROZEN metric, run the guardrail, and write result_<NN>.json (+ figure).
 
     The scoreboard row is appended LAST, behind the save-set gate - a row exists only for a fully-saved
     result. The a-priori range is echoed into the result JSON so an out-of-envelope score is visible in
-    the record, not only in the analysis narrative.
+    the record, not only in the analysis narrative. `timing` is the runner's own measured breakdown
+    (gates / suite / snapshot / solve); the solve time travels with the result as the unit's cost.
     """
     _beat("scoring")
+    t_record = time.monotonic()
+    timing = dict(timing or {})
     score = metric.compute_metric(prediction, target)
     assert np.isfinite(score), "primary metric is non-finite - refuse to record a noise result"
     diags = guardrail(prediction, cfg)
@@ -890,6 +1251,8 @@ def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = No
         # not a delta. Blank tags are a hygiene failure the checks artifact reports.
         "metric_version": str(props.get("metric_version") or ""),
         "data_version": str(props.get("data_version") or ""),
+        # The measured solve time IS the unit's cost - what verification depth is decided against.
+        "solve_wall_clock_s": timing.get("solve_s"),
         "config": cfg,
     }
     if apriori:
@@ -944,9 +1307,10 @@ def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = No
         "notes": "",
     })
     append_logbook(cfg, exp_id, label, score, diags, apriori)
+    timing["record_s"] = round(time.monotonic() - t_record, 3)
     # Last, so save_set can report the complete contract (the logbook entry lands one line above).
     try:
-        write_checks(exp_id, label, score, diags, apriori, props)
+        write_checks(exp_id, label, score, diags, apriori, props, timing=timing)
     except Exception as exc:                      # never lose the experiment over its own verdict file
         print(f"WARNING: the mechanical checks could not be computed ({type(exc).__name__}: {exc}). "
               f"Recording that failure to results/checks_{exp_id}.json rather than leaving no verdict - "
@@ -960,6 +1324,7 @@ def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = No
             }, indent=2), encoding="utf-8")
         except Exception:
             pass
+    _append_timing_row(exp_id, label, timing)
     _beat("record")
     print(f"[{label}] {{PRIMARY_METRIC}} = {score:.4f}  (figure: {fig.name}; logged to logbook.md)")
     return result
@@ -1022,10 +1387,300 @@ def require_metric_selftest() -> None:
         sys.exit(msg)
 
 
-def check_correctness_suite() -> str:
+SUITE_ROWS = ("invariants", "machinery", "gates")
+SUITE_META_DEFAULT = {"row": "invariants", "depends_on": (), "every": ""}
+
+
+def _suite_worker(select: str, report: str, exp: str) -> int:
+    """`--suite-worker`: run tests/correctness_checks.py's CHECKS in THIS process, one at a time, timed,
+    traced, and reported - the protocol behind check_correctness_suite.
+
+    The suite used to run as `python tests/correctness_checks.py`: an exit code and nothing else - no
+    check names, no per-check cost, no way to run a subset. Hosting the worker here (the suite module is
+    imported; its own main() never runs) gives the runner all three without a new file in the campaign
+    tree, and a suite with a flat CHECKS list and no declarations keeps working exactly as before (an
+    undeclared check is row 'invariants'). A suite without CHECKS at all falls back to the old exit-code
+    run. select: comma-separated check names, or ''/'all'. report: the JSON path to write. exp: the
+    experiment a 'gates' check (one that takes an argument) is given, or ''."""
+    import importlib.util
+    import inspect
+    suite = ROOT / "tests" / "correctness_checks.py"
+    sys.path.insert(0, str(ROOT / "scripts"))
+    spec = importlib.util.spec_from_file_location("correctness_checks", suite)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    checks = list(getattr(mod, "CHECKS", None) or [])
+    wanted = ({s.strip() for s in select.split(",") if s.strip()}
+              if select and select.strip().lower() != "all" else None)
+    rows_out, t_all = [], time.monotonic()
+    root_r = ROOT.resolve()
+    prefixes = (str(root_r).lower(), str(root_r.parent.parent).lower())
+    for fn in checks:
+        name = getattr(fn, "__name__", str(fn))
+        if wanted is not None and name not in wanted:
+            continue
+        meta = dict(SUITE_META_DEFAULT, **(getattr(fn, "physkit_check", None) or {}))
+        declared = getattr(fn, "physkit_check", None) is not None
+        traced: set = set()
+
+        def _tracer(frame, event, arg):
+            # Call events only (returning None never traces lines): which of OUR files a check
+            # executes is the on-change fingerprint's input; the cost is a function-call hook.
+            if event == "call":
+                f = frame.f_code.co_filename
+                if f.lower().startswith(prefixes):
+                    try:
+                        traced.add(Path(f).resolve().relative_to(root_r).as_posix())
+                    except ValueError:
+                        traced.add(Path(f).resolve().as_posix())
+            return None
+
+        takes_arg = bool(inspect.signature(fn).parameters)
+        t0 = time.monotonic()
+        sys.settrace(_tracer)
+        try:
+            if takes_arg and not exp:
+                status = "skip: needs a result (a gates check runs with the experiment it gates)"
+            else:
+                status = (fn(exp) if takes_arg else fn()) or "pass"
+        except Exception as exc:               # a raising check is a FAILURE, never a silent pass
+            status = f"fail: {type(exc).__name__}: {exc}"
+        finally:
+            sys.settrace(None)
+        status = str(status)
+        kind = "pass" if status == "pass" else ("fail" if status.startswith("fail") else "skip")
+        rows_out.append({"name": name, "row": meta["row"] if meta["row"] in SUITE_ROWS else "invariants",
+                         "depends_on": [str(d) for d in meta["depends_on"]], "every": str(meta["every"] or ""),
+                         "declared": declared, "takes_arg": takes_arg, "status": kind, "detail": status,
+                         "wall_s": round(time.monotonic() - t0, 6), "traced": sorted(traced)})
+        mark = {"pass": "PASS", "fail": "FAIL"}.get(kind, "skip")
+        print(f"  [{mark}] {name}: {status}"
+              + (f"  ({rows_out[-1]['wall_s']:.2f}s)" if rows_out[-1]["wall_s"] >= 0.5 else ""))
+    n_fail = sum(1 for r in rows_out if r["status"] == "fail")
+    n_pass = sum(1 for r in rows_out if r["status"] == "pass")
+    print(f"correctness suite: {n_pass} pass | {n_fail} fail | {len(rows_out) - n_fail - n_pass} skip"
+          + (f" (selected {len(rows_out)} of {len(checks)})" if wanted is not None else ""))
+    payload = {"protocol": 1, "checks": rows_out, "wall_s": round(time.monotonic() - t_all, 6),
+               "selected": sorted(wanted) if wanted is not None else None, "n_checks": len(checks)}
+    if report:
+        Path(report).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    if n_fail:
+        return 1
+    if n_pass == 0 and wanted is None:
+        return 2
+    return 0
+
+
+def _check_fingerprint(entry: dict, props: dict) -> str | None:
+    """What a check's outcome depended on, as one hash: the CODE of the files it executed last time
+    (frozen_core._normalized_source - comments, docstrings and formatting do not count) plus anything it
+    declared in depends_on, the campaign's data_version, and the interpreter. A check with no trace and
+    no declaration hashes every Python file under scripts/ and tests/: it over-runs, never wrongly
+    skips. None when a file cannot be read (then the check is due)."""
+    files = []
+    for rel in list(entry.get("traced") or []) + list(entry.get("depends_on") or []):
+        p = Path(rel) if Path(rel).is_absolute() else (ROOT / rel)
+        if p.is_file():
+            files.append(p)
+    if not files:
+        files = [p for d in ("scripts", "tests") for p in sorted((ROOT / d).rglob("*.py"))
+                 if "__pycache__" not in p.parts]
+    files = sorted(set(files))
+    h = frozen_core._hash_files(ROOT, files, frozen_core._normalized_source)
+    if h is None:
+        return None
+    return _hashlib.sha256((h + "\0" + str(props.get("data_version") or "") + "\0"
+                            + sys.version.split()[0] + "\0" + np.__version__).encode("utf-8")).hexdigest()
+
+
+def _due_checks(state: dict | None, rows: dict, props: dict, *, candidate, core_moved: bool) -> dict:
+    """Which checks the preset makes due for THIS invocation, and why each other one is not.
+
+    candidate=None is the PRE-solve invocation (invariants and machinery); True/False is the POST-solve
+    one (gates, and whatever waits for a promotion candidate). Returns {due, why, skipped, first}."""
+    checks = (state or {}).get("checks") or {}
+    if not checks or (state or {}).get("protocol") != 1:
+        return {"due": [], "why": {}, "skipped": {}, "first": True}   # nothing known yet: run everything
+    due, why, skipped = [], {}, {}
+    post = candidate is not None
+    demoted = set(((state or {}).get("demotions") or {}).keys())
+    for name, e in checks.items():
+        row = e.get("row") or "invariants"
+        trig = "every" if e.get("every") else str(rows.get(row) or "every")
+        if name in demoted:
+            trig = "promotion"      # metered out of the every-set; still runs for every candidate
+        gate = row == "gates" or bool(e.get("takes_arg"))
+        if gate and not post:
+            skipped[name] = "gate: runs with the result, after the solve"
+            continue
+        if not gate and post and trig != "promotion":
+            skipped[name] = "decided before the solve"
+            continue
+        if core_moved:
+            due.append(name)
+            why[name] = "the FROZEN core changed: every check is due"
+        elif trig == "off":
+            skipped[name] = f"row {row} is off under this preset"
+        elif trig == "every":
+            due.append(name)
+            why[name] = "every"
+        elif trig == "setup":
+            if e.get("last_status") is None:
+                due.append(name)
+                why[name] = "setup: never run"
+            else:
+                skipped[name] = f"setup: recorded {e.get('last_status')} at {e.get('last_run_utc', '?')}"
+        elif trig == "on-change":
+            fp = _check_fingerprint(e, props)
+            if fp is None or fp != e.get("fingerprint"):
+                due.append(name)
+                why[name] = "on-change: its code moved" if e.get("fingerprint") else "on-change: no fingerprint yet"
+            else:
+                skipped[name] = f"on-change: unchanged since {e.get('ran_for') or e.get('last_run_utc', '?')}"
+        elif trig == "promotion":
+            if post and candidate:
+                due.append(name)
+                why[name] = "promotion: this unit is a candidate"
+            else:
+                skipped[name] = "promotion: not a candidate" if post else "promotion: decided after the solve"
+        else:
+            due.append(name)
+            why[name] = f"unknown trigger {trig!r}: run it"
+    return {"due": due, "why": why, "skipped": skipped, "first": False}
+
+
+def _is_candidate(checks: dict) -> bool:
+    """A unit worth the expensive checks: it beats the incumbent, or it is the first result under this
+    metric epoch (what everything after it is compared against)."""
+    nf = checks.get("noise_floor") or {}
+    if nf.get("better") is True:
+        return True
+    return nf.get("status") == "unavailable" and "first result" in str(nf.get("detail", ""))
+
+
+def _suite_line(why: str, d: dict, known: int) -> str:
+    head = (f"correctness suite [{why}]: first run - every check"
+            if d["first"] else f"correctness suite [{why}]: {len(d['due'])} of {known} due")
+    if d["why"]:
+        head += " (" + "; ".join(f"{n}: {r}" for n, r in list(d["why"].items())[:6]) + ")"
+    if d["skipped"]:
+        head += "; skipped: " + "; ".join(f"{n} ({r})" for n, r in list(d["skipped"].items())[:6])
+        if len(d["skipped"]) > 6:
+            head += f"; +{len(d['skipped']) - 6} more"
+    return head
+
+
+SUITE_BUDGET_FRACTION = 0.10   # of the campaign's measured unit cost, for everything scripted that fires per unit
+SUITE_BUDGET_FLOOR_S = 30.0    # so a campaign of one-second units still gets a few checks per unit
+
+
+def _suite_budget_s(loop_cfg: dict) -> float:
+    """The per-unit budget for scripted checks: a fraction of unit_cost.typical_wall_clock_s, never below
+    a small floor. Runner constants, not knobs (the floor is env-overridable, PHYSKIT_SUITE_BUDGET_FLOOR_S,
+    so the deterministic tests can exercise the mechanism on a one-second toy)."""
+    try:
+        typical = float((loop_cfg.get("unit_cost") or {}).get("typical_wall_clock_s") or 0)
+    except (TypeError, ValueError):
+        typical = 0.0
+    try:
+        floor = float(os.environ.get("PHYSKIT_SUITE_BUDGET_FLOOR_S", SUITE_BUDGET_FLOOR_S))
+    except ValueError:
+        floor = SUITE_BUDGET_FLOOR_S
+    return max(floor, SUITE_BUDGET_FRACTION * typical)
+
+
+def _every_cost(state: dict | None, rows: dict) -> tuple[float, list]:
+    """The MEASURED cost of everything that fires per unit under the preset (the every-set), from the
+    per-check state: total seconds and the members, slowest first."""
+    checks = (state or {}).get("checks") or {}
+    demoted = set(((state or {}).get("demotions") or {}).keys())
+    members = []
+    for name, e in checks.items():
+        if name in demoted:
+            continue
+        row = e.get("row") or "invariants"
+        trig = "every" if e.get("every") else str(rows.get(row) or "every")
+        if trig == "every":
+            members.append((name, float(e.get("wall_s") or 0.0)))
+    members.sort(key=lambda t: -t[1])
+    return sum(w for _, w in members), members
+
+
+def _meter_suite(rows: dict, loop_cfg: dict) -> dict:
+    """Mid-campaign metering: when the every-set's MEASURED cost exceeds the budget, demote its slowest
+    members to promotion-time - loudly, and persisted under `demotions` in results/correctness_state.json.
+    Never a silent skip: a demoted check still runs for every promotion candidate, the line says how to
+    restore it, and the driver logs the change at its next loop top. The guardrail the light presets
+    rest on: a suite that grows slow cannot quietly make the lightest mode heavy."""
+    st = _read_json(CORRECTNESS_STATE, None)
+    budget = _suite_budget_s(loop_cfg)
+    if not isinstance(st, dict) or st.get("protocol") != 1:
+        return {"budget_s": budget, "every_cost_s": None, "demoted": [], "standing_demotions": []}
+    cost, members = _every_cost(st, rows)
+    demoted_now = []
+    if cost > budget and members:
+        demotions = dict(st.get("demotions") or {})
+        remaining = cost
+        for name, w in members:
+            if remaining <= budget:
+                break
+            demotions[name] = {"from": "every", "to": "promotion", "utc": _utc_stamp(), "wall_s": w,
+                               "budget_s": budget, "every_cost_s": cost}
+            demoted_now.append((name, w))
+            remaining -= w
+        st["demotions"] = demotions
+        try:
+            CORRECTNESS_STATE.write_text(json.dumps(st, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+        print(f"SUITE BUDGET: the every-set took {cost:.1f}s against a {budget:.1f}s budget "
+              f"({SUITE_BUDGET_FRACTION:g} x unit_cost.typical_wall_clock_s, floor {SUITE_BUDGET_FLOOR_S:g}s) - "
+              "DEMOTED " + ", ".join(f"{n} ({w:.1f}s)" for n, w in demoted_now)
+              + " from every to promotion. Each still runs for every promotion candidate. Restore one after "
+                "making it cheaper by deleting its entry under demotions in results/correctness_state.json; "
+                "declare it @check(row='machinery') or 'gates' if it never belonged in the every-set.")
+    return {"budget_s": budget, "every_cost_s": cost, "demoted": [n for n, _ in demoted_now],
+            "standing_demotions": sorted((st.get("demotions") or {}).keys())}
+
+
+_SUITE_LAST: dict = {}     # why -> the due/skipped decision of the last invocation, for the checks artifact
+_SUITE_TIMING: dict = {}   # the last suite run's measured wall time, for the per-unit timing record
+
+
+def _append_timing_row(exp_id: str, label: str, timing: dict) -> None:
+    """results/timing.tsv - one row per recorded experiment: where the runner's own time went (gates,
+    suite, snapshot, solve, record). The evidence a slowness audit needs and could not get from the
+    logs. Append-only; a write failure never touches the record."""
+    try:
+        p = RESULTS / "timing.tsv"
+        cols = ["exp_id", "label", "start_iso", "end_iso", "dur_s", "launched_by", "mode",
+                "gates_s", "suite_s", "snapshot_s", "solve_s", "record_s"]
+        if not p.is_file():
+            p.write_text("\t".join(cols) + "\n", encoding="utf-8")
+        t_run = timing.get("t_run")
+        total = (time.monotonic() - t_run) if t_run is not None else None
+
+        def _f(v) -> str:
+            return "" if v is None else f"{float(v):.3f}"
+
+        row = [exp_id, label, str(timing.get("start_iso") or ""),
+               _dt.datetime.now(_dt.timezone.utc).isoformat(), _f(total),
+               os.environ.get("PHYSKIT_ROLE") or "attended",
+               "supervised" if os.environ.get("AUTORESEARCH_SUPERVISED") else "attended"]
+        row += [_f(timing.get(k)) for k in ("gates_s", "suite_s", "snapshot_s", "solve_s", "record_s")]
+        with p.open("a", encoding="utf-8") as fh:
+            fh.write("\t".join(row) + "\n")
+    except Exception:
+        pass
+
+
+def check_correctness_suite(metric_version: str = "", select: str = "", ran_for: str = "",
+                            why: str = "experiment", props: dict | None = None) -> str:
     """Run the standing correctness suite (if present), RECORD its status to results/correctness_state.json,
     and WARN on anything that is not green. Returns "green" / "red" / "empty" / "error" / "absent". Runs on
-    every experiment.
+    every experiment. Also the one place a metric epoch's scorer hash is BOUND (scorer_hash_by_version in
+    the same state file): the first suite run under `metric_version` records the FROZEN scorer's hash, and
+    epoch_gate refuses to spend when a later scorer no longer matches it.
 
     Non-blocking for the run itself (so you can still iterate mid-fix) - but only an AFFIRMATIVE GREEN
     green-lights a promotion. guard_promotion refuses a promotion unless the suite is green: RED (a
@@ -1041,18 +1696,61 @@ def check_correctness_suite() -> str:
     suite = ROOT / "tests" / "correctness_checks.py"
     status = "absent"
     rc = None
+    wall_s = None       # measured, never assumed: the suite's cost was previously known only by its cap
+    report, protocol = None, None
+    t0 = time.monotonic()
     if not suite.is_file():
         print("WARNING: no correctness suite at tests/correctness_checks.py - the simulator is unguarded, so "
               "promotion is BLOCKED (status=absent). Build one with the correctness-suite skill, or "
               "record an explicit N/A in tests/CORRECTNESS_NA.md (with a rationale) if there is genuinely "
               "no simulator to check.")
+    elif select == "-":
+        # Nothing due under the preset: no subprocess, but the state is re-stamped (and the epoch's
+        # scorer hash bound) so the record shows a decision, not an absence.
+        prior0 = _read_json(CORRECTNESS_STATE, None)
+        prior0 = prior0 if isinstance(prior0, dict) else {}
+        protocol, status, wall_s = prior0.get("protocol"), str(prior0.get("status") or "error"), 0.0
+        print(f"correctness suite: nothing due under the preset - status={status} carried from the last "
+              f"run [{why}]")
     else:
         try:
-            proc = subprocess.run([sys.executable, str(suite)], capture_output=True, text=True, timeout=600)
-            rc = proc.returncode
-            if proc.stdout:
-                print(proc.stdout.rstrip())
-            status = {0: "green", 1: "red", 2: "empty"}.get(rc, "error")   # 2 = zero active checks
+            suite_text = suite.read_text(encoding="utf-8", errors="replace")
+            has_checks = any(ln.startswith("CHECKS") for ln in suite_text.splitlines())
+            if has_checks:
+                # The protocol: the runner's own worker imports the suite, runs the selection, and
+                # reports per check (name, row, status, cost, the files it executed).
+                DIAG.mkdir(parents=True, exist_ok=True)
+                rep_path = DIAG / f".suite_report_{os.getpid()}.json"
+                env = dict(os.environ, PHYSKIT_SUITE_SELECT=select or "", PHYSKIT_SUITE_REPORT=str(rep_path),
+                           PHYSKIT_SUITE_EXP=ran_for or "")
+                proc = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--suite-worker"],
+                                      capture_output=True, text=True, timeout=600, env=env, cwd=str(ROOT))
+                wall_s = time.monotonic() - t0
+                rc = proc.returncode
+                if proc.stdout:
+                    print(proc.stdout.rstrip())
+                report = _read_json(rep_path, None)
+                rep_path.unlink(missing_ok=True)
+                if isinstance(report, dict) and report.get("protocol") == 1:
+                    protocol = 1
+                    status = {0: "green", 1: "red", 2: "empty"}.get(rc, "error")   # 2 = zero active checks
+                else:
+                    status = "error"
+                    print("WARNING: the suite worker wrote no report (did tests/correctness_checks.py fail "
+                          "to import?) - recording status=error (BLOCKS PROMOTION). Worker output:\n"
+                          + (proc.stderr or "")[-1500:])
+            else:
+                # A suite with its own runner and no CHECKS list: the previous kit's exit-code run.
+                proc = subprocess.run([sys.executable, str(suite)], capture_output=True, text=True, timeout=600)
+                wall_s = time.monotonic() - t0
+                rc = proc.returncode
+                if proc.stdout:
+                    print(proc.stdout.rstrip())
+                protocol = "legacy"
+                status = {0: "green", 1: "red", 2: "empty"}.get(rc, "error")
+            print(f"correctness suite: status={status} wall={wall_s:.1f}s (cap 600s)"
+                  + (" [legacy suite: exit code only]" if protocol == "legacy" else "")
+                  + (f" [{why}]" if why != "experiment" else ""))
             if status == "red":
                 print("WARNING: correctness suite is RED - a check FAILED. This result is recorded, but a RED "
                       "suite BLOCKS PROMOTION (guard_promotion refuses the current-best/verdict write until "
@@ -1065,13 +1763,49 @@ def check_correctness_suite() -> str:
                 print(f"WARNING: correctness suite exited {rc} (unexpected) - recording status=error, which "
                       "BLOCKS PROMOTION. Investigate the suite.")
         except Exception as exc:  # a broken/slow suite must warn, never block the run
+            wall_s = time.monotonic() - t0
             print(f"WARNING: could not run the correctness suite ({exc}); recording status=error "
-                  "(BLOCKS PROMOTION).")
+                  f"(BLOCKS PROMOTION) after {wall_s:.1f}s.")
             status = "error"
+    _SUITE_TIMING["wall_s"] = None if wall_s is None else round(wall_s, 3)
     try:
-        CORRECTNESS_STATE.write_text(
-            json.dumps({"status": status, "returncode": rc, "utc": _utc_stamp(),
-                        "core_hash": frozen_core.core_hash(ROOT)}, indent=2), encoding="utf-8")
+        prior = _read_json(CORRECTNESS_STATE, None)
+        prior = prior if isinstance(prior, dict) else {}
+        # Per-check state (the protocol): a check not selected this run keeps its last recorded
+        # outcome; the aggregate status is over every check the suite currently holds, so a green
+        # still certifies the whole suite when only part of it had to run.
+        checks_state = dict(prior.get("checks") or {}) if protocol == 1 else {}
+        if protocol == 1 and isinstance(report, dict):
+            now = _utc_stamp()
+            for r in report["checks"]:
+                entry = dict(checks_state.get(r["name"]) or {})
+                entry.update(row=r["row"], depends_on=r["depends_on"], every=r["every"],
+                             declared=r["declared"], takes_arg=r["takes_arg"], last_status=r["status"],
+                             detail=r["detail"], last_run_utc=now, wall_s=r["wall_s"], traced=r["traced"],
+                             ran_for=ran_for or entry.get("ran_for", ""), why=why)
+                # The on-change trigger compares against this: the code the check just executed.
+                entry["fingerprint"] = _check_fingerprint(entry, props or {})
+                checks_state[r["name"]] = entry
+            if report.get("selected") is None:      # a full run: checks removed from the suite drop out
+                names = {r["name"] for r in report["checks"]}
+                checks_state = {k: v for k, v in checks_state.items() if k in names}
+            if status != "error":
+                if any(v.get("last_status") == "fail" for v in checks_state.values()):
+                    status = "red"
+                elif any(v.get("last_status") == "pass" for v in checks_state.values()):
+                    status = "green"
+                else:
+                    status = "empty"
+        state = {"status": status, "returncode": rc, "utc": _utc_stamp(),
+                 "wall_s": _SUITE_TIMING["wall_s"], "protocol": protocol, "why": why,
+                 "selected": select or "all", "checks": checks_state,
+                 # metering decisions survive every rewrite, like the epoch bindings below
+                 "demotions": dict(prior.get("demotions") or {}) if protocol == 1 else {},
+                 "core_hash": frozen_core.core_hash(ROOT),
+                 # bindings survive every rewrite: a bound epoch stays bound
+                 "scorer_hash_by_version": dict(prior.get("scorer_hash_by_version") or {})}
+        _bind_scorer_hash(state, metric_version, frozen_core.scorer_hash(ROOT))
+        CORRECTNESS_STATE.write_text(json.dumps(state, indent=2), encoding="utf-8")
     except Exception:
         pass
     return status
@@ -1088,8 +1822,8 @@ def check_correctness_suite() -> str:
 # replans on triggers. The driver follows the queue and the gates and adds nothing of its own.
 # Failures split by kind:
 #   * INTEGRITY (ESCALATE present · queue empty after a planner pass · corrupt queue.json · preflight /
-#     metric-selftest failure · planner failure after retry) -> HALT LOUD. These the driver must never
-#     route around.
+#     metric-selftest failure · an UNDECLARED change to the FROZEN scorer (the epoch gate) · planner
+#     failure after retry) -> HALT LOUD. These the driver must never route around.
 #   * OPERATIONAL (worker spawn error / timeout / unit unvalidated after retries) -> record the failure
 #     on the unit, SHELVE it (kind="operational"), and CONTINUE - degrade-loud. A whole overnight loop
 #     must not die for one casualty; the shelf entry is the loud part, and the planner can revive it.
@@ -1147,6 +1881,8 @@ def _parse_agent_cmd(s: str) -> list[str]:
 
 AGENT_CMD = _parse_agent_cmd(os.environ.get("AUTORESEARCH_AGENT_CMD") or "claude -p")
 STREAM_FLAGS = ["--output-format", "stream-json", "--verbose"]   # only added per driver.stream policy
+_AGENT_BACKEND = None
+_LAST_CODEX_OBSERVER = None
 
 
 def _permission_flags(mode: str) -> list[str]:
@@ -1163,6 +1899,9 @@ campaign.md (the campaign definition - mission, the FROZEN metric, the levers, t
 roles/worker.md ('The Experiment Loop' - you execute the loop steps for this single unit; and 'The
 iteration contract' - what you must persist before you finish, the ledger is the loop's only memory;
 work you do not record did not happen).
+Runner CLI you use: `python scripts/run_campaign.py --config {config}` (the unit; it enforces the gates)
+and `--diff <exp>` (what an experiment changed). `--preflight` and `--supervise` are the driver's: do not
+run them, and do not read scripts/run_campaign.py's source to learn its flags - this line is the list.
 EXECUTE-OR-DECLINE: run the assigned unit through the full loop (a-priori prediction in
 predictions/<exp_name>.json FIRST, then the runner - it enforces the gates), OR, if the unit is moot or
 superseded by the latest results, DECLINE it and say why in the journal. Never silently substitute a
@@ -1181,7 +1920,9 @@ until the save-set lands - the runner maintains results/.run_heartbeat, which is
 live solve from a dead worker; a solve you background then EXIT on loses that heartbeat and its save-set
 (on Windows it is reaped with your session), so the unit fails saved=False and you are NOT re-invoked. If you hit a genuine fork
 only the user can weigh, write results/ESCALATE.md (what, why, the options) and finish your unit if
-possible. If a USER NOTES section follows this prompt, treat it as input from the user: acknowledge each
+possible. A fault in the FROZEN metric itself is a metric epoch, never an in-place edit - roles/worker.md
+'Metric epochs' (cautious: a METRIC-REVISION PROPOSAL in results/ESCALATE.md; autonomous: enact it as a
+pending epoch in configs/loop.json campaign.metric_epochs, then re-baseline). If a USER NOTES section follows this prompt, treat it as input from the user: acknowledge each
 note in results/JOURNAL.md and record what it changed (or why nothing). Before you exit: complete the
 logbook narrative slots for your unit and leave the JOURNAL working window + NEXT consistent with the
 proposals you dropped (the driver, not you, writes results/queue.json)."""
@@ -1202,15 +1943,26 @@ alone. Review "shelved" (revive what a promotion or frame change has re-opened; 
 accumulated EVIDENCE AGAINST kills into a prune recommendation, recorded), and append a strategy note
 to results/JOURNAL.md. A reprioritization that rests on a claimed invalidation requires its verdict
 artifact in results/verdicts/ - do not steer on an unverified major-problem claim. You never launch
-solves, never edit the scoreboard, results, the journal's Findings, or anything FROZEN. If the campaign faces a
+solves, never edit the scoreboard, results, the journal's Findings, or anything FROZEN. A metric epoch (a
+bumped metric_version, roles/worker.md 'Metric epochs') owes a re-baseline: queue one config-backed unit
+per retained contender, sharing a block, before any cross-epoch ranking. If the campaign faces a
 genuine fork only the user can weigh, write results/ESCALATE.md. Review any shelved units with
 "kind": "operational" (shelved by the driver after repeated worker failures, reasons in "failures") -
-revive, reorder, or prune them with a recorded rationale. If a USER NOTES section follows this prompt,
+revive, reorder, or prune them with a recorded rationale. You run no runner command except
+`python scripts/run_campaign.py --diff <exp>` when you need to see what an experiment changed;
+`--preflight` and `--supervise` are the driver's, and the runner's source is not yours to read for its
+flags. If a USER NOTES section follows this prompt,
 weigh it as user input when reordering the queue and acknowledge it in your strategy note."""
 
 
 VERIFIER_PROMPT = """You are the verification agent for the autoresearch campaign in this directory,
-spawned by the driver because completed experiment(s) await independent verification: {exps}.{hyp}
+spawned by the driver because completed experiment(s) await independent verification: {exps}.{hyp}{mode}
+Start from what changed. The runner recorded, per experiment, what moved since the last verified unit
+(results/checks_<NN>.json "changes"; the verdict's depth decision is beside it under "verification"):
+{changes}
+Verify that delta and its interaction with the parts that did not change; code and numbers unchanged
+since the last CONFIRMED verdict inherit that verdict's coverage and are spot-checked, not re-derived. A
+change with no declared effect on the result, or a claimed effect with no change behind it, is a red flag.
 CLAUDE.md auto-loads; read campaign.md first (its Verification section - this campaign's own checks -
 and The ONE metric). Your ONE job: for EACH experiment above, run {{VERIFY_SKILL}} in campaign mode -
 it spawns an independent refuter that never saw the generating reasoning and writes the verdict
@@ -1223,8 +1975,65 @@ results/queue.json (the driver is its sole writer). If a verdict is REFUTED or I
 named control or fix-and-rerun by dropping a file into results/queue_drop/ (create it if absent) -
 results/queue_drop/<slug>.propose.json = {{"kind": "propose", "unit": {{"config":
 "configs/exp<NN>_<slug>.json", "rationale": "<control/fix, citing results/verdicts/<id>.json>"}}}} - one
-concrete runnable config each; the driver merges it into "next". Add one line per
-verdict to results/JOURNAL.md. Your turn ends when every verdict artifact above exists on disk."""
+concrete runnable config each; the driver merges it into "next". A verified kill of the METRIC itself is
+the evidence a metric epoch cites (roles/worker.md 'Metric epochs'): grade its kill_tier, and an easier
+ruler needs REFUTED; if only the user can weigh the revision, write results/ESCALATE.md. Add one line per
+verdict to results/JOURNAL.md. Run the refuter in the FOREGROUND and wait for it - never as a background
+sub-agent you then exit on: a verifier that ends its turn with refuters still running leaves no
+artifact, and the driver counts that as a failed verification. Your turn ends when every verdict
+artifact above exists on disk.{retry}"""
+
+
+CAPSTONE_PROMPT = """You are the claim-audit agent for the autoresearch campaign in this directory,
+spawned by the driver at the end of the loop ({reason}) because the campaign's verification preset asks
+for the claim audit at level {level}. CLAUDE.md auto-loads; read campaign.md (its Mission and The ONE
+metric) and then run /physkit:claim-audit at level {level}: enumerate the claims this campaign exports
+(the current-best, the promoted rows, the journal's Findings, the assumptions every unit inherited),
+rank them by load-bearing weight and label weakness, spend the budget top-down on the seven
+campaign-scale checks, and write results/verdicts/audit_<NN>.json plus one line in results/JOURNAL.md
+Findings. You edit nothing else: never configs/RECOMMENDED.json, never the scoreboard, never a config or
+a result - a downgraded label lives in your artifact and the report prints it. Run every check in the
+FOREGROUND and wait for it; your turn ends when the audit artifact exists on disk."""
+
+
+def _service_capstone(k: dict, model: str, effort: str, reason: str) -> None:
+    """At the end of the loop (a graceful STOP, or the queue running empty): spawn the claim audit the
+    preset asks for, once per stretch of new results. The audit is the counterweight to a light
+    preset - the campaign-scale checks no per-unit verifier runs - so the loop's end is where it belongs,
+    before the record is read as finished. Skipped when the preset's capstone row is off, when nothing
+    was accepted, or when an audit artifact already postdates the last accepted unit."""
+    loop_cfg = _read_json(LOOPCFG, {}) or {}
+    vr = _verify_rows(loop_cfg)
+    level = str(vr["rows"].get("capstone") or "default")
+    if level == "off":
+        print(f"[supervise] capstone: the preset's capstone row is off - no claim audit at {reason} "
+              f"utc={_utc_stamp()}")
+        return
+    q = _read_queue()
+    last = str(q.get("last_accept_utc") or "")
+    if not int(q.get("accepted_units", 0) or 0) or not last:
+        print(f"[supervise] capstone: nothing accepted yet - no claim audit at {reason} utc={_utc_stamp()}")
+        return
+    try:
+        last_ts = _dt.datetime.fromisoformat(last).timestamp()
+    except ValueError:
+        last_ts = 0.0
+    audits = sorted(VERDICTS.glob("audit_*.json")) if VERDICTS.is_dir() else []
+    if audits and audits[-1].stat().st_mtime >= last_ts:
+        print(f"[supervise] capstone: {audits[-1].name} already postdates the last accepted unit - no "
+              f"new claim audit at {reason} utc={_utc_stamp()}")
+        return
+    print(f"[supervise] capstone: spawning the claim audit (level={level}) at {reason} utc={_utc_stamp()}")
+    st = _spawn_agent(build_prompt("capstone", reasons=reason, capstone_level=level), model, "capstone", k,
+                      saved_probe=lambda: bool(list(VERDICTS.glob("audit_*.json"))
+                                               and sorted(VERDICTS.glob("audit_*.json"))[-1].stat().st_mtime >= last_ts),
+                      effort=effort)
+    done = sorted(VERDICTS.glob("audit_*.json")) if VERDICTS.is_dir() else []
+    if done and done[-1].stat().st_mtime >= last_ts:
+        print(f"[supervise] capstone: claim audit on record - {done[-1].name} utc={_utc_stamp()}")
+    else:
+        print(f"[supervise] capstone: the claim audit left no artifact (status={st}) - run "
+              f"/physkit:claim-audit yourself before reading the record as finished utc={_utc_stamp()}")
 
 
 def _md_section(path: Path, heading: str) -> str | None:
@@ -1270,7 +2079,8 @@ def _delivered_context() -> str:
 
 
 def build_prompt(role: str, *, config: str = "<config path>", reasons: str = "<trigger reasons>",
-                 notes: str = "", exps: str = "<exp ids>", hypothesis: str = "") -> str:
+                 notes: str = "", exps: str = "<exp ids>", hypothesis: str = "",
+                 retry_note: str = "", mode: str = "", capstone_level: str = "default") -> str:
     """The ONE assembly path for a spawned agent's prompt.
 
     Both spawn sites AND `--show-prompt` come through here, so what a reviewer inspects is what an
@@ -1294,8 +2104,22 @@ def build_prompt(role: str, *, config: str = "<config path>", reasons: str = "<t
         # planner-authored text cannot crash the driver - same contract as notes. No inbox notes: user
         # steering goes to judgment agents (worker/planner); the verifier stays isolated from it.
         hyp = ("\nBlock hypothesis (what this batch tests): " + hypothesis) if hypothesis else ""
-        return VERIFIER_PROMPT.format(exps=exps, hyp=hyp) + _delivered_context()
-    raise ValueError(f"unknown role {role!r} (expected 'worker', 'planner' or 'verifier')")
+        # A retry is told what the previous attempt failed to deliver. Driver-authored, a format VALUE
+        # like the hypothesis - never user steering.
+        retry = (("\nRETRY: the previous " + retry_note + ". Produce those artifacts in THIS turn: run the "
+                  "refuter in the foreground and stay until each file exists.") if retry_note else "")
+        # The change manifest is a format VALUE too: paths and config values may carry braces.
+        changes = _changes_summary(exps) if exps and exps != "<exp ids>" else "  (per-experiment change record)"
+        # The mode (review / re-execution) is the DRIVER's decision from the unit's measured cost and
+        # the preset - a VALUE like the hypothesis; a preview without one says so.
+        mode_line = mode or ("\nVerification mode for this spawn: (decided by the driver per unit - "
+                             "RE-EXECUTION when the unit is cheap and reproducible, REVIEW otherwise)")
+        return (VERIFIER_PROMPT.format(exps=exps, hyp=hyp, retry=retry, changes=changes, mode=mode_line)
+                + _delivered_context())
+    if role == "capstone":
+        # The end-of-loop claim audit: no inbox notes (it is a check, not a steering agent).
+        return CAPSTONE_PROMPT.format(reason=reasons, level=capstone_level) + _delivered_context()
+    raise ValueError(f"unknown role {role!r} (expected 'worker', 'planner', 'verifier' or 'capstone')")
 
 
 def _read_json(path: Path, default):
@@ -1312,11 +2136,95 @@ def _read_json(path: Path, default):
 
 PREDICTION_MODES = ("range", "direction", "none")
 NOISE_MODELS = ("stochastic", "deterministic")
-# 'per-block' (default): the driver spawns an independent verification agent after every completed
-# unit/block, and a promotion needs that experiment's own verdict. 'promotion-only': verification runs
-# only when something is promoted (the pre-verify-after behavior) - requires a recorded reason, the
-# same owned-control contract as prediction_mode 'none'.
+# LEGACY, still read: the previous kit's campaign.verification. 'per-block' = an independent check per
+# completed unit/block (mapped to the intensive table); 'promotion-only' = an independent review of each
+# promotion candidate (mapped to the light table) - requires a recorded reason. New campaigns set
+# verify.preset instead (VERIFY_PRESETS below).
 VERIFICATION_MODES = ("per-block", "promotion-only")
+# The verification PRESET (configs/loop.json verify.preset) - the one user-facing choice of how much
+# verification a campaign buys, and of what kind. Each preset is a FIXED table of rows x triggers that
+# the runner resolves, prints at preflight, and stamps into every checks artifact; the table is the
+# runner's implementation of the preset, never a config surface (the physkit plugin's docs/reference/verification-presets.md
+# is the single source of what each preset means). Rows: invariants (cheap authored output checks),
+# machinery (the code's own fixed-input checks), gates (expensive per-result gates), self_check (the
+# worker's recorded checks), review (a fresh-context verifier recomputing from the frozen record),
+# re_execution (an independent rerun, when the unit is cheap and reproducible), capstone (the end-of-
+# campaign claim audit). Triggers: every | block | promotion | on-change | setup | off; capstone:
+# default | panel | off. Under 'minimal' no independent check runs and every promotion is stamped
+# 'unverified' - the promotion guard refuses one that does not carry the word.
+VERIFY_PRESETS = ("minimal", "light", "moderate", "intensive")
+VERIFY_ROWS = ("invariants", "machinery", "gates", "self_check", "review", "re_execution", "capstone")
+VERIFY_PRESET_ROWS = {
+    "minimal":   {"invariants": "every", "machinery": "off",       "gates": "off",       "self_check": "every",
+                  "review": "off",       "re_execution": "off",       "capstone": "default"},
+    "light":     {"invariants": "every", "machinery": "setup",     "gates": "promotion", "self_check": "every",
+                  "review": "promotion", "re_execution": "off",       "capstone": "default"},
+    "moderate":  {"invariants": "every", "machinery": "on-change", "gates": "promotion", "self_check": "every",
+                  "review": "promotion", "re_execution": "promotion", "capstone": "default"},
+    "intensive": {"invariants": "every", "machinery": "every",     "gates": "every",     "self_check": "every",
+                  "review": "block",     "re_execution": "block",     "capstone": "panel"},
+}
+VERIFY_PRESET_EXTRAS = {"intensive": {"different_model": True, "blinded": True}}
+# An older loop.json (no verify.preset) is read the way the previous kit read campaign.verification:
+# per-block = every check and an independent check per block; promotion-only = the light table.
+LEGACY_VERIFICATION_ROWS = {
+    "per-block": dict(VERIFY_PRESET_ROWS["intensive"], capstone="default"),
+    "promotion-only": dict(VERIFY_PRESET_ROWS["light"]),
+}
+
+
+def _verify_rows(loop_cfg: dict) -> dict:
+    """The resolved verification table for this campaign: verify.preset, else the legacy
+    campaign.verification mapping, else per-block. Returns {preset, source, rows, extras, legacy}."""
+    v = loop_cfg.get("verify") if isinstance(loop_cfg.get("verify"), dict) else {}
+    c = loop_cfg.get("campaign") if isinstance(loop_cfg.get("campaign"), dict) else {}
+    preset = str(v.get("preset") or "").strip().lower()
+    legacy = str(c.get("verification") or "").strip().lower()
+    if preset:
+        return {"preset": preset, "source": "preset", "rows": dict(VERIFY_PRESET_ROWS.get(preset) or {}),
+                "extras": dict(VERIFY_PRESET_EXTRAS.get(preset) or {}), "legacy": legacy}
+    mode = legacy or "per-block"
+    return {"preset": None, "source": f"legacy:{mode}", "rows": dict(LEGACY_VERIFICATION_ROWS.get(mode) or {}),
+            "extras": {}, "legacy": legacy}
+
+
+def _rows_line(r: dict) -> str:
+    """One line a reader can act on: the preset (or its legacy source) and the resolved table."""
+    table = " ".join(f"{row}={r['rows'].get(row, '?')}" for row in VERIFY_ROWS)
+    if r["preset"] is not None:
+        extras = "".join(f" {k}" for k, on in r["extras"].items() if on)
+        return f"preset={r['preset']} ({table}{extras})"
+    return (f"rows from campaign.verification={r['source'].split(':', 1)[1]!r} (legacy - no verify.preset; "
+            f"docs/MIGRATING.md) = ({table})")
+
+
+def verify_problems(loop_cfg: dict) -> tuple[list[str], list[str]]:
+    """Every way configs/loop.json 'verify' can be WRONG (hard failures), and the notes worth a line.
+    An unknown preset is refused, never defaulted: a misspelt preset that silently became 'light'
+    would be a control nobody chose."""
+    problems, notes = [], []
+    if loop_cfg.get("verify") is not None and not isinstance(loop_cfg.get("verify"), dict):
+        return ["configs/loop.json verify must be an object"], notes
+    r = _verify_rows(loop_cfg)
+    if r["preset"] is not None:
+        if r["preset"] not in VERIFY_PRESETS:
+            problems.append(f"configs/loop.json verify.preset is {r['preset']!r}; expected one of "
+                            + " | ".join(VERIFY_PRESETS) + " (the physkit plugin's docs/reference/verification-presets.md). "
+                            "No default is substituted for a misspelt preset.")
+        elif r["preset"] == "minimal":
+            notes.append("verify.preset=minimal - NO independent check runs; every promotion is stamped "
+                         "'unverified' (the guard refuses one that does not say so) and a shareable report "
+                         "waits for the claim audit. Exploration only.")
+        if r["legacy"]:
+            notes.append(f"campaign.verification={r['legacy']!r} is superseded by verify.preset="
+                         f"{r['preset']!r} - delete the old key (docs/MIGRATING.md)")
+    return problems, notes
+# WHO may revise the FROZEN metric mid-campaign (the metric-epoch design). 'cautious' (default): a revision the loop's
+# agents want raises results/ESCALATE.md and waits for the user. 'autonomous': the agents enact a VERIFIED
+# revision themselves as a pending epoch in campaign.metric_epochs and continue; the user ratifies after.
+# The dial is the user's: only an attended session may set it (the config guard refuses a spawned role).
+METRIC_REVISION_MODES = ("cautious", "autonomous")
+METRIC_REVISION_RESERVED = ("semi-autonomous",)   # named in the design, rules not yet defined: refused, not defaulted
 
 
 def _campaign_props(loop_cfg: dict | None = None) -> dict:
@@ -1379,8 +2287,15 @@ def _campaign_props(loop_cfg: dict | None = None) -> dict:
         "tolerance": _num("tolerance"),
         "metric_version": str(c.get("metric_version") or "").strip(),
         "data_version": str(c.get("data_version") or "").strip(),
+        # Absent (an older loop.json): a hardware-in-the-loop campaign (configs/instrument.json) is
+        # not re-executable from a config; anything else is assumed to be.
+        "reproducible": (bool(c["reproducible"]) if isinstance(c.get("reproducible"), bool)
+                         else not (ROOT / "configs" / "instrument.json").is_file()),
         "verification": str(c.get("verification") or "per-block").strip().lower(),
         "verification_reason": str(c.get("verification_reason") or "").strip(),
+        "metric_revision": str(c.get("metric_revision") or "cautious").strip().lower(),
+        # absent = the campaign is still on its co-designed first metric (the implicit epoch)
+        "metric_epochs": {} if c.get("metric_epochs") is None else c.get("metric_epochs"),
         "_bad_nums": bad_nums,
     }
 
@@ -1432,13 +2347,39 @@ def campaign_props_problems(props: dict) -> list[str]:
                    "affordable or applicable here. Turning routine verification down is a real choice; "
                    "making it without a recorded reason is how the control quietly becomes nobody's "
                    "decision.")
+    if props["metric_revision"] not in METRIC_REVISION_MODES:
+        if props["metric_revision"] in METRIC_REVISION_RESERVED:
+            bad.append(f"configs/loop.json campaign.metric_revision is {props['metric_revision']!r}, which is "
+                       "RESERVED: its rules are not defined yet, so it is refused rather "
+                       "than silently treated as something else. Fix: 'cautious' (a metric revision asks the "
+                       "user first) or 'autonomous' (the loop enacts a verified revision as a pending epoch; "
+                       "the user ratifies after).")
+        else:
+            bad.append(f"configs/loop.json campaign.metric_revision is {props['metric_revision']!r}; expected "
+                       f"one of {' | '.join(METRIC_REVISION_MODES)}. Fix: 'cautious' (the default - a metric "
+                       "revision raises results/ESCALATE.md and waits for you) or 'autonomous' (the loop "
+                       "enacts a verified revision as a pending epoch in campaign.metric_epochs and continues; "
+                       "you ratify after).")
+    epochs = props.get("metric_epochs")
+    if not isinstance(epochs, dict):
+        bad.append("configs/loop.json campaign.metric_epochs must be a JSON object keyed by metric_version "
+                   "(one entry per revised epoch: kind, status, evidence, expected_direction), or absent while "
+                   "the campaign is still on its first metric.")
+    else:
+        for vid, e in epochs.items():
+            if (not isinstance(e, dict) or str(e.get("kind", "")) not in EPOCH_KINDS
+                    or str(e.get("status", "")) not in EPOCH_STATUSES):
+                bad.append(f"configs/loop.json campaign.metric_epochs[{vid!r}] must be an object with kind "
+                           f"({' | '.join(EPOCH_KINDS)}) and status ({' | '.join(EPOCH_STATUSES)}).")
+                break
     return bad
 
 
 def _halt(msg: str):
     """Hard halt, LOUDLY and ON THE RECORD: the reason goes through stdout (tee'd to the driver log by
-    DriverLog), not only stderr - a halt whose reason lives nowhere is a silent halt by morning."""
-    print(msg)
+    DriverLog), not only stderr - a halt whose reason lives nowhere is a silent halt by morning. Stamped,
+    so the idle time a halt costs is measurable from the log alone."""
+    print(f"{msg} utc={_utc_stamp()}")
     sys.exit(1)
 
 
@@ -1486,6 +2427,9 @@ def _driver_knobs(loop_cfg: dict) -> dict:
     return {
         "max_consecutive_failures": int(d.get("max_consecutive_failures", 3)),
         "planner_retries": int(d.get("planner_retries", 1)),
+        # A verifier that returns ok having written no artifact is retried on its own count; an older
+        # loop.json without the key inherits planner_retries, which is what governed it before.
+        "verifier_retries": int(d.get("verifier_retries", d.get("planner_retries", 1))),
         "stream": str(d.get("stream", "auto")).strip().lower(),
         "inbox_max_chars": int(d.get("inbox_max_chars", 20000)),
         "feed_chars": int(d.get("feed_line_chars", 160)),
@@ -1514,6 +2458,9 @@ def _stream_on(k: dict) -> bool:
     if k["stream"] == "off":
         return False
     return "AUTORESEARCH_AGENT_CMD" not in os.environ
+
+
+_LAST_RESULT: dict = {}   # label -> {turns, dur_s} from the agent's own result event, for the spawn ledger
 
 
 def _render_stream_event(raw_line: str, label: str, max_chars: int) -> str | None:
@@ -1553,8 +2500,12 @@ def _render_stream_event(raw_line: str, label: str, max_chars: int) -> str | Non
                 bits.append(f"tool: {blk.get('name', '?')} {arg[:80]}")
         return "\n".join(f"[{label}] {b}"[:max_chars] for b in bits) if bits else None
     if etype == "result":
+        dur_s = f"{float(ev.get('duration_ms', 0)) / 1000:.0f}"
+        # For the spawn ledger. Via globals() so the function also runs standalone (the fixture
+        # contracts exec this renderer on its own, outside the module).
+        globals().setdefault("_LAST_RESULT", {})[label] = {"turns": ev.get("num_turns", "?"), "dur_s": dur_s}
         return (f"[{label}] RESULT ok={not ev.get('is_error', False)} "
-                f"turns={ev.get('num_turns', '?')} dur={float(ev.get('duration_ms', 0)) / 1000:.0f}s")[:max_chars]
+                f"turns={ev.get('num_turns', '?')} dur={dur_s}s")[:max_chars]
     return None
 
 
@@ -1588,7 +2539,39 @@ def _touch_driver_alive() -> None:
 _LIVE_PROC: dict = {"proc": None}   # the currently-running agent, for Ctrl-C cleanup
 
 
-def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None) -> str:
+def _role_of(label: str) -> str:
+    """The spawned role, from the driver's own label ('worker[configs/...]', 'planner', 'verifier[block x]').
+
+    Exported to the agent as PHYSKIT_ROLE. The config guard keys on it - a driver-spawned role may not move
+    campaign.metric_revision, and may not ratify a metric epoch: those are the user's, made from an
+    attended session, which is exactly a session with NO role marker (the metric-epoch rules)."""
+    head = label.split("[", 1)[0].strip().lower()
+    return head if head in ("worker", "planner", "verifier", "repair", "capstone") else "agent"
+
+
+def _append_spawn_row(start_utc: str, end_utc: str, label: str, status: str, elapsed_s: float,
+                      res: dict, g: dict) -> None:
+    """One row per spawn in results/diagnostics/spawns.tsv - the per-spawn ledger a time audit needs.
+
+    The driver's decision lines carried no clock and the agent's own RESULT line only its self-reported
+    duration, so where a campaign's hours went (worker vs verifier vs planner vs dead waits) could not be
+    reconstructed from its own logs. Append-only; a write failure never touches the loop."""
+    try:
+        DIAG.mkdir(parents=True, exist_ok=True)
+        p = DIAG / "spawns.tsv"
+        if not p.is_file():
+            p.write_text("start_utc\tend_utc\trole\tlabel\tstatus\telapsed_s\tturns\tagent_dur_s\t"
+                         "grace_s\tgrace_resolved\n", encoding="utf-8")
+        with p.open("a", encoding="utf-8") as fh:
+            fh.write("\t".join([start_utc, end_utc, _role_of(label), label, status, f"{elapsed_s:.0f}",
+                                str(res.get("turns", "")), str(res.get("dur_s", "")),
+                                f"{g['grace_s']:.0f}", str(g["resolved"])]) + "\n")
+    except Exception:
+        pass
+
+
+def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None,
+                 effort: str = "") -> str:
     """Launch one fresh-context agent from the campaign root and WATCH it to completion.
 
     Returns "ok" | "exit_nonzero" | "timeout_inactivity" | "timeout_absolute" | "spawn_error".
@@ -1601,20 +2584,54 @@ def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None)
     runner still solving - wait up to k["grace_s"] for
     `saved_probe` to come true or the heartbeat to go stale, instead of instantly failing validation.
     """
+    try:
+        _agent_instructions.check_chain(ROOT)
+    except _agent_instructions.InstructionError as exc:
+        _halt(f"supervise: HALT - {exc}")
+    global _LAST_CODEX_OBSERVER
     stream = _stream_on(k)
     cmd = (AGENT_CMD + _permission_flags(k["permission_mode"])
-           + (["--model", model] if model else []) + (STREAM_FLAGS if stream else []) + [prompt])
-    print(f"[supervise] spawning {label} (model={model or 'default'}, cap={k['absolute_s'] / 3600:.1f}h, "
-          f"inactivity window={k['inactivity_s'] / 60:.0f}min, stream={'on' if stream else 'off'})")
+           + (["--model", model] if model else []) + (["--effort", effort] if effort else [])
+           + (STREAM_FLAGS if stream else []) + [prompt])
+    codex_spec, codex_observer = (_codex_backend.prepare_spawn(
+        ROOT, _AGENT_BACKEND, model, prompt, label, k["feed_chars"], effort)
+        if _codex_backend.is_codex(_AGENT_BACKEND) else (None, None))
+    _LAST_CODEX_OBSERVER = codex_observer
+    t_spawn = time.monotonic()
+    start_utc = _utc_stamp()
+    _g = {"grace_s": 0.0, "resolved": ""}     # post-exit grace, if any, for the spawn ledger
+
+    def _finish(final: str) -> str:
+        # ONE exit path for every outcome: the driver's decision lines carried no clock, so where a
+        # campaign's time went was unrecoverable from its own logs. Every spawn now ends with a stamped
+        # line and a row in results/diagnostics/spawns.tsv (start, end, elapsed, turns, grace).
+        elapsed = time.monotonic() - t_spawn
+        res = _LAST_RESULT.pop(label, {})
+        end_utc = _utc_stamp()
+        print(f"[supervise] {label} done: status={final} elapsed={elapsed:.0f}s "
+              f"turns={res.get('turns', '?')} agent_dur={res.get('dur_s', '?')}s"
+              + (f" grace={_g['grace_s']:.0f}s resolved={_g['resolved']}" if _g["grace_s"] else "")
+              + f" utc={end_utc}")
+        _append_spawn_row(start_utc, end_utc, label, final, elapsed, res, _g)
+        return final
+
+    print(f"[supervise] spawning {label} (model={model or 'default'}, effort={effort or 'default'}, "
+          f"cap={k['absolute_s'] / 3600:.1f}h, "
+          f"inactivity window={k['inactivity_s'] / 60:.0f}min, "
+          f"stream={'jsonl' if codex_spec else ('on' if stream else 'off')}) utc={start_utc}")
     HEARTBEAT.unlink(missing_ok=True)   # a stale heartbeat from an earlier run must not fake liveness
-    env = dict(os.environ, AUTORESEARCH_SUPERVISED="1")   # Stop hook stands down for spawned agents
+    env = _codex_backend.spawn_env(os.environ, bool(codex_spec))  # also tells Codex experiment children which prompt was delivered
+    env["PHYSKIT_ROLE"] = _role_of(label)   # spawned, not attended: the config/epoch guards key on this
     try:
-        proc = subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True, encoding="utf-8",
-                                errors="replace", bufsize=1)
+        if codex_spec:
+            proc = _codex_backend.start(codex_spec, ROOT, env)
+        else:
+            proc = subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                                    errors="replace", bufsize=1)
     except OSError as exc:
         print(f"[supervise] SPAWN ERROR for {label}: {exc}")
-        return "spawn_error"
+        return _finish("spawn_error")
     _LIVE_PROC["proc"] = proc
     lines: _LineQueue = _LineQueue()
 
@@ -1624,6 +2641,9 @@ def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None)
                 lines.put(raw)
         except Exception:
             pass
+        finally:
+            if codex_observer:
+                codex_observer.reader_eof = True
 
     threading.Thread(target=_reader, daemon=True).start()
 
@@ -1642,7 +2662,8 @@ def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None)
         except _QEmpty:
             raw = None
         if raw is not None:
-            rendered = _render_stream_event(raw, label, k["feed_chars"])
+            rendered = (codex_observer.observe(raw, display=k["stream"] != "off") if codex_observer
+                        else _render_stream_event(raw, label, k["feed_chars"]))
             if rendered:
                 try:
                     print(rendered)
@@ -1661,7 +2682,7 @@ def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None)
             last_hb_change = time.monotonic()
             last_activity = last_hb_change
         if proc.poll() is not None:
-            if raw is None and lines.empty():
+            if raw is None and lines.empty() and (not codex_observer or codex_observer.reader_eof):
                 status = "exited"                               # fully drained - judge below
             continue
         now = time.monotonic()
@@ -1677,7 +2698,7 @@ def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None)
             status = "timeout_inactivity"
     _LIVE_PROC["proc"] = None
     if status != "exited":
-        return status
+        return _finish(status)
     # ---- POST-EXIT detached-runner grace ----
     if (saved_probe is not None and last_hb_change is not None
             and time.monotonic() - last_hb_change <= k["hb_stale_s"] and not saved_probe()):
@@ -1685,7 +2706,8 @@ def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None)
         t0 = time.monotonic()
         deadline = t0 + k["grace_s"]
         print(f"[supervise] {label} exited but the heartbeat is FRESH - a detached runner may still be "
-              f"solving; waiting up to {k['grace_s'] / 60:.0f} min for the save-set (grace)")
+              f"solving; waiting up to {k['grace_s'] / 60:.0f} min for the save-set (grace) "
+              f"utc={_utc_stamp()}")
         while time.monotonic() < deadline:
             if saved_probe():
                 break
@@ -1696,13 +2718,23 @@ def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None)
             if hb is not None and hb != last_hb_mtime:
                 last_hb_mtime = hb
                 last_hb_change = time.monotonic()
-            if time.monotonic() - last_hb_change > k["hb_stale_s"]:
+            # A detached runner that is still solving beats every HB_TICK_S; after the worker's exit,
+            # two silent ticks mean it is not there. The in-flight stale window (hb_stale_s) was the
+            # bound before, and every grace wait measured ended on it, seven times in eight for nothing.
+            if time.monotonic() - last_hb_change > min(k["hb_stale_s"], 2 * HB_TICK_S):
                 break
             _touch_driver_alive()
             time.sleep(poll_s)
-        print(f"[supervise] detached-runner grace ended after {time.monotonic() - t0:.0f}s "
-              f"(resolved={bool(saved_probe())})")
-    return "ok" if proc.returncode == 0 else "exit_nonzero"
+        _g["grace_s"] = time.monotonic() - t0
+        _g["resolved"] = bool(saved_probe())
+        print(f"[supervise] detached-runner grace ended after {_g['grace_s']:.0f}s "
+              f"(resolved={_g['resolved']}) utc={_utc_stamp()}")
+    if codex_observer and not codex_observer.successful(proc.returncode):
+        print(f"[supervise] {label} Codex protocol failed (exit={proc.returncode}, "
+              f"thread_id={codex_observer.thread_id or '?'}, completed={codex_observer.completed}, "
+              f"turn_failed={codex_observer.failed})")
+        return _finish("exit_nonzero")
+    return _finish("ok" if proc.returncode == 0 else "exit_nonzero")
 
 
 def _read_queue() -> dict:
@@ -1896,8 +2928,8 @@ def _drain_inbox(max_chars: int) -> str:
 
 def preflight(smoke: bool = False) -> list[str]:
     """Launch checks for supervisor mode - run automatically at --supervise start and standalone via
-    --preflight. Collects and reports ALL failures (never first-fail); every failure names its fix in
-    plain language. Refusing a launch is cheaper than a night of unit-by-unit discovery.
+    --preflight. Instruction drift halts before any other probe; otherwise this collects and reports ALL
+    failures (never first-fail), each with its fix. Refusing a launch is cheaper than a night of discovery.
     `smoke` additionally does ONE real agent spawn (costs one model call; opt-in)."""
     fails: list[str] = []
 
@@ -1908,23 +2940,34 @@ def preflight(smoke: bool = False) -> list[str]:
         fails.append(msg)
         print(f"preflight FAIL: {msg}")
 
+    try:
+        instruction_fingerprint = _agent_instructions.check_chain(ROOT)
+        if instruction_fingerprint:
+            ok(f"Claude/Codex instruction twins agree ({instruction_fingerprint[:12]})")
+    except _agent_instructions.InstructionError as exc:
+        bad(str(exc))
+        return fails
+
     # 1. agent CLI resolves and answers
-    exe = shutil.which(AGENT_CMD[0])
-    if exe is None:
-        bad(f"agent CLI '{AGENT_CMD[0]}' not found on PATH. Fix: install the claude CLI (or set "
-            "AUTORESEARCH_AGENT_CMD to the command to use).")
+    if _codex_backend.is_codex(_AGENT_BACKEND):
+        ok(f"agent CLI: {_AGENT_BACKEND.executable} ({_AGENT_BACKEND.version}); backend=codex")
     else:
-        try:
-            proc = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=30)
-            if proc.returncode == 0:
-                out = (proc.stdout or "").strip().splitlines()
-                ok(f"agent CLI: {exe} ({out[0] if out else 'responds'})")
-            else:
-                print(f"preflight note: '{AGENT_CMD[0]} --version' exited {proc.returncode} - a custom "
-                      "AUTORESEARCH_AGENT_CMD may not implement it; continuing.")
-        except (subprocess.TimeoutExpired, OSError) as exc:
-            bad(f"agent CLI '{exe}' did not answer --version ({exc}). Fix: check the install "
-                "('claude --version' in a fresh terminal), or set AUTORESEARCH_AGENT_CMD.")
+        exe = shutil.which(AGENT_CMD[0])
+        if exe is None:
+            bad(f"agent CLI '{AGENT_CMD[0]}' not found on PATH. Fix: install the claude CLI (or set "
+                "AUTORESEARCH_AGENT_CMD to the command to use).")
+        else:
+            try:
+                proc = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=30)
+                if proc.returncode == 0:
+                    out = (proc.stdout or "").strip().splitlines()
+                    ok(f"agent CLI: {exe} ({out[0] if out else 'responds'})")
+                else:
+                    print(f"preflight note: '{AGENT_CMD[0]} --version' exited {proc.returncode} - a custom "
+                          "AUTORESEARCH_AGENT_CMD may not implement it; continuing.")
+            except (subprocess.TimeoutExpired, OSError) as exc:
+                bad(f"agent CLI '{exe}' did not answer --version ({exc}). Fix: check the install "
+                    "('claude --version' in a fresh terminal), or set AUTORESEARCH_AGENT_CMD.")
 
     # 2. loop.json parses and carries every key the driver dereferences without a default
     try:
@@ -1955,6 +2998,20 @@ def preflight(smoke: bool = False) -> list[str]:
                     + ", ".join(missing) + ". Fix: add them (the kit template shows the schema).")
             else:
                 ok("loop.json: effective driver knobs " + json.dumps(_driver_knobs(lc)))
+                launch_problems = []
+                if _AGENT_BACKEND is not None:
+                    launch_problems = _codex_backend.model_errors(lc, _AGENT_BACKEND)
+                    for problem in launch_problems: bad(problem)
+                if _AGENT_BACKEND is not None and not launch_problems:
+                    role_settings = []
+                    for role in ("planner", "worker"):
+                        section = lc.get(role) or {}
+                        model = _codex_backend.model_for(section, _AGENT_BACKEND) or "default/inherited"
+                        effort = _codex_backend.effort_for(section, _AGENT_BACKEND) or "default/inherited"
+                        role_settings.append(f"{role}(model={model}, effort={effort})")
+                    ok(f"launch settings: backend={_AGENT_BACKEND.name}; " + "; ".join(role_settings))
+                for problem in (_verifier_policy().strategy_errors(lc, _AGENT_BACKEND.name)
+                                if _AGENT_BACKEND is not None else []): bad(problem)
             props = _campaign_props(lc)
             prop_problems = campaign_props_problems(props)
             for problem in prop_problems:
@@ -1962,12 +3019,75 @@ def preflight(smoke: bool = False) -> list[str]:
             if not prop_problems:
                 note = (f"campaign: prediction_mode={props['prediction_mode']} "
                         f"noise_model={props['noise_model']} "
-                        f"verification={props['verification']}")
+                        + (f"verification={props['verification']} "     # the legacy key, only when present
+                           if (lc.get("campaign") or {}).get("verification") else "")
+                        + f"metric_revision={props['metric_revision']}")
                 if props["noise_model"] == "stochastic" and props["noise_floor"] is None:
                     note += " (noise_floor unset - the noise-floor check reports 'unavailable')"
                 if props["noise_model"] == "deterministic" and props["tolerance"] is None:
                     note += " (tolerance unset - the tolerance check reports 'unavailable')"
                 ok(note)
+                vprob, vnotes = verify_problems(lc)
+                for problem in vprob:
+                    bad(problem)
+                for vn in vnotes:
+                    ok("NOTE: " + vn)
+                if not vprob:
+                    ok("verify: " + _rows_line(_verify_rows(lc)))
+                    # The suite runs at preflight (the `setup` home) so its every-set is MEASURED before
+                    # the first unit: an over-budget set is refused here, by name, where fixing it is cheap.
+                    suite_status = check_correctness_suite(props["metric_version"], select="all",
+                                                           why="preflight", props=props)
+                    st_now = _read_json(CORRECTNESS_STATE, None)
+                    st_now = st_now if isinstance(st_now, dict) else {}
+                    budget = _suite_budget_s(lc)
+                    if st_now.get("protocol") == 1:
+                        rows_now = _verify_rows(lc)["rows"]
+                        cost, members = _every_cost(st_now, rows_now)
+                        if cost > budget:
+                            checks_now = st_now.get("checks") or {}
+                            named = ", ".join(f"{n} {w:.1f}s ({(checks_now.get(n) or {}).get('row') or 'invariants'})"
+                                              for n, w in members[:6])
+                            if rows_now.get("machinery") == "every":
+                                # A declaration alone changes nothing here: this preset fires machinery every unit.
+                                fix = ("Fix: under this preset the machinery row fires every unit too, so declaring "
+                                       "a check machinery does not remove it from the every-set - choose a preset "
+                                       "whose machinery row runs on code change (moderate), declare a per-result "
+                                       "check @check(row='gates') (promotion time), or make the slow ones cheaper.")
+                            else:
+                                fix = ("Fix: declare the slow ones @check(row='machinery') (they then run at setup "
+                                       "/ on code change) or 'gates' (at promotion time), or make them cheaper.")
+                            bad(f"correctness suite every-set is over budget: {cost:.1f}s > {budget:.1f}s "
+                                f"({SUITE_BUDGET_FRACTION:g} x unit_cost.typical_wall_clock_s, floor "
+                                f"{SUITE_BUDGET_FLOOR_S:g}s) - " + named + ". " + fix
+                                + " Mid-campaign the runner would demote them, loudly; at launch you choose.")
+                        else:
+                            ok(f"correctness suite: {suite_status}; every-set {cost:.1f}s of {budget:.1f}s "
+                               f"budget ({len(members)} check(s) per unit)")
+                    elif st_now.get("protocol") == "legacy":
+                        w = st_now.get("wall_s")
+                        ok(f"correctness suite: {suite_status} in {float(w or 0):.1f}s (legacy suite: no "
+                           f"per-check cost, so the {budget:.1f}s budget cannot be metered; migrate it to a "
+                           "CHECKS list with @check rows)")
+                    else:
+                        ok(f"correctness suite: {suite_status}")
+                if props["metric_revision"] != "cautious":
+                    # Loud by design: the one launch-time fact the user must not miss. Every revision the
+                    # loop enacts lands as a PENDING epoch in campaign.metric_epochs; nothing in this mode
+                    # is silent, but nothing waits for the user either.
+                    ok(f"NOTICE: metric_revision={props['metric_revision']} - the loop's agents may revise "
+                       "the FROZEN metric WITHOUT asking first (the metric-epoch design). Each revision is "
+                       "declared as a pending epoch in configs/loop.json campaign.metric_epochs for YOUR "
+                       "ratification; campaign-status lists them.")
+                epoch_problems = epoch_gate(props)
+                for problem in epoch_problems:
+                    bad("metric epoch: " + problem)
+                if not epoch_problems and props["metric_version"]:
+                    decl = _epoch_declaration(props) or {}
+                    ok(f"metric epoch: {props['metric_version']} ({decl.get('kind', '?')}, "
+                       f"{decl.get('status', '?')}" + (", the implicit first epoch" if decl.get("implicit") else "")
+                       + ("; scorer hash bound" if _scorer_bindings().get(props["metric_version"])
+                          else "; the scorer hash binds on the first experiment") + ")")
         except json.JSONDecodeError as exc:
             bad(f"configs/loop.json is not valid JSON ({exc}). Fix: repair it (check trailing commas).")
 
@@ -2076,26 +3196,37 @@ def preflight(smoke: bool = False) -> list[str]:
     # 8. opt-in smoke spawn (one real model call)
     if smoke and not fails:
         try:
-            cmd = (AGENT_CMD
-                   + _permission_flags(os.environ.get("AUTORESEARCH_PERMISSION_MODE") or "auto")
-                   + ["Reply with exactly OK and end the turn."])
-            proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=300,
-                                  env=dict(os.environ, AUTORESEARCH_SUPERVISED="1"))
-            if proc.returncode == 0:
+            _agent_instructions.check_chain(ROOT)
+            smoke_prompt = "Reply with exactly OK and end the turn."
+            if _codex_backend.is_codex(_AGENT_BACKEND):
+                proc, rendered, smoke_ok = _codex_backend.smoke(
+                    ROOT, _AGENT_BACKEND, dict(os.environ, AUTORESEARCH_SUPERVISED="1"))
+                for line in rendered:
+                    print(line)
+            else:
+                cmd = (AGENT_CMD
+                       + _permission_flags(os.environ.get("AUTORESEARCH_PERMISSION_MODE") or "auto")
+                       + [smoke_prompt])
+                proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=300,
+                                      env=dict(os.environ, AUTORESEARCH_SUPERVISED="1"))
+                smoke_ok = proc.returncode == 0
+            if smoke_ok:
                 ok("smoke spawn completed")
             else:
-                bad(f"smoke spawn exited {proc.returncode}. Fix: run the agent CLI by hand from this "
+                bad(f"smoke spawn {'protocol incomplete' if _codex_backend.is_codex(_AGENT_BACKEND) and proc.returncode == 0 else f'exited {proc.returncode}'}. Fix: run the agent CLI by hand from this "
                     "directory and read its output.")
         except Exception as exc:
             bad(f"smoke spawn failed ({exc}). Fix: verify the agent CLI runs headless from this directory.")
     return fails
 
 
-def supervise(smoke: bool = False):
+def _supervise_unlocked(smoke: bool = False):
     """The loop driver. Deterministic; judgment lives in the worker/planner agents it spawns."""
     log = DriverLog(DIAG / f"supervise_{_utc_stamp()}.log")
     sys.stdout = log
-    print(f"[supervise] ==== launch {_utc_stamp()} ==== root={ROOT} agent_cmd={' '.join(AGENT_CMD)}")
+    launch_cmd = _AGENT_BACKEND.executable if _codex_backend.is_codex(_AGENT_BACKEND) else " ".join(AGENT_CMD)
+    backend_tag = " backend=codex" if _codex_backend.is_codex(_AGENT_BACKEND) else ""
+    print(f"[supervise] ==== launch {_utc_stamp()} ==== root={ROOT}{backend_tag} agent_cmd={launch_cmd}")
     try:
         INBOX.mkdir(parents=True, exist_ok=True)   # the steering mailbox exists from launch, visibly
         DROP.mkdir(parents=True, exist_ok=True)     # the agent proposal/decline channel, likewise visible
@@ -2117,6 +3248,8 @@ def supervise(smoke: bool = False):
     cfg_mtime = LOOPCFG.stat().st_mtime
     consec_fail = 0
     consec_vfail = 0
+    seen_demotions: set = set()     # suite checks metered out of the every-set, as last logged
+    t_last_tick = time.monotonic()   # the SUPERVISED clock: time this driver was actually running
 
     try:
         while True:
@@ -2134,6 +3267,8 @@ def supervise(smoke: bool = False):
                     pass
                 print(f"[supervise] STOP - results/{stop.name} present: graceful stop honoured. The "
                       "completed unit is recorded; delete the file and relaunch to resume.")
+                _service_capstone(k, _codex_backend.model_for(p, _AGENT_BACKEND),
+                                  _codex_backend.effort_for(p, _AGENT_BACKEND), f"STOP ({stop.name})")
                 return
             if ESCALATE.is_file():
                 _halt(f"supervise: HALT - {ESCALATE} present (a genuine fork awaits the user). "
@@ -2149,13 +3284,48 @@ def supervise(smoke: bool = False):
                       "writes a partial save-set. Free space or apply the retention plan "
                       "(roles/worker.md, 'Retention plan'), then relaunch - the queue resumes where it is.")
             if LOOPCFG.stat().st_mtime != cfg_mtime:
+                old_loop_cfg = loop_cfg
                 loop_cfg = _read_json(LOOPCFG, loop_cfg)
                 w, p, plat = loop_cfg["worker"], loop_cfg["planner"], loop_cfg["plateau"]
                 k = _driver_knobs(loop_cfg)
                 k["absolute_s"] = float(w["iteration_timeout_hours"]) * 3600
-                props = _campaign_props(loop_cfg)
+                old_props, props = props, _campaign_props(loop_cfg)
                 cfg_mtime = LOOPCFG.stat().st_mtime
                 print("[supervise] configs/loop.json changed - reloaded (logged): " + json.dumps(k))
+                # The campaign PROPERTIES are setup-time declarations, so a flip mid-run is an event the
+                # record must show - the driver knobs above were logged, the properties were not. The
+                # metric_revision dial especially: it is changed only from an attended session (the
+                # config guard refuses a spawned role), so this line is how a flip is seen at all.
+                def _epochs_summary(block) -> str:
+                    return "{" + ", ".join(f"{k}: {v.get('status', '?') if isinstance(v, dict) else '?'}"
+                                           for k, v in (block or {}).items()) + "}"
+                for key in ("metric_revision", "metric_version", "data_version", "prediction_mode",
+                            "noise_model", "verification", "metric_epochs"):
+                    if old_props.get(key) != props.get(key):
+                        before, after = old_props.get(key), props.get(key)
+                        if key == "metric_epochs":
+                            before, after = _epochs_summary(before), _epochs_summary(after)
+                        print(f"[supervise] campaign.{key}: {before!r} -> {after!r} "
+                              f"(utc {_utc_stamp()}; edited outside the driver - the user, an attended "
+                              "session, or an agent opening an epoch)")
+                ov, nv = _verify_rows(old_loop_cfg), _verify_rows(loop_cfg)
+                if (ov["preset"], ov["source"]) != (nv["preset"], nv["source"]):
+                    # The preset is the user's choice of how much verification the campaign buys; a
+                    # mid-campaign change is legitimate and must be visible in the record, never silent.
+                    print(f"[supervise] verify.preset: {ov['preset']!r} -> {nv['preset']!r} "
+                          f"({_rows_line(nv)}; utc {_utc_stamp()}; edited outside the driver)")
+
+            # A demotion is made inside a worker's runner; the driver log is where it must be seen.
+            _st_d = _read_json(CORRECTNESS_STATE, None)
+            _dem = dict((_st_d or {}).get("demotions") or {}) if isinstance(_st_d, dict) else {}
+            for _name in sorted(set(_dem) - set(seen_demotions)):
+                _d = _dem[_name] if isinstance(_dem[_name], dict) else {}
+                print(f"[supervise] suite demotions changed: {_name} {_d.get('from', 'every')}->"
+                      f"{_d.get('to', 'promotion')} ({float(_d.get('wall_s') or 0):.1f}s vs "
+                      f"{float(_d.get('budget_s') or 0):.1f}s budget) - it still runs for every promotion "
+                      f"candidate; restore it by deleting its demotions entry in "
+                      f"results/correctness_state.json utc={_utc_stamp()}")
+            seen_demotions = set(_dem)
 
             q = _read_queue()
             # Merge any agent proposals/declinations dropped since the last pass BEFORE the planner
@@ -2165,6 +3335,23 @@ def supervise(smoke: bool = False):
             if _drain_queue_drops(q):
                 _write_queue(q)
 
+            if _verification_strategy(loop_cfg) == "driver-direct":
+                consec_vfail = _service_due(k, _codex_backend.model_for(p, _AGENT_BACKEND), consec_vfail)
+                q = _read_queue()
+                if _verification_backlog(q):
+                    continue
+
+            # ---- the supervised clock: only time the driver was running counts toward a plateau ----
+            # Wall-clock since the last accept once fired "plateau: 115.8h without an accepted result"
+            # on the first line of a relaunch - the loop had been DOWN for five days, not stalled - and
+            # a planner pass went to diagnosing an outage as a scientific stall. The clock is persisted
+            # in queue.json, so it resumes across launches; an older ledger without it falls back to
+            # wall-clock once, then carries the key.
+            now_m = time.monotonic()
+            q["supervised_s_since_accept"] = (float(q.get("supervised_s_since_accept") or 0.0)
+                                              + (now_m - t_last_tick))
+            t_last_tick = now_m
+
             # ---- planner triggers (spawn before popping so the planner can reorder/refill) ----
             reasons = []
             if len(q["next"]) < int(p.get("next_min_units", 2)):
@@ -2173,19 +3360,27 @@ def supervise(smoke: bool = False):
                 reasons.append(f"cadence: {q['units_since_planner']} units since last planner review")
             if q["next"] and q["next"][0].get("declined"):
                 reasons.append("head-of-queue declined: " + "; ".join(q["next"][0]["declined"]))
-            last = q.get("last_accept_utc")
-            if last:
-                idle_h = (_dt.datetime.now(_dt.timezone.utc)
-                          - _dt.datetime.fromisoformat(last)).total_seconds() / 3600
+            if q.get("last_accept_utc"):
+                idle_h = float(q["supervised_s_since_accept"]) / 3600
                 if idle_h > float(plat["wall_clock_hours"]):
-                    reasons.append(f"plateau: {idle_h:.1f}h without an accepted result")
+                    reasons.append(f"plateau: {idle_h:.1f}h of supervised time without an accepted result")
+            units_since = int(q.get("units_since_accept") or 0)
+            if plat.get("units") and units_since >= int(plat["units"]):
+                reasons.append(f"plateau: {units_since} units without an accepted result")
+            if q.get("planner_due"):                     # set by the verification service (a REFUTED verdict)
+                reasons.append(str(q.pop("planner_due")))
+            rec_mtime = _recommended_mtime()
+            if q.get("recommended_mtime") not in (None, rec_mtime):
+                reasons.append("promotion recorded (configs/RECOMMENDED.json changed)")
+            q["recommended_mtime"] = rec_mtime
             if reasons:
                 print("[supervise] planner triggered: " + "; ".join(reasons))   # the decision trace
                 notes = _drain_inbox(k["inbox_max_chars"])
                 st = "unknown"
                 for attempt in range(1 + k["planner_retries"]):
                     st = _spawn_agent(build_prompt("planner", reasons="; ".join(reasons), notes=notes),
-                                      p.get("model", ""), "planner", k)
+                                      _codex_backend.model_for(p, _AGENT_BACKEND), "planner", k,
+                                      effort=_codex_backend.effort_for(p, _AGENT_BACKEND))
                     if st == "ok":
                         break
                     print(f"[supervise] planner attempt {attempt + 1} failed (status={st})"
@@ -2203,6 +3398,8 @@ def supervise(smoke: bool = False):
                 print(f"[supervise] shelved after two declinations: {u['config']}")
             if not q["next"]:
                 _write_queue(q)
+                _service_capstone(k, _codex_backend.model_for(p, _AGENT_BACKEND),
+                                  _codex_backend.effort_for(p, _AGENT_BACKEND), "queue empty")
                 _halt("supervise: HALT - queue empty even after a planner pass. The campaign has run "
                       "out of proposed directions; this is a stopping decision for the user (an "
                       "unfalsified 'done' is INCONCLUSIVE - see CLAUDE.md HARD GATE 5).")
@@ -2226,12 +3423,21 @@ def supervise(smoke: bool = False):
                 (a drop file in results/queue_drop/, since the worker no longer edits queue.json)."""
                 return _unit_saved(cp) or _has_decline_drop(u["config"])
 
-            declined = done = False
+            declined = False
             st = "unknown"
             retries = int(w.get("retries", 1))
-            for attempt in range(1 + retries):
-                st = _spawn_agent(prompt, w.get("model", ""), f"worker[{unit['config']}]", k,
-                                  saved_probe=_unit_resolved)
+            # A unit whose save-set is already on disk (a crash between the save and the bookkeeping, a
+            # relaunch mid-accept) is accepted from the record, never re-run: a finished unit re-run
+            # and re-counted inflates accepted_units and fakes the plateau clock.
+            done = _unit_saved(cfg_path)
+            if done:
+                st = "saved"
+                print(f"[supervise] unit {unit['config']} already has its save-set on disk - accepting "
+                      f"from the record without a spawn utc={_utc_stamp()}")
+            for attempt in range(0 if done else 1 + retries):
+                st = _spawn_agent(prompt, _codex_backend.model_for(w, _AGENT_BACKEND), f"worker[{unit['config']}]", k,
+                                  saved_probe=_unit_resolved,
+                                  effort=_codex_backend.effort_for(w, _AGENT_BACKEND))
                 q = _read_queue()
                 _drain_queue_drops(q)          # merge this worker's declinations + proposals (single-writer)
                 head = q["next"][0] if q["next"] else None
@@ -2240,7 +3446,8 @@ def supervise(smoke: bool = False):
                 if declined or done:
                     break                      # the accept/decline block below persists q (merged drops incl.)
                 _record_failure(q, unit["config"], attempt + 1, st,
-                                "unit neither saved nor declined after this attempt")
+                                "unit neither saved nor declined after this attempt (save-set missing: "
+                                + ", ".join(_unit_saved_missing(cfg_path)) + ")")
                 _write_queue(q)
                 print(f"[supervise] unit not validated (attempt {attempt + 1}): status={st}, "
                       f"saved={done} - " + ("retrying" if attempt < retries else "out of retries"))
@@ -2274,17 +3481,46 @@ def supervise(smoke: bool = False):
                     print(f"[supervise] unit {unit['config']} already accepted (stem {stem} pending "
                           "verification) - dropping the duplicate without re-counting (idempotent)")
                 else:
+                    # Codex's direct verifier must know which fresh worker thread generated this
+                    # evidence. Do this only for a genuinely new acceptance: a resurrected duplicate
+                    # must not overwrite the original snapshot provenance or verification debt.
+                    if _codex_backend.is_codex(_AGENT_BACKEND):
+                        if provenance_error := _codex_backend.stamp_worker_snapshot(
+                                ROOT, cfg_path, _LAST_CODEX_OBSERVER):
+                            print(f"[supervise] Codex provenance WARNING: {provenance_error}")
                     q["accepted_units"] = int(q.get("accepted_units", 0)) + 1
                     q["last_accept_utc"] = _dt.datetime.now(_dt.timezone.utc).isoformat()
-                    print(f"[supervise] accepted unit #{q['accepted_units']}: {unit['config']}")
-                    if props["verification"] == "per-block" and stem:
-                        # Queue the accepted unit for driver-spawned verification. Its block (a batch of
-                        # related units sharing a "block" id) is verified once, when its last unit lands;
-                        # a block-less unit is a block of one. Persisted in the queue ledger, so
-                        # verification owed by an interrupted run is serviced on relaunch.
-                        q.setdefault("pending_verification", []).append(
-                            {"config": unit["config"], "exp": stem,
-                             "block": unit.get("block"), "hypothesis": unit.get("hypothesis")})
+                    q["supervised_s_since_accept"] = 0.0     # the plateau clocks restart on an accept
+                    q["units_since_accept"] = 0
+                    print(f"[supervise] accepted unit #{q['accepted_units']}: {unit['config']} "
+                          f"utc={_utc_stamp()}")
+                    if stem:
+                        # What independent check the PRESET owes this unit (configs/loop.json verify.preset,
+                        # or the legacy campaign.verification mapping): re-execution when the row fires and
+                        # the unit is cheap and reproducible, review when the row fires otherwise, nothing
+                        # when nothing fires - the label then stays what the worker's own checks made it.
+                        # Queued in the ledger, so verification owed by an interrupted run is serviced on
+                        # relaunch; a block-triggered entry waits for its block, the rest are verified at once.
+                        vr_now = _verify_rows(loop_cfg)
+                        owed = _agent_row_for(vr_now["rows"],
+                                              _read_json(CHECKS / f"checks_{exp_id_for(stem)}.json", None))
+                        if owed is not None:
+                            pending = {"config": unit["config"], "exp": stem,
+                                       "block": unit.get("block"),
+                                       "hypothesis": unit.get("hypothesis"), **owed}
+                            if _codex_backend.is_codex(_AGENT_BACKEND):
+                                pending.update(worker_backend="codex", worker_thread_id=(
+                                    _LAST_CODEX_OBSERVER.thread_id if _LAST_CODEX_OBSERVER else ""))
+                            q.setdefault("pending_verification", []).append(pending)
+                            print(f"[supervise] verification owed for {stem}: {owed['row']} "
+                                  f"(trigger={owed['trigger']}, eligible={owed['eligible']}"
+                                  + (f": {owed['eligibility']}" if owed.get("eligibility") else "")
+                                  + f") utc={_utc_stamp()}")
+                        else:
+                            print(f"[supervise] no independent check owed for {stem} under "
+                                  f"{vr_now['preset'] or vr_now['source']} (review={vr_now['rows'].get('review')}, "
+                                  f"re_execution={vr_now['rows'].get('re_execution')}; the label stays what "
+                                  f"the worker's own checks made it) utc={_utc_stamp()}")
             elif declined:
                 consec_fail = 0
                 print(f"[supervise] unit declined -> planner will review: {unit['config']}")
@@ -2305,12 +3541,14 @@ def supervise(smoke: bool = False):
                           "(the environment, not the units): check the agent CLI, credentials, and disk; "
                           "read the driver log, then relaunch.")
             q["units_since_planner"] = int(q.get("units_since_planner", 0)) + 1
+            if not done:
+                q["units_since_accept"] = int(q.get("units_since_accept") or 0) + 1
             q["consecutive_operational_failures"] = consec_fail
             _write_queue(q)
 
-            # ---- verify-after: service completed blocks (also drains backlog left by a mode flip) ----
-            if props["verification"] == "per-block" or (q.get("pending_verification") or []):
-                consec_vfail = _service_verification(k, p.get("model", ""), consec_vfail)
+            # ---- verify-after: service what the preset owes (also drains backlog left by a preset flip) ----
+            if q.get("pending_verification") or []:
+                consec_vfail = _service_due(k, _codex_backend.model_for(p, _AGENT_BACKEND), consec_vfail)
     except KeyboardInterrupt:
         proc = _LIVE_PROC.get("proc")
         if proc is not None and proc.poll() is None:
@@ -2323,6 +3561,21 @@ def supervise(smoke: bool = False):
         sys.stdout = log.close()
 
 
+def supervise(smoke: bool = False):
+    """Own the campaign, then run the otherwise-unchanged deterministic supervisor."""
+    try:
+        lock = _supervisor_lock.acquire(
+            RESULTS / ".supervisor.lock",
+            backend=("codex" if _codex_backend.is_codex(_AGENT_BACKEND) else _supervisor_lock.backend_label(AGENT_CMD[0])),
+        )
+    except _supervisor_lock.SupervisorLockError as exc:
+        _halt(f"supervise: HALT - {exc}")
+    try:
+        return _supervise_unlocked(smoke=smoke)
+    finally:
+        lock.release()
+
+
 def _exp_stem(config_path: Path) -> str:
     """The exp_name a config declares, or "" if unreadable - the stem every artifact is keyed by.
     BOM-tolerant, since a config may have been hand-edited on Windows."""
@@ -2332,18 +3585,40 @@ def _exp_stem(config_path: Path) -> str:
         return ""
 
 
-def _unit_saved(config_path: Path) -> bool:
-    """Structural validation of what a worker must leave behind (the checkpoint contract's hard core)."""
+def _recommended_mtime() -> float | None:
+    """configs/RECOMMENDED.json's mtime, or None: a change between loop tops is a promotion the planner
+    should re-plan around (re-open shelved directions)."""
+    try:
+        return (ROOT / "configs" / "RECOMMENDED.json").stat().st_mtime
+    except OSError:
+        return None
+
+
+def _unit_saved_missing(config_path: Path) -> list[str]:
+    """Which parts of the save-set a worker must leave behind are ABSENT (the checkpoint contract's hard
+    core): the result JSON, the snapshot directory, the logbook entry. Named, so a failure record says
+    what was missing instead of a constant string nobody can act on."""
     stem = _exp_stem(config_path)
     exp_id = exp_id_for(stem) if stem else ""
     if not exp_id:
-        return False                       # an unnameable unit cannot have left a well-named save-set
-    return ((RESULTS / f"result_{exp_id}.json").is_file()
-            and (SNAPSHOTS / stem).is_dir()
-            and stem in LOGBOOK.read_text(encoding="utf-8", errors="replace"))
+        return ["a nameable exp id"]       # an unnameable unit cannot have left a well-named save-set
+    missing = []
+    if not (RESULTS / f"result_{exp_id}.json").is_file():
+        missing.append(f"results/result_{exp_id}.json")
+    if not (SNAPSHOTS / stem).is_dir():
+        missing.append(f"results/snapshots/{stem}/")
+    if stem not in LOGBOOK.read_text(encoding="utf-8", errors="replace"):
+        missing.append("the logbook entry")
+    return missing
 
 
-# ---- per-block verification (the driver spawns the verifier; the worker never grades its own work) ----
+def _unit_saved(config_path: Path) -> bool:
+    """Structural validation of what a worker must leave behind (the checkpoint contract's hard core)."""
+    return not _unit_saved_missing(config_path)
+
+
+# ---- driver-scheduled verification (the preset says what each unit is owed; the driver spawns the
+# ---- verifier and decides its depth; the worker never grades its own work) -------------------------
 
 def _find_verdict_file(stem: str) -> Path | None:
     """The verdict artifact for one experiment, matched by SUBJECT: the file is named for the exp id or
@@ -2407,31 +3682,121 @@ def _stamp_verified(stem: str) -> None:
               "is the record either way")
 
 
+def _agent_row_for(rows: dict, checks_payload) -> dict | None:
+    """Which independent check the preset owes an accepted unit, if any: re_execution when its trigger
+    fires and the unit is eligible; review when review's trigger fires, or re-execution fired but the
+    unit is not eligible; nothing otherwise (the label stays what the worker's own checks made it).
+    Returns the pending entry's verification fields, or None."""
+    ck = checks_payload if isinstance(checks_payload, dict) else {}
+    checks = ck.get("checks") or {}
+    ver = ck.get("verification") or {}
+    candidate = _is_candidate(checks) if checks else True   # no artifact: assume the check is owed
+    elig = ver.get("re_execution") or {}
+    rev, rex = str(rows.get("review") or "off"), str(rows.get("re_execution") or "off")
+
+    def fires(trig: str) -> bool:
+        return trig in ("every", "block") or (trig == "promotion" and candidate)
+
+    if fires(rex) and elig.get("eligible") is True:
+        return {"row": "re_execution", "trigger": rex, "eligible": True,
+                "eligibility": str(elig.get("eligibility") or ""), "candidate": candidate,
+                "solve_wall_clock_s": elig.get("solve_wall_clock_s")}
+    if fires(rex) or fires(rev):
+        return {"row": "review", "trigger": rex if fires(rex) else rev, "eligible": bool(elig.get("eligible")),
+                "eligibility": (str(elig.get("eligibility") or "re-execution is not in this preset")
+                                if fires(rex) else ""),
+                "candidate": candidate, "solve_wall_clock_s": elig.get("solve_wall_clock_s")}
+    return None
+
+
+def _mode_line(group: list, extras: dict) -> str:
+    """The verifier's mode, decided by the driver from the unit's measured cost and the preset, as a
+    prompt VALUE (never through the template string)."""
+    row = str(group[0].get("row") or "review") if group else "review"
+    why = "; ".join(sorted({str(e.get("eligibility") or "") for e in group if e.get("eligibility")}))
+    if row == "re_execution":
+        line = (f"\nVerification mode for this spawn: RE-EXECUTION (eligible: {why}) - re-run each experiment "
+                "from its config, recompute every reported number, and write \"mode\": \"re-execution\" in "
+                "each verdict.")
+    else:
+        line = ("\nVerification mode for this spawn: REVIEW"
+                + (f" (re-execution not eligible: {why})" if why else "")
+                + " - recompute from the frozen record (snapshot, config, result, the checks artifact with its "
+                  "self_check and changes blocks) and verify the delta; do not re-execute; write "
+                  "\"mode\": \"review\" in each verdict.")
+    if extras.get("blinded"):
+        line += (" Blinded: do not read results/JOURNAL.md or the logbook narrative - the record and the "
+                 "artifacts only.")
+    if extras.get("different_model"):
+        line += " Where the campaign's verify block names a different model family for the refuter, use it."
+    return line
+
+
+def _stamp_label(stem: str, entry: dict) -> None:
+    """After a verdict lands: the checks artifact's `verification.agent` block and the label every
+    exported claim carries (<VERDICT>/<mode>). The verdict artifact is the evidence; the label is the
+    machine-derived view of it, never softened (a recorded verdict is never replaced by a weaker label)."""
+    vf = _find_verdict_file(stem)
+    eid = exp_id_for(stem)
+    art = CHECKS / f"checks_{eid}.json" if eid else None
+    if vf is None or not art or not art.is_file():
+        return
+    try:
+        v = json.loads(vf.read_text(encoding="utf-8"))
+        ck = json.loads(art.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    verdict = str(v.get("verdict", "")).strip().upper()
+    if not verdict:
+        return
+    requested = "re-execution" if entry.get("row") == "re_execution" else "review"
+    recorded = str(v.get("mode") or "").strip().lower() or "unknown"
+    ck.setdefault("verification", {})["agent"] = {
+        "row": entry.get("row"), "trigger": entry.get("trigger"), "verdict": verdict,
+        "mode_requested": requested, "mode_recorded": recorded, "refuter": v.get("refuter"),
+        "verdict_file": vf.name, "utc": _utc_stamp()}
+    ck["label"] = f"{verdict}/{recorded if recorded != 'unknown' else requested}"
+    tmp = art.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(ck, indent=2), encoding="utf-8")
+    os.replace(tmp, art)
+
+
 def _verification_backlog(q: dict) -> list[list[dict]]:
-    """Groups from queue.json's pending_verification whose block is COMPLETE - no queued unit still
-    shares the block id. Unblocked (block-less) entries are singleton groups, ready immediately."""
-    queued_blocks = {u.get("block") for u in q.get("next", []) if u.get("block")}
-    groups: dict[str, list] = {}
+    """Groups from queue.json's pending_verification that are ready: block-less entries at once, and a
+    block's completed members once the queue HEAD has left that block.
+
+    Blocks are contiguous after _normalize_blocks, so "the head left the block" is "the batch the
+    planner scheduled together has run". The earlier rule - release only when NO queued unit still
+    carried the block id - deadlocked: a straggler the planner tagged into an old block, eight queue
+    positions back, withheld four finished units from verification, and a whole planner pass went to
+    diagnosing it. A straggler now forms its own group when it lands; the science already done is
+    verified when it is done."""
+    head_block = (q.get("next") or [{}])[0].get("block") if q.get("next") else None
+    groups: dict = {}
     ready: list[list[dict]] = []
     for e in q.get("pending_verification") or []:
         b = e.get("block")
-        if not b:
+        # Only a block-triggered entry waits for its block; every/promotion entries are verified at
+        # once. An entry without a trigger predates the presets and keeps the block rule. Grouping is
+        # by (block, row): a block's re-executable units and its review-only units get separate spawns.
+        trig = str(e.get("trigger") or "block")
+        if not b or trig != "block":
             ready.append([e])
-        elif b not in queued_blocks:
-            groups.setdefault(str(b), []).append(e)
+        elif head_block is None or str(b) != str(head_block):
+            groups.setdefault((str(b), str(e.get("row") or "")), []).append(e)
     ready.extend(groups.values())
     return ready
 
 
-def _service_verification(k: dict, model: str, vfail: int) -> int:
+def _service_verification(k: dict, model: str, vfail: int, effort: str = "") -> int:
     """Spawn the verifier for every completed block awaiting verification; stamp and clear on success.
 
     Runs every loop iteration (pending_verification is queue-persisted, so verification owed by a
     crashed or interrupted run is serviced on relaunch - never lost). Verification is control flow,
     not agent virtue: a block is not cleared until every experiment's verdict artifact exists.
     Failures degrade LOUD like worker failures - the entries stay pending and are retried next
-    iteration - and N in a row is SYSTEMIC: a campaign that declared per-block verification
-    (configs/loop.json campaign.verification) must not keep accumulating unverified science.
+    iteration - and N in a row is SYSTEMIC: a campaign whose verification preset (configs/loop.json
+    verify.preset) owes these units an independent check must not keep accumulating unverified science.
     Returns the updated consecutive-verification-failure count."""
     q = _read_queue()
     for group in _verification_backlog(q):
@@ -2447,20 +3812,57 @@ def _service_verification(k: dict, model: str, vfail: int) -> int:
         if missing:
             hyp = next((e.get("hypothesis") for e in group if e.get("hypothesis")), "")
             label = "block " + str(group[0].get("block")) if group[0].get("block") else exps[0]
-            print(f"[supervise] verification due for {label}: {', '.join(missing)}")
-            prompt = build_prompt("verifier", exps=", ".join(missing), hypothesis=str(hyp or ""))
+            loop_cfg = _read_json(LOOPCFG, {}) or {}
+            vr = _verify_rows(loop_cfg)
+            row = str(group[0].get("row") or "review")
+            print(f"[supervise] verification due for {label}: {', '.join(missing)} (row={row}, "
+                  f"trigger={group[0].get('trigger') or 'block'}, eligible={group[0].get('eligible', '?')}"
+                  + (f": {group[0].get('eligibility')}" if group[0].get("eligibility") else "")
+                  + f") utc={_utc_stamp()}")
+            # The intensive rows include the scripted ones: whatever promotion-time checks have not yet
+            # run for these experiments run now, recorded against them, before an agent is spent.
+            try:
+                props_v = _campaign_props(loop_cfg)
+                for s in missing:
+                    d = _due_checks(_read_json(CORRECTNESS_STATE, None), vr["rows"], props_v,
+                                    candidate=True, core_moved=False)
+                    if d["due"] and not d["first"]:
+                        check_correctness_suite(props_v["metric_version"], select=",".join(d["due"]),
+                                                ran_for=s, why="review", props=props_v)
+            except Exception as exc:
+                print(f"[supervise] note: promotion-time checks before verification skipped ({exc})")
+            mode = _mode_line(group, vr["extras"])
+            prompt = build_prompt("verifier", exps=", ".join(missing), hypothesis=str(hyp or ""), mode=mode)
 
             def _verdicts_probe(ms=tuple(missing)) -> bool:
                 return all(_find_verdict_file(s) is not None for s in ms)
 
-            for attempt in range(1 + k["planner_retries"]):
-                st = _spawn_agent(prompt, model, f"verifier[{label}]", k, saved_probe=_verdicts_probe)
+            retries = int(k.get("verifier_retries", k.get("planner_retries", 1)))
+            for attempt in range(1 + retries):
+                before = list(missing)
+                st = _spawn_agent(prompt, model, f"verifier[{label}]", k, saved_probe=_verdicts_probe,
+                                  effort=effort)
                 missing = [s for s in exps if _find_verdict_file(s) is None]
                 if not missing:
                     break
-                print(f"[supervise] verifier attempt {attempt + 1} left verdicts missing for "
-                      f"{', '.join(missing)} (status={st})"
-                      + (" - retrying" if attempt < k["planner_retries"] else ""))
+                wrote = [s for s in before if s not in missing]
+                again = " - retrying" if attempt < retries else ""
+                if st == "ok" and not wrote:
+                    # The characteristic shape: the verifier launched its refuters in the background,
+                    # reported them running, and ended its turn - ok, and nothing on disk.
+                    print(f"[supervise] verifier attempt {attempt + 1} returned ok but wrote NO verdict "
+                          f"artifact (0 of {len(before)}: {', '.join(before)}) - a refuter launched in "
+                          f"the background and abandoned is the usual cause{again}")
+                else:
+                    print(f"[supervise] verifier attempt {attempt + 1} left verdicts missing for "
+                          f"{', '.join(missing)} (status={st}, wrote {len(wrote)} of {len(before)}){again}")
+                if attempt < retries:
+                    # The retry is told what the last attempt failed to deliver - a driver-authored note,
+                    # not user steering (the verifier stays isolated from the inbox).
+                    prompt = build_prompt("verifier", exps=", ".join(missing), hypothesis=str(hyp or ""),
+                                          mode=mode,
+                                          retry_note=f"attempt {attempt + 1} ended with status={st} and "
+                                                     f"these verdicts still missing: {', '.join(missing)}")
         if missing:
             vfail += 1
             print(f"[supervise] VERIFICATION failure #{vfail}/{k['max_consecutive_failures']}: "
@@ -2468,25 +3870,259 @@ def _service_verification(k: dict, model: str, vfail: int) -> int:
                   "are retried next iteration (degrade-loud)")
             if vfail >= k["max_consecutive_failures"]:
                 _halt(f"supervise: HALT - {vfail} consecutive verification failures is SYSTEMIC. This "
-                      "campaign runs verification per block (configs/loop.json campaign.verification), "
-                      "so the loop must not keep producing science nothing verifies: check the agent "
-                      "CLI and the driver log, then relaunch - pending verification resumes first.")
+                      "campaign's verification preset (configs/loop.json verify.preset) owes an independent "
+                      "check for these units, so the loop must not keep producing science nothing "
+                      "verifies: check the agent CLI and the driver log, then relaunch - pending "
+                      "verification resumes first.")
             continue
         vfail = 0
+        refuted = []
         for s in exps:
             _stamp_verified(s)
+            _stamp_label(s, next((e for e in group if e.get("exp") == s), group[0]))
+            vf = _find_verdict_file(s)
+            v = (_read_json(vf, {}) or {}) if vf else {}
+            if str(v.get("verdict", "")).strip().upper() == "REFUTED":
+                refuted.append(s)
         done_cfgs = {e.get("config") for e in group}
         q2 = _read_queue()
         q2["pending_verification"] = [e for e in (q2.get("pending_verification") or [])
                                       if e.get("config") not in done_cfgs]
+        if refuted:
+            # A refutation re-opens strategy: the planner is due at the next loop top (the promise the
+            # planner knobs made and the driver did not keep until now).
+            q2["planner_due"] = "REFUTED verdict for " + ", ".join(refuted)
         _write_queue(q2)
         print(f"[supervise] verification complete: {', '.join(exps)} - verdict(s) on record and "
               "stamped; any REFUTED/INCONCLUSIVE follow-ups the verifier dropped are merged at the next "
-              "loop top (results/queue_drop/)")
+              f"loop top (results/queue_drop/) utc={_utc_stamp()}")
     return vfail
 
 
+def _verification_strategy(loop_cfg: dict) -> str:
+    policy = _verifier_policy()
+    if errors := policy.strategy_errors(loop_cfg, _AGENT_BACKEND.name):
+        _halt("supervise: HALT - " + "; ".join(errors))
+    return policy.strategy(loop_cfg, _AGENT_BACKEND.name)
+
+
+def _direct_verifier_spawn(prompt, model, label, k, saved_probe):
+    loop_cfg = _read_json(LOOPCFG, {}) or {}
+    effort = _codex_backend.effort_for(loop_cfg.get("worker") or {}, _AGENT_BACKEND)
+    status = _spawn_agent(prompt, model, label, k, saved_probe=saved_probe, effort=effort)
+    return status, (_LAST_CODEX_OBSERVER.thread_id if _LAST_CODEX_OBSERVER else "")
+
+
+def _service_due(k: dict, model: str, vfail: int) -> int:
+    loop_cfg = _read_json(LOOPCFG, {}) or {}
+    if _verification_strategy(loop_cfg) != "driver-direct":
+        effort = _codex_backend.effort_for(loop_cfg.get("planner") or {}, _AGENT_BACKEND)
+        return _service_verification(k, model, vfail, effort)
+    policy, q = _verifier_policy(), _read_queue()
+    if problem := policy.pending_problem(q):
+        _halt("supervise: HALT - invalid Codex verification debt: " + problem)
+    model = _codex_backend.model_for(loop_cfg.get("worker") or {}, _AGENT_BACKEND)
+    extras = _verify_rows(loop_cfg)["extras"]
+
+    def _stamp_both(stem: str) -> None:
+        _stamp_verified(stem)
+        entry = next((e for e in (q.get("pending_verification") or []) if e.get("exp") == stem), {})
+        _stamp_label(stem, entry)
+
+    return policy.service(
+        ROOT, _verification_backlog(q), k, model, vfail,
+        build_prompt=build_prompt, spawn=_direct_verifier_spawn, stamp=_stamp_both,
+        exp_id_for=exp_id_for, read_queue=_read_queue, write_queue=_write_queue,
+        log=print, halt=_halt, mode_line=lambda g: _mode_line(g, extras))
+
+
+def _set_metric_revision(mode: str) -> None:
+    """`--set-metric-revision MODE`: the attended-session way to move the dial without hand-editing JSON.
+
+    Refused under PHYSKIT_ROLE (a driver-spawned role inherits the marker; the dial is the user's). The
+    change is recorded three ways without the user writing a word: this line, the driver's hot-reload
+    log line if a loop is running, and the value stamped into every later snapshot manifest."""
+    mode = str(mode).strip().lower()
+    role = os.environ.get("PHYSKIT_ROLE", "").strip()
+    if role:
+        sys.exit(f"REFUSED: PHYSKIT_ROLE={role} - a driver-spawned role may not change campaign."
+                 "metric_revision. That dial is the user's decision (the metric-epoch design): it is set from an attended "
+                 "session. If you believe the mode should change, say so in results/ESCALATE.md.")
+    probe = _campaign_props()
+    if probe.get("_unreadable"):
+        sys.exit("CAMPAIGN PROPERTIES: " + probe["_unreadable"])
+    problems = [p for p in campaign_props_problems(dict(probe, metric_revision=mode)) if "metric_revision" in p]
+    if problems:
+        sys.exit("REFUSED: " + problems[0])
+    cfg = _read_json(LOOPCFG, None)
+    before = str((cfg.get("campaign") or {}).get("metric_revision") or "cautious").strip().lower()
+    cfg.setdefault("campaign", {})["metric_revision"] = mode
+    tmp = LOOPCFG.parent / f".loop.{os.getpid()}.tmp"
+    tmp.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    os.replace(tmp, LOOPCFG)
+    print(f"campaign.metric_revision: {before} -> {mode} (configs/loop.json; utc {_utc_stamp()})")
+    if mode != "cautious":
+        print("NOTICE: the loop's agents may now revise the FROZEN metric without asking first. Each revision "
+              "is declared as a PENDING epoch in configs/loop.json campaign.metric_epochs for your ratification; "
+              "campaign-status lists them.")
+    else:
+        print("From here on a metric revision raises results/ESCALATE.md and the loop waits for you.")
+
+
+def _self_check_cli(exp: str, ran: list, changes: list, estimate: str, note: str) -> int:
+    """`--self-check EXP --ran name=pass|fail|skip[:detail] ... [--change "what=>expected=>observed"] ...
+    [--estimate X] [--note "..."]`: the worker records the checks it ran on its own result, directed at
+    what the unit changed, into results/checks_<NN>.json `self_check`. The runner writes it (validated,
+    atomically, touching no other key) so a self-check is an auditable artifact rather than prose: a
+    label a reviewer or the claim audit can read - never independent verification."""
+    eid = exp_id_for(exp)
+    art = CHECKS / f"checks_{eid}.json" if eid else None
+    if not art or not art.is_file():
+        print(f"--self-check: no results/checks_{eid or '?'}.json for {exp!r} - record the experiment first")
+        return 2
+    entries = []
+    for item in ran or []:
+        head, _, detail = item.partition(":")
+        name, sep, outcome = head.partition("=")
+        outcome = outcome.strip().lower()
+        if not sep or not name.strip() or outcome not in ("pass", "fail", "skip"):
+            print(f"--self-check: --ran {item!r} must look like name=pass|fail|skip[:detail]")
+            return 2
+        entries.append({"name": name.strip(), "outcome": outcome, "detail": detail.strip()})
+    considered = []
+    for item in changes or []:
+        parts = [p.strip() for p in item.split("=>")]
+        if len(parts) != 3 or not parts[0]:
+            print(f"--self-check: --change {item!r} must look like "
+                  "\"<what changed>=><expected effect on the result>=><what was observed>\"")
+            return 2
+        considered.append({"change": parts[0], "expected_effect": parts[1], "observed": parts[2]})
+    try:
+        ck = json.loads(art.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"--self-check: cannot read {art.name}: {exc}")
+        return 2
+    est = None
+    if estimate:
+        try:
+            est = float(estimate)
+        except ValueError:
+            print(f"--self-check: --estimate {estimate!r} is not a number")
+            return 2
+    pred = (ck.get("checks") or {}).get("prediction") or {}
+    apriori = {"predicted": pred.get("predicted"), "observed": (ck.get("metric") or {}).get("value"),
+               "within": {"pass": True, "fail": False}.get(pred.get("status"))}
+    changed = ([c["path"] for c in ((ck.get("changes") or {}).get("files") or [])]
+               + [c["key"] for c in ((ck.get("changes") or {}).get("config_keys") or [])])
+    named = [c["change"] for c in considered]
+    unconsidered = [c for c in changed if not any(c in n or n in c for n in named)]
+    ck["self_check"] = {"status": "recorded", "utc": _utc_stamp(), "ran": entries, "apriori": apriori,
+                        "estimate": est, "changes_considered": considered,
+                        "changes_unconsidered": unconsidered, "reconciled": (note or "").strip()}
+    if ck.get("label") in (None, "unverified"):
+        ck["label"] = "self-checked"      # a self-check is a label, never independent verification
+    tmp = art.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(ck, indent=2), encoding="utf-8")
+    os.replace(tmp, art)
+    print(f"self-check recorded -> results/{art.name}: {len(entries)} check(s), {len(considered)} change(s) "
+          "considered" + (f"; {len(unconsidered)} recorded change(s) NOT considered: {', '.join(unconsidered)}"
+                          " - say what you expected each to do" if unconsidered else "")
+          + f"; label={ck['label']}")
+    return 0
+
+
+def _print_diff(exp: str, since: str | None) -> int:
+    """`--diff EXP [--since EXP]`: the full change record behind results/checks_<NN>.json `changes` - a
+    unified diff of the two snapshots' scripts plus the config keys that moved. Read-only."""
+    import difflib
+    eid = exp_id_for(exp)
+    ck = _read_json(CHECKS / f"checks_{eid}.json", None) if eid else None
+    mine_name = (ck or {}).get("exp_name") if isinstance(ck, dict) else None
+    mine = SNAPSHOTS / (mine_name or exp)
+    if not mine.is_dir():
+        print(f"--diff: no snapshot for {exp!r} (results/snapshots/{mine.name}/)")
+        return 2
+    if not since:
+        ch = (ck or {}).get("changes") if isinstance(ck, dict) else None
+        since = (ch or {}).get("since") if isinstance(ch, dict) else None
+        if not since:
+            print(f"--diff: {mine.name} has nothing to diff against "
+                  f"({(ch or {}).get('since_reason', 'no change record')}); pass --since EXP")
+            return 2
+    theirs = SNAPSHOTS / since
+    if not theirs.is_dir():
+        sid = exp_id_for(since)
+        sck = _read_json(CHECKS / f"checks_{sid}.json", None) if sid else None
+        theirs = SNAPSHOTS / str((sck or {}).get("exp_name") or since)
+        if not theirs.is_dir():
+            print(f"--diff: no snapshot for {since!r}")
+            return 2
+    print(f"=== {mine.name} vs {theirs.name} (frozen snapshots) ===")
+    rels = sorted({p.relative_to(d).as_posix() for d in (mine, theirs) for p in (d / "scripts").rglob("*")
+                   if p.is_file() and "__pycache__" not in p.parts})
+    n = 0
+    for rel in rels:
+        a, b = theirs / rel, mine / rel
+        ta = a.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True) if a.is_file() else []
+        tb = b.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True) if b.is_file() else []
+        if ta == tb:
+            continue
+        n += 1
+        sys.stdout.writelines(difflib.unified_diff(ta, tb, fromfile=f"{theirs.name}/{rel}",
+                                                   tofile=f"{mine.name}/{rel}"))
+    ca = _read_json(theirs / "config.json", {}) or {}
+    cb = _read_json(mine / "config.json", {}) or {}
+    keys = [k for k in sorted(set(ca) | set(cb))
+            if json.dumps(ca.get(k), sort_keys=True, default=str) != json.dumps(cb.get(k), sort_keys=True, default=str)]
+    print(f"--- config: {len(keys)} key(s) differ ---")
+    for k in keys:
+        print(f"  {k}: {_short(ca.get(k))} -> {_short(cb.get(k))}")
+    print(f"--- {n} script file(s) differ textually (the checks artifact counts CODE changes only) ---")
+    return 0
+
+
+def _run_suite_cli(select: str, for_exp: str) -> int:
+    """`--run-suite SELECT [--for EXP]`: the suite on demand, recorded like any other run. 'due' asks
+    the preset what is owed (treating EXP, when given, as a promotion candidate); a row name selects
+    that row; anything else is check names. The run's ran_for stamp is what the promotion guard reads
+    when a promotion-time check must have run for THAT experiment."""
+    props = _campaign_props()
+    loop_cfg = _read_json(LOOPCFG, {}) or {}
+    state = _read_json(CORRECTNESS_STATE, None)
+    state = state if isinstance(state, dict) else None
+    known = (state or {}).get("checks") or {}
+    sel = select.strip()
+    low = sel.lower()
+    if low == "all":
+        names = "all"
+    elif low == "due":
+        d = _due_checks(state, _verify_rows(loop_cfg)["rows"], props, candidate=bool(for_exp), core_moved=False)
+        pre = _due_checks(state, _verify_rows(loop_cfg)["rows"], props, candidate=None, core_moved=False)
+        names = "all" if d["first"] else (",".join(dict.fromkeys(pre["due"] + d["due"])) or "-")
+        print(_suite_line("manual", {"due": [n for n in dict.fromkeys(pre["due"] + d["due"])],
+                                     "why": {**pre["why"], **d["why"]},
+                                     "skipped": {k: v for k, v in {**pre["skipped"], **d["skipped"]}.items()
+                                                 if k not in pre["due"] and k not in d["due"]},
+                                     "first": d["first"]}, len(known)))
+    elif low in SUITE_ROWS:
+        picked = [n for n, e in known.items() if (e.get("row") or "invariants") == low]
+        if not picked and not known:
+            names = "all"          # nothing recorded yet: run everything and learn the rows
+        elif not picked:
+            print(f"--run-suite: no check in row {low!r} (known rows: "
+                  f"{sorted({e.get('row') or 'invariants' for e in known.values()})})")
+            return 2
+        else:
+            names = ",".join(picked)
+    else:
+        names = sel
+    status = check_correctness_suite(props["metric_version"], select=names, ran_for=for_exp,
+                                     why="manual", props=props)
+    return {"green": 0, "red": 1, "empty": 2}.get(status, 3)
+
+
 def main():
+    global _AGENT_BACKEND
     _make_console_lenient()   # before ANY print: a model-authored glyph must never end a run
     ap = argparse.ArgumentParser(description="Experiment runner for {{CAMPAIGN_TITLE}}")
     g = ap.add_mutually_exclusive_group(required=True)
@@ -2497,25 +4133,83 @@ def main():
     g.add_argument("--preflight", action="store_true",
                    help="run the supervisor launch checks (agent CLI, loop.json, queue.json, metric "
                         "selftest) and exit - no spend")
-    g.add_argument("--show-prompt", choices=("worker", "planner", "verifier"), metavar="ROLE",
+    g.add_argument("--show-prompt", choices=("worker", "planner", "verifier", "capstone"), metavar="ROLE",
                    help="print the literal prompt this driver would spawn ROLE with, plus its size "
                         "and hash, then exit. Reads nothing, spends nothing, changes nothing")
+    g.add_argument("--set-metric-revision", metavar="MODE",
+                   help="set configs/loop.json campaign.metric_revision (cautious | autonomous) from an "
+                        "ATTENDED session and exit. Refused inside a driver-spawned role: the dial is the "
+                        "user's decision (the metric-epoch design)")
+    g.add_argument("--diff", metavar="EXP",
+                   help="print what experiment EXP changed (code, as a unified diff of the snapshots; "
+                        "config keys) against the unit its checks artifact names, or --since EXP. "
+                        "Reads the frozen snapshots only; spends nothing")
+    ap.add_argument("--since", metavar="EXP", help="with --diff: the experiment to compare against")
+    g.add_argument("--run-suite", metavar="SELECT",
+                   help="run the correctness suite now: 'all', 'due', a row (invariants | machinery | gates), "
+                        "or comma-separated check names; with --for EXP the per-result gates get that "
+                        "experiment and the run is recorded against it (what a promotion needs). Spends "
+                        "only suite time")
+    ap.add_argument("--for", dest="for_exp", metavar="EXP", help="with --run-suite: the experiment to run for")
+    g.add_argument("--self-check", metavar="EXP",
+                   help="record the checks you ran on your own result for EXP into results/checks_<NN>.json "
+                        "(with --ran name=pass|fail|skip[:detail] ..., --change \"what=>expected=>observed\" "
+                        "..., --estimate X, --note \"...\"). A label, never independent verification")
+    ap.add_argument("--ran", action="append", metavar="NAME=OUTCOME[:DETAIL]", help="with --self-check")
+    ap.add_argument("--change", action="append", metavar="WHAT=>EXPECTED=>OBSERVED", help="with --self-check")
+    ap.add_argument("--estimate", metavar="X", help="with --self-check: your a-priori point estimate")
+    ap.add_argument("--note", metavar="TEXT", help="with --self-check: one line reconciling prediction and result")
+    g.add_argument("--suite-worker", action="store_true",
+                   help="internal: run the correctness suite's CHECKS in-process for check_correctness_suite "
+                        "(selection, report path and experiment come from PHYSKIT_SUITE_* env vars)")
     ap.add_argument("--smoke", action="store_true",
                     help="with --preflight/--supervise: also do ONE real agent spawn (costs a model call)")
+    ap.add_argument("--backend", choices=_codex_backend.BACKENDS,
+                    help="supervisor agent backend (CLI overrides loop.json and AUTORESEARCH_BACKEND)")
     ap.add_argument("--selftest", action="store_true",
                     help="(deprecated: the metric self-test + correctness suite now run automatically before every experiment)")
     args = ap.parse_args()
+
+    if args.set_metric_revision:
+        _set_metric_revision(args.set_metric_revision)
+        return
+
+    if args.diff:
+        sys.exit(_print_diff(args.diff, args.since))
+
+    if args.suite_worker:
+        sys.exit(_suite_worker(os.environ.get("PHYSKIT_SUITE_SELECT", ""),
+                               os.environ.get("PHYSKIT_SUITE_REPORT", ""),
+                               os.environ.get("PHYSKIT_SUITE_EXP", "")))
+
+    if args.run_suite:
+        sys.exit(_run_suite_cli(args.run_suite, args.for_exp or ""))
+
+    if args.self_check:
+        sys.exit(_self_check_cli(args.self_check, args.ran or [], args.change or [], args.estimate or "",
+                                 args.note or ""))
+
+    if args.preflight or args.supervise or args.show_prompt:
+        _AGENT_BACKEND = _codex_backend.configure_or_exit(LOOPCFG, args.backend)
 
     if args.show_prompt:
         # The prompt to STDOUT and the metadata to STDERR, so the setup review gate can capture one
         # without the other. Size is REPORTED, never capped: the plan is explicit that capacity was
         # never the binding constraint here, so growth should be visible rather than enforced.
         text = build_prompt(args.show_prompt)
+        direct_preview = (args.show_prompt == "verifier" and _codex_backend.is_codex(_AGENT_BACKEND)
+                          and _verification_strategy(_read_json(LOOPCFG, {}) or {}) == "driver-direct")
+        if direct_preview: text = _verifier_policy().direct_prompt(text, "driver-nonce-preview")
+        if _codex_backend.is_codex(_AGENT_BACKEND):
+            text = _codex_backend.adapt_prompt(text)
         print(text)
         digest = _hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
         print(f"\n--- {args.show_prompt} prompt: {len(text)} chars ({len(text)/1024:.1f} KB) "
               f"· sha256:{digest} ---", file=sys.stderr)
-        print("--- this is the literal spawn string. CLAUDE.md auto-loads on top of it, and the "
+        instruction_name = "AGENTS.md" if _codex_backend.is_codex(_AGENT_BACKEND) else "CLAUDE.md"
+        prompt_kind = ("a direct-verifier shape preview; the live nonce differs" if direct_preview
+                       else "the literal spawn string")
+        print(f"--- this is {prompt_kind}. {instruction_name} auto-loads on top of it, and the "
               "files it names (campaign.md, the role file) are read by the agent, not included here."
               " ---", file=sys.stderr)
         return
@@ -2534,14 +4228,39 @@ def main():
     # FROZEN-infrastructure gates, automatic before every experiment (no longer opt-in via --selftest):
     # Cheapest refusal first: a typo in a campaign property is a string comparison, and it must not cost
     # the correctness suite's 600 s timeout to discover.
+    t_run = time.monotonic()               # the per-unit timing record starts with the gates
+    run_start_iso = _dt.datetime.now(_dt.timezone.utc).isoformat()
     props = _campaign_props()              # what KIND of campaign this is (configs/loop.json "campaign")
     problems = campaign_props_problems(props)
     if problems:
         sys.exit("CAMPAIGN PROPERTIES: configs/loop.json is not usable as written:\n  - "
                  + "\n  - ".join(problems))
+    vprob, _ = verify_problems(_read_json(LOOPCFG, {}) or {})   # the preset, before any spend
+    if vprob:
+        sys.exit("VERIFY PRESET: configs/loop.json is not usable as written:\n  - " + "\n  - ".join(vprob))
 
     require_metric_selftest()      # hard-fail unless the scorer passes its self-test
-    check_correctness_suite()      # run + record; only an affirmative GREEN green-lights promotion
+    for problem in epoch_gate(props):   # the scorer on disk IS the declared epoch's (the metric-epoch design)
+        sys.exit("METRIC EPOCH: " + problem)
+    # The suite, as the preset schedules it: cheap invariants every unit; machinery checks at setup /
+    # when their code moved / every unit; gates after the solve. A FROZEN-core change makes everything
+    # due, so a green still certifies the core on disk. Records + binds the epoch's scorer hash; only
+    # an affirmative GREEN green-lights promotion.
+    _state0 = _read_json(CORRECTNESS_STATE, None)
+    _lcfg = _read_json(LOOPCFG, {}) or {}
+    _rows = _verify_rows(_lcfg)["rows"]
+    _core_moved = (isinstance(_state0, dict) and bool(_state0.get("core_hash"))
+                   and _state0.get("core_hash") != frozen_core.core_hash(ROOT))
+    _due = _due_checks(_state0 if isinstance(_state0, dict) else None, _rows, props,
+                       candidate=None, core_moved=_core_moved)
+    _SUITE_LAST["experiment"] = _due
+    print(_suite_line("experiment", _due, len(((_state0 or {}) if isinstance(_state0, dict) else {}).get("checks") or {})))
+    # A moved core includes an edited suite file: the recorded check list may be stale, so the run is a
+    # full one (which also learns new checks and drops removed ones), not a selection by old names.
+    check_correctness_suite(props["metric_version"], props=props, why="experiment",
+                            select="all" if (_due["first"] or _core_moved) else (",".join(_due["due"]) or "-"))
+    _SUITE_LAST["budget"] = _meter_suite(_rows, _lcfg)   # the every-set against its measured budget
+    gates_s = time.monotonic() - t_run
     _beat("gates")                 # liveness trace begins (dead-worker detection; progress = the ledger)
 
     if args.baseline:
@@ -2557,11 +4276,13 @@ def main():
 
     apriori = check_prediction_gate(cfg, props)   # SPEND GATE: no run without a written prediction
 
+    t_snap = time.monotonic()
     snapshot_experiment(cfg, args.config if not args.baseline else None, props)
     pred_file = PREDICTIONS / f"{stem}.json"
     if pred_file.is_file():                # the prediction is part of the reproducible record
         shutil.copy2(pred_file, SNAPSHOTS / stem / "prediction.json")
     print(f"snapshot -> results/snapshots/{stem}/")
+    snapshot_s = time.monotonic() - t_snap
     _beat("snapshot")
 
     validate_method(cfg)   # hard-fail before spending an evaluation on an unwired/unrecognized lever
@@ -2569,12 +4290,17 @@ def main():
     _beat("solve_start")
     ticker = _HeartbeatTicker()   # beats every HB_TICK_S so a long solve doesn't look dead mid-run
     ticker.start()
+    t_solve = time.monotonic()
     try:
         prediction = run_experiment(cfg)
     finally:
         ticker.stop()
+    solve_s = time.monotonic() - t_solve   # the measured unit cost: what re-execution eligibility reads
     _beat("solve_done")
-    evaluate_and_record(cfg, prediction, target, apriori, props)
+    evaluate_and_record(cfg, prediction, target, apriori, props, timing={
+        "start_iso": run_start_iso, "t_run": t_run, "gates_s": round(gates_s, 3),
+        "suite_s": _SUITE_TIMING.get("wall_s"), "snapshot_s": round(snapshot_s, 3),
+        "solve_s": round(solve_s, 6)})   # microseconds: an analytic toy solve must not round to zero
 
 
 if __name__ == "__main__":

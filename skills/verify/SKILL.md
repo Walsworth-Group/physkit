@@ -10,8 +10,8 @@ description: >-
   this". For a new or derived equation it runs a dimensional sanity-check first (dimensional-analysis);
   for a fit or prediction it interrogates the NATURE of the residuals (systematic structure vs random
   noise), not just their size. Also verifies NEGATIVE results and invalidation claims (kill-claims) —
-  a "this approach doesn't work" or "these results are tainted" finding is as load-bearing as a win and
-  more likely to hide an implementation bug. Returns CONFIRMED / PROVISIONAL / QUESTIONABLE ASSUMPTION /
+  a "this approach doesn't work", "these results are tainted", or "the metric is wrong" finding is as
+  load-bearing as a win and more likely to hide an implementation bug. Returns CONFIRMED / PROVISIONAL / QUESTIONABLE ASSUMPTION /
   REFUTED / INCONCLUSIVE with evidence (campaign mode also writes the results/verdicts/<id>.json artifact
   the promotion gate consumes). Not for checking citations (cite-check) or building a standing check suite
   (correctness-suite).
@@ -230,20 +230,29 @@ scorer and every derived number, recomputed from the stored raw artifact — is 
 - **Always, at any cost tier:** recompute every derived number from the raw artifacts, because a
   transcribed value is never trusted; check that the config actually ran, log consistency, and
   prediction-vs-result.
-- **Cheap to recompute** (at or below the campaign's `configs/loop.json`
-  `verify.full_reproduction_threshold_s` when one exists; otherwise seconds to minutes): full from-scratch
-  re-execution, plus multiple seeds or perturbations and a statistical test. A cheap computation has no
-  excuse for a single-seed conclusion.
-- **Expensive / long** (above the threshold): do not force a full re-run, but never zero re-execution.
-  Scrutinize the code (the change, its logic, its conventions) and the conclusions (do they follow from the
-  logged numbers? are saved metrics internally consistent and recomputable from saved outputs?), re-check
-  the saved artifacts, and run the cheapest discriminating spot-check: one config of the sweep, a
-  coarse-mesh replica, or the selftest. That is the minimum re-execution that could catch the error class at
-  issue.
+- **Cheap to recompute** — in a campaign, the runner has already decided this per unit from its MEASURED
+  solve time and the campaign's `reproducible` flag: `results/checks_<NN>.json` `verification.re_execution`
+  says `eligible` and why (outside a campaign: seconds to minutes, seeded, re-runnable from its inputs).
+  Then: full from-scratch re-execution, plus multiple seeds or perturbations and a statistical test. A
+  cheap computation has no excuse for a single-seed conclusion.
+- **Expensive / long** (the artifact says not eligible, and names the reason): do not force a full
+  re-run, but never zero re-execution. Scrutinize the code (the change, its logic, its conventions) and
+  the conclusions (do they follow from the logged numbers? are saved metrics internally consistent and
+  recomputable from saved outputs?), re-check the saved artifacts, and run the cheapest discriminating
+  spot-check: one config of the sweep, a coarse-mesh replica, or the selftest. That is the minimum
+  re-execution that could catch the error class at issue.
+
+Start from what changed. The same artifact's `changes` block names what this unit moved since the last
+verified one (code, compared as code; config keys; version tags), and
+`python scripts/run_campaign.py --diff <exp>` prints the full diff. Verify that delta and its interaction
+with the unchanged parts; what did not change since the last CONFIRMED verdict inherits that verdict's
+coverage and is spot-checked, not re-derived. A change with no declared effect on the result, or a
+claimed effect with no change behind it, is a red flag in its own right.
 
 State which mode you used in the verdict. Tiering applies to re-solving only; it never licenses skipping
 the recomputation of derived numbers from raw artifacts. If a tiered verification later proves to have
-missed an error in the part not re-run, lower the threshold.
+missed an error in the part not re-run, say so in the verdict: that is the evidence the eligibility rule
+is revised on.
 
 ---
 
@@ -262,7 +271,9 @@ sessions, and mid-unit suspicions, invoke it directly.
 map, so route through it rather than assuming a path. *A campaign scaffolded before the table existed has
 none; read `docs/charter*.md` (or `docs/program.md` in the oldest trees — lint-ok: a fallback must name
 the retired spelling) directly.* Note: the FROZEN
-primary metric and direction, and the FROZEN scorer path; the run command and the baseline (exp 000); the
+primary metric and direction, and the FROZEN scorer path; the current metric epoch (`configs/loop.json`
+`campaign.metric_version`, its `campaign.metric_epochs` entry if any, and its standing — a result is
+judged within its epoch); the run command and the baseline (exp 000); the
 guardrail, the diagnostics, and any ceilings; the levers and the FROZEN / READ-ONLY / MUTABLE lists, in
 particular whether code is a lever, since forward-model campaigns mutate the code under test; and the
 campaign-specific extra checks its *Independent verification* section already names (the
@@ -274,7 +285,9 @@ scoreboard row, the result JSON. Do not pre-read the JOURNAL narrative; the veri
 independent view.
 
 **Spawn the independent refuter** (Agent tool, one call per candidate; verify several in parallel in one
-message) with the prompt below, `<…>` filled from Step 0, reproduce-mode chosen by run cost. Run it on a
+message) with the prompt below, `<…>` filled from Step 0, in the mode the driver decided for this unit (the
+spawn prompt's mode line: RE-EXECUTION when the unit is cheap and reproducible, REVIEW otherwise; in an
+attended session read `verification.re_execution` in the experiment's checks artifact). Run it on a
 model at least as capable as the one that produced the result. A different capable model is preferable: it
 adds mechanism diversity. Never use a weaker model, which yields false CONFIRMs.
 
@@ -284,6 +297,7 @@ adds mechanism diversity. Never use a weaker model, which yields false CONFIRMs.
 stub and fill every `<…>`; all fields are REQUIRED. Do not hand-improvise a subset:
 ```json
 {"claim": "<one line>", "exp_id": "<id>", "verdict": "CONFIRMED",
+ "mode": "<review | re-execution>", "mode_basis": "<the driver's mode line, or 'ineligible: <why>'>",
  "kill_tier": null, "refuter": "<the spawned agent's id — never this session>",
  "confounded_levers": [], "disentangler": null, "resolves_confounded": [],
  "utc": "<current UTC stamp>", "summary": "<2-3 sentences>"}
@@ -371,7 +385,11 @@ section and verified exactly like a win. The failed-experiment population is mor
 implementation errors degrade performance, so bugs masquerade as "this approach doesn't work," and an
 unexamined negative kills a branch permanently. A claimed invalidation ("the scoreboard is tainted", "the
 metric is broken") gets this check before the campaign reprioritizes or forks on it; the false alarm is the
-symmetric failure mode.
+symmetric failure mode. **A verified kill of the metric itself is what opens a metric epoch**
+(`roles/worker.md` §Metric epochs): a `semantics` revision needs a REFUTED or EVIDENCE_AGAINST tier
+against the old metric, and an `easier` revision — one under which the current best would score better,
+the goalpost-moving shape — needs REFUTED. The verdict artifact is what the epoch entry cites;
+INCONCLUSIVE never opens one.
 
 The refuter's checklist differs from the positive case. Hunt the false-negative sources:
 - **Implementation error** — signs/units/ports/conventions; run the selftest and the correctness suite on
@@ -416,12 +434,14 @@ reproduce mode by run cost.
 > examples, test edge/degenerate/extreme inputs, randomize inputs, search for counterexamples. A crash is a
 > code bug to fix and report, not a refutation of the idea. Surface load-bearing assumptions; if the result
 > stands only under a dubious or unverified premise, that is a QUESTIONABLE ASSUMPTION.
-> 1. **Reproduce (mode by run cost).** FAST: re-run `<RUN COMMAND> --config <config path>` (tee to
->    `results/diagnostics/verify_<exp_id>_<UTCstamp>.log 2>&1`), recompute `<METRIC>` from scratch with the
->    FROZEN scorer `<scorer path>`; doesn't reproduce → REFUTED. LONG/EXPENSIVE: recompute `<METRIC>` from
->    the saved artifacts and confirm internal consistency, leaning on the code and conclusions checks.
->    Either way recompute every reported number from a fresh evaluation; convergence is not correctness. A
->    number that doesn't match → REFUTED.
+> 1. **Reproduce (in the mode you were given).** RE-EXECUTION: re-run `<RUN COMMAND> --config <config path>`
+>    (tee to `results/diagnostics/verify_<exp_id>_<UTCstamp>.log 2>&1`), recompute `<METRIC>` from scratch
+>    with the FROZEN scorer `<scorer path>`; doesn't reproduce → REFUTED. REVIEW: recompute `<METRIC>` from
+>    the saved artifacts and confirm internal consistency, leaning on the code and conclusions checks, and
+>    state that you did not rerun. Either way recompute every reported number from a fresh evaluation;
+>    convergence is not correctness. A number that doesn't match → REFUTED. Never background the
+>    reproduction: if it cannot finish in the foreground, write INCONCLUSIVE with the reason rather than
+>    no artifact. Record the mode in the verdict.
 > 2. **Replicate — test, don't assume noise.** Re-run with perturbed params and, for stochastic steps,
 >    different seeds; report spread; apply a paired statistical test. No consistent effect → noise (REFUTED);
 >    consistent trend whose spread overlaps the comparison → INCONCLUSIVE (gather more); clear
@@ -437,7 +457,10 @@ reproduce mode by run cost.
 >    it collapses to the no-skill floor. Entanglement: does the scorer, the reference, or the comparison's
 >    starting point share a fitted component with the candidate (a reference fitted under it, an inherited
 >    nuisance parameter, a sweep scored from its own start)? Then it favours that candidate by construction:
->    re-score under something that shares nothing, or profile the shared component out.
+>    re-score under something that shares nothing, or profile the shared component out. A change to the
+>    FROZEN metric that is declared as a metric epoch is judged by its direction: a harder ruler (the
+>    current best scores worse) is presumptively honest; an easier one is the goalpost-moving shape and
+>    needs the strongest evidence.
 > 5. **Ceiling vs gap, and the nature of the residuals.** Is the win a CEILING move (physical bound rose —
 >    real) or a gap-to-ceiling move (a freer model closed the gap — suspect overfitting; must clear the
 >    guardrail)? Examine the residuals for systematic structure vs random noise: structure means a bug or
@@ -455,8 +478,11 @@ reproduce mode by run cost.
 > 8. **Generalization.** Improvement holds across the whole evaluation (`<all conditions / held-out split>`),
 >    not a lucky subset, no regression on anchors.
 > 9. **Fairness of any adapted evaluation.** FAITHFUL (removed a real artifact → may be CONFIRMED, flag
->    PROVISIONAL) vs LENIENT (relaxed the bar → REFUTED). The FROZEN metric, data, and known ground truth must
->    not have been touched — if they were, REFUTED outright.
+>    PROVISIONAL) vs LENIENT (relaxed the bar → REFUTED). The data and known ground truth must not have been
+>    touched — if they were, REFUTED outright. The FROZEN metric may have changed ONLY as a declared metric
+>    epoch (a new `metric_version` with its `campaign.metric_epochs` entry and evidence): undeclared →
+>    REFUTED outright; declared → judge the epoch by its direction and evidence, and never rank this result
+>    against rows from the previous epoch.
 > [CODE / FORWARD-MUTATING ONLY:
 > 10. **Code soundness.** Sign/convention slip (check this first — see `../../PROJECT.md` §Standing constraints), units
 >    error, geometry mismatch. `--selftest` still passes; no stale cache reused after a core change; no
@@ -475,7 +501,8 @@ reproduce mode by run cost.
 
 ## Notes & composition
 - **Verification only.** Never promotes, never edits a FROZEN metric or physics, never edits data. It
-  re-runs, re-derives, and reports.
+  re-runs, re-derives, and reports. It never opens a metric epoch either; it adjudicates the kill-claim
+  that would justify one.
 - **Composes:** `dimensional-analysis` (the units/bounds first check), `frame-problem` (the a-priori range
   and the physics inventory a structured residual points back to), `correctness-suite` (which turns a
   check produced here into a standing regression gate), `record-decision` (the reason for a non-obvious
@@ -501,6 +528,7 @@ reproduce mode by run cost.
 - [ ] Campaign mode: the correctness suite (`tests/correctness_checks.py`) is green, or explicitly N/A — a red suite blocks promotion.
 - [ ] Campaign mode: the verdict artifact `results/verdicts/<id>.json` written (with a named refuter) — the promotion hook and the loop driver consume it, and the Findings entry must cite it.
 - [ ] A kill-claim got the negative-refuter checklist (implementation error / strawman / insufficient search / mechanism) and a `kill_tier` — INCONCLUSIVE kills queue a fix-and-rerun, never graduate.
+- [ ] A kill-claim against the METRIC itself carries the tier a metric epoch needs (REFUTED or EVIDENCE_AGAINST; REFUTED for an easier ruler), and its verdict artifact is what the epoch entry will cite.
 - [ ] Counted the levers that moved. More than one → `confounded_levers` + a `disentangler` recorded; the causal claim graded QUESTIONABLE ASSUMPTION (the empirical one may still promote); a negative kills only the combination — every member INCONCLUSIVE, still untried, checked for masking (one lever helping while another hurts more).
 - [ ] Reproduction mode chosen per the cost tier (threshold from `configs/loop.json` when present); above-threshold verification still ran the cheapest discriminating spot-check — never zero re-execution.
 - [ ] Verdict graded; load-bearing assumption named; disputes recorded append-only (campaign mode).

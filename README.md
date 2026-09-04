@@ -1,6 +1,7 @@
 # PhysKit (`physkit`)
 
-A Claude Code plugin for rigorous physical-science research. It has two layers:
+A cross-harness plugin for rigorous physical-science research, packaged for Claude Code and Codex. It
+has two layers:
 
 - **General science toolkit** — skills for framing problems, verifying results, designing and validating
   simulations, dimensional analysis, deriving theory, debugging, and honest reporting. Useful in any
@@ -8,7 +9,8 @@ A Claude Code plugin for rigorous physical-science research. It has two layers:
 - **Campaign layer** — scaffolds and runs autonomous-research loops (hypothesize → run → evaluate → log
   → verify → repeat), with a frozen honesty/verification core.
 
-Once installed, the skills appear as `/physkit:<name>` in every project.
+Once installed, the skills appear as `/physkit:<name>` in Claude Code and `$physkit:<name>` in Codex;
+both harnesses may also select a matching skill automatically.
 
 ## Start here — the five skills to know
 
@@ -17,11 +19,11 @@ it. These five are the workflow front doors worth invoking by name:
 
 | To… | Invoke |
 |---|---|
-| start any physics problem (before modeling, simulating, or deriving) | `/physkit:frame-problem` |
-| check a result, number, or derivation before relying on it | `/physkit:verify` |
-| write up work — every number provenance-labeled, every citation verified | `/physkit:report` |
-| stand up an autonomous research campaign (it creates the project home if none exists) | `/physkit:new-campaign` |
-| health-check or checkpoint a running campaign | `/physkit:campaign-status` |
+| start any physics problem (before modeling, simulating, or deriving) | `frame-problem` |
+| check a result, number, or derivation before relying on it | `verify` |
+| write up work — every number provenance-labeled, every citation verified | `report` |
+| stand up an autonomous research campaign (it creates the project home if none exists) | `new-campaign` |
+| health-check or checkpoint a running campaign | `campaign-status` |
 
 ## Principles
 
@@ -87,17 +89,37 @@ claude plugin install physkit@physkit
 ```
 Then run `/reload-plugins` and confirm with `/plugin list`. Skills appear as `/physkit:<name>`.
 
-### Codex, OpenCode, and Gemini CLI
+### Codex — full campaign-capable package
 
-These read skills from `~/.agents/skills`. Project this kit's skills there with the bundled installer:
+Register the local PhysKit marketplace and install the plugin:
+
+```
+codex plugin marketplace add "<path-to-this-folder>"
+codex plugin add physkit@physkit
+```
+
+Confirm with `codex plugin list`, then start a new Codex task so the refreshed plugin context is loaded.
+This full-package route includes the templates, doctrine, validators, and scripts required by
+`new-campaign`, `run-campaign`, and the closed loop.
+
+After updating this local checkout, refresh the installed copy with
+`codex plugin add physkit@physkit`, confirm it with
+`codex plugin list --marketplace physkit`, and start a new task. You do not need to register the same
+marketplace again.
+
+### Skills-only projection — general use, not campaigns
+
+Codex, OpenCode, and Gemini CLI can read standalone skills from `~/.agents/skills`. Project the skill
+folders there with the bundled installer:
 ```
 scripts/install-skills.sh                                            # macOS / Linux
 powershell -ExecutionPolicy Bypass -File scripts\install-skills.ps1  # Windows
 ```
 
 Restart the harness; it auto-discovers them (verify with `/skills` in Codex, or `opencode debug skill`
-in OpenCode). Codex users who prefer a marketplace flow can instead
-`codex plugin marketplace add "<path-to-this-folder>"`.
+in OpenCode). This projection does not include package-level `templates/` or `docs/`; use it for the
+general science toolkit only. A campaign skill discovered from this projection must not scaffold from a
+source-tree fallback—install the full Codex plugin above instead.
 
 See [GETTING_STARTED.md](GETTING_STARTED.md) for the full walkthrough, including how to stand up and
 launch an autonomous campaign.
@@ -109,7 +131,7 @@ launch an autonomous campaign.
 .codex-plugin/    Codex plugin.json (points at the same skills/)
 .agents/          vendor-neutral Codex marketplace entry
 skills/           the 24 skills (general + campaign), each a SKILL.md
-scripts/          install-skills.{sh,ps1} — project skills into ~/.agents/skills (Codex/OpenCode/Gemini)
+scripts/          install-skills.{sh,ps1} — skills-only projection for general cross-harness use
 docs/             always-on spine (CORE, PRINCIPLES) + on-demand reference docs
 templates/        project + campaign scaffolds materialized by /physkit:new-project + new-campaign
 ```

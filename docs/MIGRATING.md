@@ -14,6 +14,157 @@ versions behind, work upward from the oldest section that matches your tree.
 > `python` is correct on macOS and Linux. Every command in this file works either way with that
 > substitution.
 
+## Upgrading an existing campaign in place — `upgrade_campaign.py` (kit ≥ v0.11.0, 2026-09-03)
+
+Re-scaffolding a running campaign re-answers an interview whose answers already sit in the rendered
+files, and it is expensive. The alternative is an in-place upgrade: every kit-owned file in a campaign
+was rendered from a template at the kit commit stamped in `campaign.md` ("Scaffolded by physkit
+vX.Y.Z (<hash>, <date>)"), so each can be **three-way merged** — base = the template the campaign was
+rendered from, ours = the campaign's file with its own edits, theirs = the current template. Campaign
+edits survive; a conflict appears only where both sides changed the same lines. Files the old kit did
+not ship are copied in. The FROZEN scorer, the data, `results/`, and `configs/exp*.json` are never
+touched.
+
+**Run it** from the campaign directory, with the kit checked out (the stamped commit must be reachable
+so the script can fetch the base templates; `--base-dir` points at an older plugin cache instead):
+
+```bash
+python "<kit>/skills/new-campaign/scripts/upgrade_campaign.py" . --preset light --base-git <kit repo>[@<ref>]
+```
+
+`--preset` is required (there is no default for a campaign that already has a history: `intensive`
+keeps today's spend, `light` is what a new campaign would get; `docs/reference/verification-presets.md`).
+`--dry-run` prints the merge outcome without writing. Every file changed gets a
+`<file>.pre_upgrade_<UTC>` backup beside it; the log lands in `results/diagnostics/upgrade_<UTC>.md`;
+`campaign.md` and the logbook gain an "Upgraded in place to physkit …" provenance line under the
+scaffold stamp. The script also edits `configs/loop.json` (`verify.preset`; `campaign.reproducible`;
+`driver.verifier_retries`; the legacy `campaign.verification` / `verification_reason` removed; a
+`full_reproduction_threshold_s` kept as the extra cap it now is), adds `_metric_version` to
+`RECOMMENDED.json`, and materializes the project-level `AGENTS.md` twin when the project has one
+unmarked `CLAUDE.md` and no `AGENTS.md`. Exit 0: merged clean and validated. Exit 2: conflicts left.
+Exit 3: the validator failed.
+
+**Resolving conflicts.** The markers carry three sides — `campaign:<file>`, `scaffold-template`, and
+`current-template`. Placeholder-only hunks (a line that still reads `{{X}}` in both templates) are
+resolved by the script from the campaign's own rendered value. What remains is a real edit on both
+sides, and five rules cover every case a v0.10 campaign produced:
+
+1. **Both sides added, at the same spot** (a campaign import beside new kit imports; a campaign helper
+   beside a new kit block): keep both, the campaign's first.
+2. **Both sides changed the same line** (a logbook format string the campaign rewrote and the kit
+   extended): take the template's new structure and the campaign's values — a metric name, a project
+   file path, an interpreter path.
+3. **The campaign deleted an optional block the template rewrote** (a `[[OPTIONAL …]]` section the
+   scaffolder removed as not applicable): the deletion stands; drop the template's new marker lines.
+4. **A call signature both sides extended** (`write_checks(…, ledger=…)` beside the kit's
+   `timing=…`): the union of the arguments, in both the `def` and every call.
+5. **A branch the campaign added where the kit changed the body** (a zero-evaluation branch around
+   the checks dict): keep the branch, and update the shared lines inside it to the kit's new
+   signatures (`_incumbent(priors, props)`, the `epoch` check, `check_comparability(props, inc, priors)`).
+
+Then remove the markers, `python -m py_compile` the two Python files, and run
+`python scripts/sync_agent_instructions.py --scope campaign --from claude --write` (the campaign twin the
+script skipped while conflicts stood).
+
+**Declare the suite's rows.** The merge lands the `@check` decorator, the four contract stubs, and the
+template's `machinery` declarations on the checks it ships; the campaign's own checks arrive undeclared,
+which makes them `invariants` — run every unit, metered. Preflight runs the whole suite once, timed, and
+refuses an over-budget every-set by name, each with its row. On photophysics10's sixteen-check suite
+(206 s whole, against a 150 s budget) that line named `convergence` (164 s) and
+`conservation_invariants` (29 s). Declaring them `@check(row="machinery", depends_on=("scripts/<engine>.py",))`
+is the fix under `light` and `moderate`, where machinery runs at setup and on code change: the every-set
+fell to 34 s. Under `intensive` the machinery row fires every unit too, so the declaration alone changes
+nothing and preflight says so — choose `moderate`, make the check cheaper, or declare a per-result
+check `gates`. Fill the contract checks or record `tests/CORRECTNESS_NA.md`.
+
+**Finish** with the validator and preflight, the latter under the campaign's own interpreter (the one
+`.claude/settings.json` names, since the campaign's engine imports live there):
+
+```bash
+python "<kit>/skills/new-campaign/scripts/validate_campaign.py" .
+```
+
+```bash
+<campaign python> scripts/run_campaign.py --preflight
+```
+
+Read the new HARD GATE 1 in the campaign `CLAUDE.md` and the presets doc before relaunching: promotions
+now follow the label, not the verdict alone. Results recorded before the upgrade keep the established
+promotion rule (their checks artifacts predate the presets).
+
+## To the verification preset — `configs/loop.json` `verify.preset` (kit ≥ v0.11.0, 2026-09-03)
+
+**Symptom.** Preflight prints `preflight OK: verify: preset=… (invariants=… machinery=… gates=…
+self_check=… review=… re_execution=… capstone=…)` — or, for an older file,
+`rows from campaign.verification='per-block' (legacy - no verify.preset; docs/MIGRATING.md)`. The
+driver's log says `verification owed for <exp>: review|re_execution (…)` or `no independent check owed
+for <exp> under <preset>` after each accepted unit; the verifier's prompt opens with a
+`Verification mode for this spawn: REVIEW|RE-EXECUTION` line; every `results/checks_<NN>.json` carries
+`verification` (the preset, its resolved rows, the computed re-execution eligibility, the suite's
+due/skipped decisions, and — after a verdict — the `agent` block), `self_check`, `changes`, and a
+`label`. `results/correctness_state.json` is per-check. A `capstone` spawn (the claim audit) follows a
+graceful STOP or an empty queue.
+
+**What breaks.** Nothing. An older `configs/loop.json` without `verify.preset` is read through its
+`campaign.verification`: `per-block` maps to the `intensive` table without its different-model and
+blinded extras (every check and an independent check per block — today's behaviour, now metered), and
+`promotion-only` maps to the `light` table (an independent review of each promotion candidate, which
+that mode used to leave to the worker). A suite with a flat `CHECKS` list and no `@check` declarations
+runs whole (every check is row `invariants`), timed as a total, never demoted. Verdicts without a
+`mode` field are read as their requested mode. An experiment whose checks artifact predates the
+presets keeps the established promotion rule.
+
+**Minimal edit.** Add `"preset": "light"` (or `"intensive"` to keep today's spend) to the `verify`
+block and delete `campaign.verification` / `verification_reason`; add `"reproducible": true|false` to
+the `campaign` block. Declare rows in `tests/correctness_checks.py` (`@check(row="machinery")` on the
+analytic-limit, parity, and convergence checks; `row="gates"` on any per-result gate, which then takes
+the experiment as its argument) so the preset can schedule them; undeclared checks stay `invariants`
+and count against the every-unit budget (a tenth of `unit_cost.typical_wall_clock_s`, floor 30 s —
+preflight names an over-budget set). Add the four contract checks the template ships
+(`baseline_reproduces`, `noise_floor_measured`, `metric_discriminates`, `synthetic_recovery`) or a
+`tests/CORRECTNESS_NA.md`; the validator asks for them.
+
+**The doctrine that moved.** "Only CONFIRMED graduates" is now "promotion follows the label": every
+exported claim carries an honest verification label (`unverified` · `self-checked` · `<verdict>/review`
+· `<verdict>/re-execution` · `<verdict>/audit`); where the preset checks promotions only CONFIRMED
+graduates, where it does not (`minimal`) the row promotes stamped `unverified` and the guard refuses
+one that does not say so. `final-report` waits for the claim audit while an exported claim's label is
+non-independent. The verbatim sentence lives in `docs/CORE.md`, `docs/PRINCIPLES.md`, the campaign
+`CLAUDE.md` (HARD GATE 1), and `campaign.md`.
+
+## To measured verification depth, the change manifest, and the time ledgers (kit ≥ v0.11.0, 2026-09-03)
+
+**Symptom.** A relaunched campaign prints `correctness suite: status=green wall=…s` before each unit,
+`[supervise] … done: status=… elapsed=…s` after each spawn, and `utc=` on the driver's decision lines;
+`results/diagnostics/spawns.tsv` and `results/timing.tsv` appear; `results/checks_<NN>.json` gains
+`run`, `verification.re_execution`, and `changes`; `results/queue.json` gains `supervised_s_since_accept`,
+`units_since_accept`, and occasionally `planner_due` / `recommended_mtime`.
+
+**What breaks.** Nothing. Every addition is additive; an older `configs/loop.json` keeps working.
+
+**What changed underneath.**
+- `verify.full_reproduction_threshold_s` is no longer set by the scaffold. Re-execution is decided per
+  unit from the *measured* solve time (within a quarter of `worker.iteration_timeout_hours`) and
+  `campaign.reproducible`. A threshold still present in an older file is honoured as an additional cap;
+  delete it when the rule alone is right.
+- `campaign.reproducible` (new; boolean). Absent, the runner assumes `false` when
+  `configs/instrument.json` exists (hardware-in-the-loop) and `true` otherwise. Set it explicitly for a
+  one-shot or unseeded campaign.
+- `driver.verifier_retries` (new; inherits `planner_retries` when absent) governs the verifier's retry
+  count separately; a verifier that returns ok having written no verdict is retried with a note.
+- The plateau clock now counts supervised time, persisted in `queue.json`; the first loop top after
+  upgrading falls back to wall-clock since the last accept once, then carries the key. `plateau.units`
+  is now enforced; a REFUTED verdict and a change to `configs/RECOMMENDED.json` trigger the planner.
+- A block's finished units are verified as soon as the queue head has left the block; a unit the
+  planner tags into an old block later forms its own verification group.
+- A unit whose save-set is already on disk at the queue head is accepted from the record without a
+  worker spawn.
+- The post-exit grace for a detached runner ends after two silent runner ticks (or
+  `heartbeat_stale_min` if shorter); `detached_grace_min` is only the outer bound.
+
+**Minimal edit.** None required. Recommended: add `"reproducible": true|false` to the `campaign` block
+and remove `verify.full_reproduction_threshold_s`.
+
 ## To the consolidated project root — README + one overview + rules (kit ≥ v0.10.1, 2026-08-20, ADR-0015)
 
 **Symptom.** The validator reports *"consolidated project still carries LINEAGE.md /
@@ -210,6 +361,19 @@ here on. If the FROZEN scorer or the evaluation data changed at some point in th
 not retro-fit one version onto the older rows: their blank tag is the honest record that nobody certified
 them.
 
+**Metric epochs (ADR-0020) — a runner-side behaviour, no new file.** A campaign running the current
+runner treats its `metric_version` as a metric *epoch*: the first experiment binds the FROZEN scorer's
+hash (`scorer_hash_by_version` in `results/correctness_state.json`), and from then on a change to the scorer's code that
+no new epoch declares refuses to spend (comments, docstrings and formatting do not count). Nothing needs adding for that; a tree whose `metric_version` is
+blank is simply not enforced. Two optional `campaign` keys in `configs/loop.json` complete the picture:
+`"metric_revision": "cautious"` (who may open an epoch; the default when absent) and `metric_epochs` — an
+object keyed by `metric_version`, present only once the campaign has revised its metric, each entry
+`{kind, status, evidence, expected_direction, opened_by}` (copy `_doc_metric_revision` across; it is the
+authority on the fields). If the FROZEN scorer changed at some point in the campaign's history, give each
+later version its own entry with what you know as its `evidence`; do not invent a verdict. A campaign
+frozen with an older runner keeps its own runner and is untouched. Only an attended session moves
+`metric_revision`; a spawned role is refused by the config guard.
+
 **The decision you cannot default.** `prediction_mode` and `noise_model` are setup-time declarations
 about what kind of campaign this is. They are not per-experiment knobs, and the defaults do not answer
 them:
@@ -247,10 +411,11 @@ mid-campaign therefore lands in the frozen record, not only in a mutable file.
 4. Set `noise_floor` or `tolerance`, or leave it `null` as recorded debt.
 
 **Done when.** The validator has the last word on whether the block is legal. It rejects an out-of-enum
-`prediction_mode` or `noise_model`, and a `none` with an empty `prediction_mode_reason`:
+`prediction_mode` or `noise_model`, and a `none` with an empty `prediction_mode_reason`. From the
+PhysKit package root, run:
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/new-campaign/scripts/validate_campaign.py" <campaign>
+python skills/new-campaign/scripts/validate_campaign.py <campaign>
 ```
 
 It does not fail a campaign with blank tags or an unset resolution, and should not, because that is debt
@@ -322,8 +487,9 @@ where it stands.
    heading, so a copied row that does not match your campaign fails loudly by design.
 5. Delete `docs/protocols/`, `results/INDEX.md`, `docs/baselines.md`, `docs/dataset.md` only after
    confirming their content landed somewhere.
-6. Run `python "${CLAUDE_PLUGIN_ROOT}/skills/new-campaign/scripts/validate_campaign.py" <campaign>`
-   until it passes. Exit 3 means step 2 has not been done yet; exit 1 lists what is still missing.
+6. From the PhysKit package root, run
+   `python skills/new-campaign/scripts/validate_campaign.py <campaign>` until it passes. Exit 3 means
+   step 2 has not been done yet; exit 1 lists what is still missing.
 
 **Do not** migrate `results/`. The ledger is the record, and its format did not change.
 

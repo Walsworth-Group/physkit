@@ -58,6 +58,8 @@ DEFAULT_RULES = [
      "tier": "spawn"},
     {"name": "the FROZEN metric is named to the worker", "tokens": ["frozen metric"],
      "roles": ["worker"], "tier": "spawn"},
+    {"name": "a metric fault is a declared epoch, never an in-place edit",
+     "tokens": ["metric epoch"], "roles": ["worker"], "tier": "spawn"},
     # --- planner ---
     {"name": "planner is read-mostly and strategy-only", "tokens": ["read-mostly"],
      "roles": ["planner"], "tier": "spawn"},
@@ -71,6 +73,8 @@ DEFAULT_RULES = [
      "tokens": ["operational"], "roles": ["planner"], "tier": "spawn"},
     {"name": "revive shelved directions after a promotion", "tokens": ["shelved"],
      "roles": ["planner"], "tier": "spawn"},
+    {"name": "a metric epoch owes a re-baseline before any cross-epoch ranking",
+     "tokens": ["re-baseline"], "roles": ["planner"], "tier": "spawn"},
     # --- both ---
     {"name": "user notes are acknowledged, not silently absorbed",
      "tokens": ["user notes"], "roles": ["worker", "planner"], "tier": "spawn"},
@@ -97,6 +101,8 @@ DEFAULT_RULES = [
      "tokens": ["never yours"], "roles": ["verifier"], "tier": "spawn"},
     {"name": "a REFUTED/INCONCLUSIVE verdict produces a named next unit",
      "tokens": ["refuted or inconclusive"], "roles": ["verifier"], "tier": "spawn"},
+    {"name": "a verified kill of the metric is what a metric epoch cites",
+     "tokens": ["metric epoch"], "roles": ["verifier"], "tier": "spawn"},
     # --- all roles: the project's standing constraints ride IN the spawn string (v0.10.1) ---
     {"name": "standing constraints delivered by value, not by reference (v0.10.1+)",
      "tokens": ["standing constraints"], "roles": ["worker", "planner", "verifier"],

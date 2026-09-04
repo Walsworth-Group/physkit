@@ -46,6 +46,23 @@ A normal scoreboard row append (no promotion token) is recording, not promotion 
 to anything else are always allowed; unparseable stdin is allowed + logged (we cannot even tell what is
 being written).
 
+One further surface serves the metric-epoch design, keyed on PHYSKIT_ROLE - the marker the driver sets
+in every spawned role's environment; an ATTENDED session (the user, or run-campaign on the user's word)
+has none. It is configs/loop.json, and it carries two rules:
+  * the `campaign.metric_revision` dial (who may revise the FROZEN metric) may not be moved by a spawned
+    role. Every other knob passes for everyone. Fail-open-logged.
+  * `campaign.metric_epochs` - the metric-epoch record, keyed by metric_version, present only once a
+    campaign has revised its metric (the first epoch is implicit) - is APPEND-ONLY (kind and evidence never
+    change, no entry is removed); a new entry carries its evidence (a semantics epoch cites a CONFIRMED
+    kill verdict against the old metric with a graduating tier - REFUTED only for an 'easier' ruler; a
+    mechanics epoch names its reproducing check); a spawned role may add one only when the dial delegates
+    it, and only as 'pending'; a standing change (pending -> ratified | rolled-back) is the user's, from an
+    attended session, and a resolved epoch is final. FAIL-CLOSED for the block - every epoch label rests
+    on it. The scorer hash an epoch is bound to is the runner's (results/correctness_state.json).
+  * A promotion (surface 2) additionally requires the current metric_version to be a declared (or the
+    implicit first), non-rolled-back epoch; a PENDING epoch promotes (promote-and-label: the row carries its
+    metric_version, the declaration the standing).
+
 SCOPE (gaps campaign-status backstops): the scoreboard signal is token-based - a promotion phrased
 without those tokens slips past (verified-column check is the backstop); the hook only fires if THIS
 tree wired it (.claude/settings.json) - campaign-status asserts the wiring - and it is wired per
@@ -63,6 +80,11 @@ from pathlib import Path
 VERDICT_REF_RE = re.compile(r"verdicts[/\\]([\w\-.]+\.json)")
 SUBJECT_RE = re.compile(r"exp[\w\-]*\d[\w\-]*", re.I)
 PROMOTABLE = {"CONFIRMED"}
+# metric epochs + the metric_revision dial (the metric-epoch design)
+EPOCH_KINDS = {"mechanics", "semantics"}
+EPOCH_STATUSES = {"pending", "ratified", "rolled-back"}
+EPOCH_DIRECTIONS = {"harder", "easier", "neutral"}
+ROLE_ENV = "PHYSKIT_ROLE"       # set by the driver for every spawned role; absent = an attended session
 
 
 def _allow():
@@ -103,7 +125,7 @@ def _is_project_ledger(fp: Path | None) -> bool:
     (PROJECT.md beside the written file; LINEAGE.md is NOT required, because the consolidated layout
     absorbed it into PROJECT.md).
 
-    New projects no longer scaffold a DISCOVERIES ledger at all (retired by the project-root consolidation: findings live
+    New projects no longer scaffold a DISCOVERIES ledger at all (findings live
     in the campaign that produced them, pointed at from PROJECT.md §Lineage / §Updates from
     discoveries). This surface stays so a LEGACY or imported ledger remains gated rather than
     silently fail-open - and detection must therefore not key on LINEAGE.md, which a consolidated
@@ -130,6 +152,259 @@ def _find_project_verdict(project_root: Path, name: str) -> Path | None:
     """The cited verdict artifact anywhere under the project's campaigns (incl. campaigns/_archive)."""
     hits = sorted(project_root.glob(f"campaigns/**/verdicts/{name}"))
     return hits[0] if hits else None
+
+
+def _spawned_role() -> str:
+    return os.environ.get(ROLE_ENV, "").strip().lower()
+
+
+def _new_full_text(fp: Path | None, ti) -> str | None:
+    """The file's content AFTER this Write / Edit / MultiEdit, reconstructed from the on-disk text. None if
+    it cannot be (an old_string that is not in the file, or an unreadable file)."""
+    if ti.get("content") is not None:
+        return str(ti.get("content", ""))
+    try:
+        text = fp.read_text(encoding="utf-8") if (fp is not None and fp.is_file()) else ""
+    except OSError:
+        return None
+    edits = []
+    if ti.get("new_string") is not None:
+        edits.append((str(ti.get("old_string", "") or ""), str(ti.get("new_string", "")),
+                      bool(ti.get("replace_all"))))
+    for e in (ti.get("edits") or []):
+        if isinstance(e, dict):
+            edits.append((str(e.get("old_string", "") or ""), str(e.get("new_string", "")),
+                          bool(e.get("replace_all"))))
+    for old, new, everywhere in edits:
+        if not old or old not in text:
+            return None
+        text = text.replace(old, new) if everywhere else text.replace(old, new, 1)
+    return text
+
+
+def _campaign_key(text: str, key: str, default=None):
+    """configs/loop.json text -> campaign.<key> (or default); "__unparseable__" if the text is not JSON."""
+    try:
+        d = json.loads(text) if text else {}
+    except Exception:
+        return "__unparseable__"
+    camp = d.get("campaign") if isinstance(d, dict) else None
+    return camp.get(key, default) if isinstance(camp, dict) else default
+
+
+def _loop_campaign_key(root: Path | None, key: str, default=None):
+    if root is None:
+        return default
+    try:
+        v = _campaign_key((root / "configs" / "loop.json").read_text(encoding="utf-8"), key, default)
+    except Exception:
+        return default
+    return default if v == "__unparseable__" else v
+
+
+def _is_loop_config(fp: Path | None) -> bool:
+    return (fp is not None and fp.name.lower() == "loop.json"
+            and fp.parent.name.lower().startswith("configs"))
+
+
+def config_dial_problem(fp: Path, ti) -> str | None:
+    """Deny-reason if a DRIVER-SPAWNED role is moving campaign.metric_revision, else None.
+
+    The dial says who may revise the FROZEN metric, so it is the one config key an agent must not set for
+    itself: it is the user's decision, made from an attended session (the metric-epoch rules). Attended sessions
+    (no PHYSKIT_ROLE) pass; every other loop.json knob passes for everyone."""
+    role = _spawned_role()
+    if not role:
+        return None
+    new_text = _new_full_text(fp, ti)
+    if new_text is None:
+        return None
+    new_val = _campaign_key(new_text, "metric_revision")
+    if new_val == "__unparseable__":
+        return None                    # not a provable flip; the runner refuses a broken loop.json anyway
+    try:
+        old_text = fp.read_text(encoding="utf-8") if fp.is_file() else ""
+    except OSError:
+        old_text = ""
+    old_val = _campaign_key(old_text, "metric_revision")
+
+    def norm(v):
+        return "cautious" if v == "__unparseable__" else str(v or "cautious").strip().lower()
+
+    if norm(new_val) != norm(old_val):
+        return (f"config gate: a driver-spawned {role} may not change campaign.metric_revision "
+                f"({norm(old_val)!r} -> {norm(new_val)!r}). That dial is the USER's decision (the metric-epoch design): it "
+                "is set from an attended session - the user editing configs/loop.json, run-campaign on their "
+                "request, or `run_campaign.py --set-metric-revision`. If you believe the mode should change, "
+                "say so in results/ESCALATE.md or the journal and leave the file alone.")
+    return None
+
+
+def _kill_tier(v: dict) -> str:
+    return str(v.get("kill_tier") or "").strip().upper().replace(" ", "_").replace("-", "_")
+
+
+def _epoch_evidence_problem(root: Path | None, entry: dict) -> str | None:
+    """The evidence rule for a NEW epoch entry (the metric-epoch evidence rule): a semantics epoch cites a CONFIRMED kill
+    verdict against the current metric with a graduating tier - REFUTED or EVIDENCE_AGAINST, and REFUTED
+    only when the revision is 'easier' (the goalpost-moving shape); a mechanics epoch names the check that
+    reproduced the discrepancy. An epoch with no evidence is a metric change nobody verified."""
+    kind = str(entry.get("kind", ""))
+    ev = str(entry.get("evidence") or "").strip()
+    eid = entry.get("id")
+    if kind == "mechanics":
+        if not ev:
+            return (f"epoch {eid!r} (mechanics) names no evidence - record the correctness check that "
+                    "reproduces the discrepancy on the old scorer and passes on the new one")
+        return None
+    direction = str(entry.get("expected_direction") or "").strip().lower()
+    if direction not in EPOCH_DIRECTIONS:
+        return (f"epoch {eid!r} (semantics) must declare expected_direction: "
+                + " | ".join(sorted(EPOCH_DIRECTIONS)))
+    m = VERDICT_REF_RE.search(ev)
+    if not m:
+        return (f"epoch {eid!r} (semantics) cites no verdict artifact - a metric revision needs the verify "
+                "skill's kill verdict against the CURRENT metric (results/verdicts/<id>.json) before it can "
+                "open an epoch; an unverified 'the metric is flawed' is exactly the claim this gate exists "
+                "to check")
+    if root is None:
+        return "cannot resolve the campaign root to find the cited verdict"
+    path = root / "results" / "verdicts" / m.group(1)
+    if not path.is_file():
+        return f"epoch {eid!r}: cited verdict artifact not found: results/verdicts/{m.group(1)}"
+    try:
+        reason = _check_verdict(path, m.group(1))
+        v = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return f"epoch {eid!r}: cited verdict artifact unreadable ({exc})"
+    if reason:
+        return f"epoch {eid!r}: {reason}"
+    tier = _kill_tier(v)
+    if not tier:
+        return (f"epoch {eid!r}: verdicts/{m.group(1)} carries no kill_tier - a metric revision rests on a "
+                "verified KILL of the old metric (kill_tier REFUTED or EVIDENCE_AGAINST), not on a "
+                "confirmation of a result")
+    if direction == "easier" and tier != "REFUTED":
+        return (f"epoch {eid!r} is an EASIER ruler (the current best would score better) and its kill "
+                f"verdict is only {tier} - an easier-ruler revision needs a REFUTED-tier kill of the old "
+                "metric (the metric-epoch evidence rule); weaker evidence goes to the user via results/ESCALATE.md")
+    return None
+
+
+def _epoch_block(text: str):
+    """campaign.metric_epochs from loop.json text: a dict (absent = {}), or "__unparseable__"."""
+    v = _campaign_key(text, "metric_epochs", None)
+    if v == "__unparseable__":
+        return v
+    return v if isinstance(v, dict) else ({} if v is None else "__not_an_object__")
+
+
+def epoch_block_problem(root: Path | None, fp: Path, ti) -> str | None:
+    """Deny-reason for a configs/loop.json write that breaks campaign.metric_epochs' contract, else None.
+
+    The block is the metric-epoch record and is append-only: an entry's kind and evidence never change and
+    no entry is removed. A new entry carries its evidence (_epoch_evidence_problem) and, from a spawned
+    role, is allowed only when the campaign's metric_revision dial delegates it, always as 'pending'.
+    Standing changes (pending -> ratified | rolled-back) are the USER's: attended sessions only, and a
+    resolved epoch is final. FAIL-CLOSED for the block - every epoch label rests on it. A write that does
+    not involve the block at all passes (the dial check is separate)."""
+    role = _spawned_role()
+    try:
+        old_text = fp.read_text(encoding="utf-8") if fp.is_file() else ""
+    except OSError:
+        old_text = ""
+    # Involvement is the quoted JSON KEY, not the bare word: the campaign block's own _doc string names
+    # metric_epochs in prose, and an edit that never touches the block must not be judged by it.
+    if '"metric_epochs"' not in _written_text(ti) and '"metric_epochs"' not in old_text:
+        return None
+    new_text = _new_full_text(fp, ti)
+    if new_text is None:
+        return ("cannot reconstruct the loop.json this edit produces (an old_string not present in the "
+                "file?) - rewrite the campaign block whole so the gate can check metric_epochs")
+    new_block = _epoch_block(new_text)
+    if new_block == "__unparseable__":
+        return "the write leaves configs/loop.json unparseable"
+    if new_block == "__not_an_object__":
+        return "campaign.metric_epochs must be a JSON object keyed by metric_version"
+    old_block = _epoch_block(old_text)
+    if not isinstance(old_block, dict):
+        if role:
+            return ("the loop.json on disk is unreadable and a spawned role may not rewrite its epoch block "
+                    "- an attended session repairs it")
+        old_block = {}
+    mode = _campaign_key(old_text, "metric_revision", "cautious")
+    mode = "cautious" if mode == "__unparseable__" else str(mode or "cautious").strip().lower()
+    for vid, e in new_block.items():
+        vid = str(vid).strip()
+        if not vid or not isinstance(e, dict):
+            return "every metric_epochs entry is keyed by a non-empty metric_version and is an object"
+        kind, status = str(e.get("kind", "")), str(e.get("status", ""))
+        if kind not in EPOCH_KINDS:
+            return f"epoch {vid!r}: kind must be " + " | ".join(sorted(EPOCH_KINDS))
+        if status not in EPOCH_STATUSES:
+            return f"epoch {vid!r}: status must be " + " | ".join(sorted(EPOCH_STATUSES))
+        prior = old_block.get(vid)
+        if isinstance(prior, dict):
+            if str(prior.get("kind", "")) != kind:
+                return f"epoch {vid!r}: kind is append-only ({prior.get('kind')!r} -> {kind!r})"
+            if (prior.get("evidence") or None) != (e.get("evidence") or None):
+                return f"epoch {vid!r}: evidence is append-only; open a new epoch for a new justification"
+            old_status = str(prior.get("status", ""))
+            if old_status != status:
+                if role:
+                    return (f"epoch {vid!r}: {old_status} -> {status} is a RATIFICATION decision, and a "
+                            f"driver-spawned {role} may not make it. Ratification is the user's: it happens "
+                            "from an attended session (run-campaign relays it on the user's word). Leave "
+                            "the status 'pending' and surface the epoch in the journal.")
+                if old_status != "pending":
+                    return (f"epoch {vid!r}: a {old_status} epoch is final ({old_status} -> {status}); "
+                            "record a reversal as a NEW epoch, never by rewriting standing")
+            continue
+        # a NEW entry
+        if role:
+            if mode != "autonomous":
+                return (f"epoch {vid!r}: campaign.metric_revision is {mode!r}, so a driver-spawned {role} "
+                        "may not open a metric epoch. Propose it instead: write results/ESCALATE.md (the "
+                        "claim, the verdict, the proposed change, its expected_direction) and the user "
+                        "opens the epoch.")
+            if status != "pending":
+                return (f"epoch {vid!r}: a spawned role opens an epoch as 'pending' (this one was written "
+                        f"{status!r}); ratification is the user's")
+        problem = _epoch_evidence_problem(root, dict(e, id=vid))
+        if problem:
+            return problem
+    removed = sorted(set(old_block) - {str(k).strip() for k in new_block})
+    if removed:
+        return ("metric_epochs is append-only; this write removes epoch(s) " + ", ".join(removed)
+                + " - roll an epoch back by setting its status, never by deleting it")
+    return None
+
+
+def epoch_blocks_promotion(root: Path | None) -> str | None:
+    """Deny-reason if the CURRENT metric epoch cannot carry a promotion, else None. A PENDING epoch
+    promotes (promote-and-label: the row carries its metric_version, the declaration carries the standing);
+    a rolled-back one, or a metric_version the block never declared, does not. No block = the implicit
+    first epoch = pass."""
+    if root is None:
+        return None
+    mv = str(_loop_campaign_key(root, "metric_version", "") or "").strip()
+    block = _loop_campaign_key(root, "metric_epochs", None)
+    if not mv or not isinstance(block, dict) or not block:
+        return None
+    cur = block.get(mv)
+    if not isinstance(cur, dict):
+        # The first epoch never needs an entry: it is the one version the runner could bind before any
+        # block existed. Anything else absent from the block is an undeclared bump.
+        st = _read_correctness(root) or {}
+        if (st.get("scorer_hash_by_version") or {}).get(mv):
+            return None
+        return (f"campaign.metric_version {mv!r} is not declared in campaign.metric_epochs (declared: "
+                f"{', '.join(str(k) for k in block) or 'none'}) - a metric_version bump is an epoch; declare "
+                "it (with its evidence) before promoting anything scored under it")
+    if str(cur.get("status", "")) == "rolled-back":
+        return (f"the current metric epoch {mv!r} is ROLLED-BACK - nothing scored under it promotes. Point "
+                "campaign.metric_version at the epoch the campaign reverted to, or open the next epoch")
+    return None
 
 
 def _note_bypass(root: Path | None, reason: str):
@@ -197,19 +472,21 @@ def _has_na_waiver(root: Path | None) -> bool:
         return False
 
 
-def correctness_blocks_promotion(root: Path | None) -> str | None:
+def correctness_blocks_promotion(root: Path | None, relaxed: bool = False) -> str | None:
     """Deny-reason if the correctness suite does NOT green-light a promotion, else None.
 
     Promotion requires an AFFIRMATIVE GREEN - not merely 'not red'. A freshly-scaffolded all-skip suite
     (EMPTY), a missing suite (ABSENT), an unreadable/anomalous state (ERROR), and a never-run state (no file)
     all block, because none is evidence the machinery is right; deleting or never-finishing the suite was the
-    trivial silent bypass this closes. ABSENT/EMPTY are excused by an explicit tests/CORRECTNESS_NA.md."""
+    trivial silent bypass this closes. ABSENT/EMPTY are excused by an explicit tests/CORRECTNESS_NA.md.
+    `relaxed` (a preset that promotes stamped 'unverified'): only RED/ERROR block - a known-broken machine
+    is wrong, not unverified - because an unverified promotion never claimed a green in the first place."""
     st = _read_correctness(root)
     status = str((st or {}).get("status", "")).strip().lower() if st is not None else None
     if status == "green":
         return None
     if status in ("absent", "empty", None):
-        if _has_na_waiver(root):
+        if relaxed or _has_na_waiver(root):
             return None
         which = status.upper() if status else "MISSING (run_campaign has not run its FROZEN-infra gates)"
         return (f"the correctness suite is {which} - no active checks guard the machinery, so it cannot "
@@ -305,9 +582,9 @@ def promotion_subject_problem(root: Path | None, ti) -> str | None:
     Subject-matched: the written content names its experiment (RECOMMENDED.json carries its config
     path; a scoreboard token lands on its experiment's row), and the gate demands THAT experiment's
     verdict - CONFIRMED, graduating kill tier if any, named independent refuter (`_check_verdict`,
-    the same bar the project-ledger surface applies). With per-block verification every experiment
-    carries its own verdict artifact, so an unmatched subject means the experiment was never
-    verified, not that a window expired."""
+    the same bar the project-ledger surface applies). Where the campaign's verification preset owes a
+    unit an independent check, that experiment carries its own verdict artifact, so an unmatched
+    subject means the experiment was never verified, not that a window expired."""
     if root is None:
         return ("cannot resolve the campaign root for this write - promote from inside the campaign "
                 "tree so the gate can find results/verdicts/")
@@ -338,7 +615,120 @@ def promotion_subject_problem(root: Path | None, ti) -> str | None:
     return (f"no verdict artifact in results/verdicts/ matches the promoted experiment(s) "
             f"{', '.join(sorted(toks))}. A promotion needs THAT experiment's CONFIRMED verdict with a "
             "named independent refuter (hard gate #1) - run the verify skill for it (in supervised "
-            "runs the driver's per-block verification writes it), then promote.")
+            "runs the driver's verification service writes it for every unit the preset owes one), "
+            "then promote.")
+
+
+def promotion_row_problem(root: Path | None, ti) -> str | None:
+    """Deny-reason unless every promotion-time correctness check has run FOR the experiment this write
+    promotes, else None.
+
+    Under a verification preset, the expensive checks (the per-result gates, and whatever the preset
+    holds back for a promotion candidate) run only after the solve of a candidate unit, and the runner
+    records which experiment each ran for (results/correctness_state.json, per check: ran_for). A
+    promotion of a unit those checks never ran for would be a green suite certifying nothing about the
+    thing being promoted. Inactive for a legacy suite (no per-check state) and for an experiment whose
+    checks artifact predates the presets (no verification.rows)."""
+    if root is None:
+        return None
+    st = _read_correctness(root)
+    checks = (st or {}).get("checks") if isinstance(st, dict) else None
+    if not isinstance(checks, dict) or not checks:
+        return None
+    ids = {_eid(t) for t in SUBJECT_RE.findall(_written_text(ti))}
+    problems = []
+    for eid in sorted(ids):
+        art = root / "results" / f"checks_{eid}.json"
+        try:
+            ck = json.loads(art.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        rows = ((ck.get("verification") or {}).get("rows") or {}) if isinstance(ck, dict) else {}
+        if not rows:
+            continue
+        stale = []
+        for name, e in checks.items():
+            row = str(e.get("row") or "invariants")
+            trig = "every" if e.get("every") else str(rows.get(row) or "every")
+            gate = row == "gates" or bool(e.get("takes_arg"))
+            if trig == "off" or not (gate or trig == "promotion"):
+                continue
+            if e.get("last_status") != "pass" or _eid(str(e.get("ran_for") or "")) != eid:
+                stale.append(f"{name} (last: {e.get('last_status') or 'never'}, for "
+                             f"{e.get('ran_for') or 'no experiment'})")
+        if stale:
+            problems.append(f"the promotion-time checks {', '.join(stale)} have not passed for exp{eid} - "
+                            f"run `python scripts/run_campaign.py --run-suite due --for <exp{eid} name>` "
+                            "(it records the run against that experiment), then retry")
+    return " | ".join(problems) if problems else None
+
+
+def verification_gate_problem(root: Path | None, ti) -> tuple:
+    """What the promoted experiment's verification PRESET requires of this write: (deny-reason or None,
+    needs_verdict).
+
+    Read from the experiment's checks artifact (results/checks_<NN>.json `verification`: the resolved
+    rows, the computed re-execution eligibility, and the agent block a verdict stamped) - never from a
+    preset table of the guard's own, which would be a twin. Three shapes:
+      * both agent rows off (the `minimal` preset): no verdict is required, and the write must carry the
+        word `unverified` (RECOMMENDED.json: "verification_label": "unverified"; a scoreboard token:
+        UNVERIFIED on the row) - a promotion with no independent check is legitimate only when it says so;
+      * re-execution off, review on (`light`): the established rule - a CONFIRMED verdict, named refuter;
+      * re-execution on (`moderate` / `intensive` / legacy per-block): the established rule AND, when the
+        artifact says the unit was eligible for re-execution, the verdict must record mode re-execution -
+        a review-mode CONFIRMED on a unit the preset said to re-run is not the check the preset bought.
+    An experiment without a `verification` block (predates the presets) gets the established rule."""
+    if root is None:
+        return None, True
+    text = _written_text(ti)
+    ids = {_eid(t) for t in SUBJECT_RE.findall(text)}
+    if not ids:
+        return None, True
+    problems, needs_verdict = [], False
+    any_seen = False
+    for eid in sorted(ids):
+        try:
+            ck = json.loads((root / "results" / f"checks_{eid}.json").read_text(encoding="utf-8"))
+        except Exception:
+            needs_verdict = True
+            continue
+        ver = ck.get("verification") if isinstance(ck, dict) else None
+        rows = (ver or {}).get("rows") if isinstance(ver, dict) else None
+        if not rows:
+            needs_verdict = True
+            continue
+        any_seen = True
+        rev, rex = str(rows.get("review") or "off"), str(rows.get("re_execution") or "off")
+        if rev == "off" and rex == "off":
+            up = text.upper()
+            if '"VERIFICATION_LABEL": "UNVERIFIED"' not in up and "UNVERIFIED" not in up:
+                problems.append(f"exp{eid} is promoted under a preset with no independent check "
+                                f"(preset {ver.get('preset')!r}); the write must say so - carry "
+                                '"verification_label": "unverified" in RECOMMENDED.json, or UNVERIFIED on '
+                                "the scoreboard row - so no reader mistakes it for a verified best")
+            continue
+        needs_verdict = True
+        elig = (ver.get("re_execution") or {}).get("eligible") is True
+        if rex != "off" and elig:
+            agent = ver.get("agent") or {}
+            recorded = str(agent.get("mode_recorded") or "").lower()
+            if recorded != "re-execution":
+                for p in sorted((root / "results" / "verdicts").glob("*.json")) if (root / "results" / "verdicts").is_dir() else []:
+                    try:
+                        v = json.loads(p.read_text(encoding="utf-8"))
+                    except Exception:
+                        continue
+                    if _eid(p.stem) == eid or _eid(str(v.get("exp_id", ""))) == eid:
+                        recorded = str(v.get("mode") or "").lower() or recorded
+                        break
+            if recorded != "re-execution":
+                problems.append(f"exp{eid} was eligible for re-execution ({(ver.get('re_execution') or {}).get('eligibility', '')}) "
+                                f"and its preset ({ver.get('preset') or ver.get('source')}) asks for it, but the "
+                                f"verdict records mode {recorded or 'unknown'!r} - a promotion needs the re-executed "
+                                "CONFIRMED; re-run the verifier in re-execution mode")
+    if not any_seen:
+        needs_verdict = True
+    return (" | ".join(problems) if problems else None), needs_verdict
 
 
 def scoreboard_promotion(ti) -> bool:
@@ -367,6 +757,25 @@ def main():
         return
     fp = Path(fp_str) if fp_str else None
     root = _campaign_root(fp) if fp else None
+
+    # ---- surface 0: configs/loop.json - the metric_revision dial (attended-session-only, fail-open-
+    #      logged) and the campaign.metric_epochs record (append-only, evidence-checked, FAIL-CLOSED) ----
+    if _is_loop_config(fp):
+        try:
+            problem = config_dial_problem(fp, ti)
+        except Exception as exc:
+            _note_bypass(root, f"config-dial guard error: {exc}")
+            problem = None
+        if problem:
+            _deny(problem)
+        try:
+            problem = epoch_block_problem(root, fp, ti)
+        except Exception as exc:
+            problem = f"could not validate campaign.metric_epochs ({exc})"
+        if problem:
+            _deny("epoch gate: " + problem)
+        _allow()
+        return
 
     # ---- surface 1: the PROJECT ledger <project>/DISCOVERIES.md - subject-matched, FAIL-CLOSED ----
     if _is_project_ledger(fp):
@@ -413,7 +822,11 @@ def main():
         if not is_promo:
             _allow()
             return
-        suite_reason = correctness_blocks_promotion(root)
+        # The preset decides what this promotion needs (a verdict, and of what depth) - read from the
+        # promoted experiment's own checks artifact. A preset that promotes stamped 'unverified' relaxes
+        # the suite rule to not-RED and needs no verdict; every other preset keeps the established gate.
+        gate_reason, needs_verdict = verification_gate_problem(root, ti)
+        suite_reason = correctness_blocks_promotion(root, relaxed=not needs_verdict)
         if suite_reason:
             _deny("promotion gate: " + suite_reason)
             return
@@ -421,6 +834,20 @@ def main():
             _deny("promotion gate: the correctness suite's green was recorded against a DIFFERENT version of "
                   "the FROZEN/core code than what is on disk now (scripts/frozen_core.py) - re-run the suite "
                   "(run_campaign) so it validates the current core before marking a current-best.")
+            return
+        epoch_reason = epoch_blocks_promotion(root)
+        if epoch_reason:
+            _deny("promotion gate: " + epoch_reason)
+            return
+        row_reason = promotion_row_problem(root, ti)
+        if row_reason:
+            _deny("promotion gate: " + row_reason)
+            return
+        if gate_reason:
+            _deny("promotion gate: " + gate_reason)
+            return
+        if not needs_verdict:
+            _allow()          # promoted stamped 'unverified', as its preset allows and its label says
             return
         subject_problem = promotion_subject_problem(root, ti)
         if subject_problem is None:

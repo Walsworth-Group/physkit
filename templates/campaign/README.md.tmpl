@@ -12,9 +12,9 @@ reproducibility. {{APPROACH_SUMMARY}}
 - **The contract is [`campaign.md`](campaign.md)**: mission, the frozen metric, levers, caps,
   verification checks, promotion rules. It is the one document a human reviews and signs off. Its
   §Decision record tail is the campaign's append-only "why" ledger.
-- **Rules bind automatically.** [`CLAUDE.md`](CLAUDE.md) auto-loads for ANY agent working in this
-  folder — its §Where things live table is this tree's own map — and the project rules auto-load from
-  `../../CLAUDE.md` above it. What is FROZEN stays frozen: do not edit this campaign to satisfy a
+- **Rules bind automatically.** Byte-identical [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](AGENTS.md)
+  give Claude Code and Codex the same §Where things live map; their matching project twins live two
+  levels above. What is FROZEN stays frozen: do not edit this campaign to satisfy a
   newer kit or validator (see the kit's `docs/MIGRATING.md` instead).
 - **Results live in `results/`**: `scoreboard.tsv` is the numeric record (one row per experiment),
   `JOURNAL.md` the working window and NEXT pointer, `logbook.md` the full narrative record. The
@@ -26,7 +26,22 @@ reproducibility. {{APPROACH_SUMMARY}}
 ## How the loop runs — the two roles
 
 The driver (`scripts/run_campaign.py --supervise`) alternates two spawned agents, each receiving only
-what its job needs:
+what its job needs. It also holds `results/.supervisor.lock`, so a second Claude/Codex supervisor refuses
+before campaign-body mutation or spend; the persistent file is diagnostics, not proof that an owner is still live.
+Before switching harnesses, stop the supervisor and run
+`python scripts/sync_agent_instructions.py --check`. Drift halts preflight and every model spawn; repair
+requires an explicit `--scope campaign --from claude --write` (or `--from agents`) choice; repeat with
+`--scope project` when the project pair is authoritative.
+The default verifier policy preserves Claude's nested-refuter flow and gives Codex one fresh direct-refuter
+thread at the worker's model per ready block; Codex debt is validated before the planner or another worker runs.
+
+Codex loads this campaign's `.codex/hooks.json` only after the project-local hook is trusted. Start a
+fresh Codex task from this campaign root, run `/hooks`, and review/trust the exact definition before a
+run or resume. The hook synchronously routes canonical `apply_patch` writes to the same promotion policy
+Claude uses. Keep any protected promotion in its own single-file patch so its evidence cannot be changed
+atomically beside it. The scaffold validator checks the file and command, but cannot establish host trust.
+
+The roles are:
 
 - **The worker** executes ONE experiment per spawn, following the numbered loop in
   [`roles/worker.md`](roles/worker.md): a-priori prediction *first* (the runner refuses to spend an
@@ -47,7 +62,7 @@ its **concierge** (the `run-campaign` skill): launch, watch, steer through notes
 | File | Who reads it | When |
 |---|---|---|
 | `campaign.md` | both roles + the human | every cycle; at sign-off |
-| `CLAUDE.md` | every agent in this folder | auto-loaded, every turn |
+| `CLAUDE.md` · `AGENTS.md` | Claude Code · Codex, respectively | auto-loaded, every turn; must agree |
 | `roles/worker.md` · `roles/planner.md` | that role only | every spawn |
 | `../../PROJECT.md` | everyone; §Standing constraints is injected into every spawn | background depth, on demand |
 | `results/JOURNAL.md` | both roles | every cycle (working window) |
@@ -68,7 +83,7 @@ green at handoff (any exception — something only the user could stage — was 
 The authoritative answer is always mechanical, never a table to maintain:
 
 ```
-python scripts/run_campaign.py --preflight
+python scripts/run_campaign.py --preflight --backend <codex|claude>
 ```
 
 It refuses to launch while anything is missing and names each item with its fix — run it first on

@@ -53,7 +53,14 @@ WHILE not interrupted:
                     the prediction in whatever shape this campaign's prediction_mode requires. Every
                     failed check is yours to explain before moving on; a flag you did not answer is
                     not a passed check. Then the judgement no code makes: did the guardrail hold, and
-                    is the effect statistical or systematic?
+                    is the effect statistical or systematic? Then RECORD your own checks, directed at
+                    what this unit changed (the artifact's `changes` block names every file and config
+                    key that moved): for each change, what you expected it to do and what you observed;
+                    the checks you ran (a recompute, a limiting case, a sum rule). Write them with
+                    `python scripts/run_campaign.py --self-check <exp> --ran name=pass|fail|skip[:detail]
+                    ... --change "what=>expected effect=>observed" ... --note "<one line>"` - an
+                    artifact, never prose. It raises the result's label to `self-checked`; only an
+                    independent verdict raises it further.
   8. ARTIFACTS    — every experiment: save {{ARTIFACT_LIST}}, a cheap visualization, and the
                     reproducibility bundle (config + code snapshot) under results/snapshots/exp<NN>_<slug>/.
                     Noteworthy results get additional visualizations. (§The save-set, below)
@@ -76,10 +83,10 @@ WHILE not interrupted:
 ## How the loop runs — supervisor mode
 The loop above is the per-unit procedure; who repeats it is the mode:
 
-- Supervisor mode (`{{PYTHON_CMD}} scripts/run_campaign.py --supervise`) is the default for unattended
+- Supervisor mode (`{{PYTHON_CMD}} scripts/run_campaign.py --supervise --backend <codex|claude>`) is the default for unattended
   runs. A deterministic driver pops one unit at a time from `results/queue.json` and spawns a fresh
   agent context per unit: you, the worker, execute steps 1–11 for one unit and exit. Nothing carries
-  over between units. `CLAUDE.md` auto-loads and the driver assembles this file + `campaign.md` into
+  over between units. The active instruction twin auto-loads and the driver assembles this file + `campaign.md` into
   your prompt; everything else you need, you read from the ledger.
 
   **Keep the solve alive under your own session — never fire-and-forget it.** A single tool call is
@@ -140,8 +147,64 @@ When you suspect this:
   and keep it flagged.
 - Mark resulting findings PROVISIONAL until the fairness is independently reviewed/verified; only then
   may they graduate to the journal's Findings section.
-- Hard boundary: you may adapt the mutable guardrails and diagnostics for fairness; you may never edit
-  the FROZEN primary metric, the data, or known ground truth.
+- Hard boundary: you may adapt the mutable guardrails and diagnostics for fairness; you never edit the
+  FROZEN primary metric, the data, or known ground truth on your own. A metric you believe is WRONG is a
+  different case with its own procedure: §Metric epochs, next.
+
+## Metric epochs — when the FROZEN metric itself is wrong
+Frozen means locked against quiet change, not immutable. A campaign sometimes discovers its ruler is
+wrong: the scorer measures the wrong thing (noise-free data when the campaign targets low SNR; a proxy
+that overfits and needs a second gate), or it does not compute what `campaign.md` §The ONE metric
+specifies. Revising it openly is the highest-integrity move available; revising it quietly is the
+failure the freeze exists to prevent. The procedure:
+
+1. **Is it really the metric?** A mutable guardrail or diagnostic that misjudges a run is fixed in place
+   (§Metric integrity (2), no epoch). An experiment that changed what the metric sees is §Metric
+   integrity (1). Only a fault in the FROZEN scorer or its specification opens an epoch.
+2. **Verify the claim before acting on it.** "The metric is flawed" is a kill-claim against the current
+   metric and gets `{{VERIFY_SKILL}}`'s kill-claim check like any other invalidation; the epoch cites
+   the verdict artifact. A `semantics` revision (what the metric measures changes, so §The ONE metric is
+   edited) needs a REFUTED or EVIDENCE_AGAINST kill of the old metric. A `mechanics` fix (the
+   specification stands; the scorer did not compute it) needs the correctness check that reproduces the
+   discrepancy, kept in `tests/correctness_checks.py` as a regression.
+3. **Name the direction.** `harder` (the current best would score worse under the new ruler), `neutral`,
+   or `easier` (it would score better). Easier is the goalpost-moving shape: it needs a REFUTED-tier
+   kill and gets maximum scrutiny at ratification.
+4. **Who enacts it is `configs/loop.json` `campaign.metric_revision` — the user's dial, never yours to
+   change:**
+   - `cautious` (the default): write `results/ESCALATE.md` with a `## METRIC-REVISION PROPOSAL` block —
+     the claim; the verdict artifact; the proposed change (the specification diff and the scorer diff);
+     `kind` and `expected_direction`; the re-baseline cost (which retained contenders must be re-scored).
+     Finish your unit if you can. The driver halts at the next loop top; the user opens the epoch or
+     declines it.
+   - `autonomous`: enact it yourself, in this order — bump `campaign.metric_version`; add the entry to
+     `campaign.metric_epochs` (`kind`, `status: "pending"`, `evidence`, `expected_direction`,
+     `opened_by: "worker@<exp_name>"`); edit the specification (`campaign.md` §The ONE metric, for a
+     semantics epoch) and the scorer; `python scripts/metric.py --selftest` green; then run the runner,
+     which re-runs the correctness suite and binds the new epoch's scorer hash; then queue the
+     re-baseline (step 5). The guard refuses an entry with no evidence, an easier revision without a
+     REFUTED kill, and any entry at all when the dial is `cautious` — propose instead.
+   - **The user already opened it** (a `cautious` proposal accepted: `campaign.metric_epochs` declares
+     the current `metric_version` but the scorer on disk is still the previous epoch's): enact it now,
+     in the `autonomous` order above, *before running any unit* — the runner binds an epoch's scorer
+     hash on the first experiment under it, so a unit run before the scorer edit would bind the new
+     epoch to the old scorer.
+5. **Re-baseline; never compare across the boundary.** The retained contenders are
+   `configs/RECOMMENDED.json` plus every scoreboard row still cited as live in `results/JOURNAL.md`
+   §Findings or `results/queue.json`. Re-score them under the new ruler as ordinary units — one
+   config-backed unit per contender, sharing a `block` — and drop the proposals in
+   `results/queue_drop/`. Until then the runner sets earlier rows aside and the checks artifact names
+   the boundary. Rows keep their `metric_version`; nothing is deleted or re-labelled.
+6. **One line in `results/JOURNAL.md` §Findings:** `metric epoch <version> opened (<kind>, <direction>)
+   · <verdict or check> · <what the new metric measures, one sentence>`. That line is the narrative
+   record; the evidence is the verdict, the change is the specification diff, the governance is the
+   entry.
+
+The epoch stays `pending` until the user ratifies it — from an attended session, never a spawned role —
+and a ratified or rolled-back epoch is final. A pending epoch promotes normally, with its standing
+riding on the row's version (promote-and-label); a rolled-back one never promotes. When the ruler was
+wrong but the save-sets are valid and re-scorable, this procedure applies; when the artifacts
+themselves are tainted (a forward-model bug, corrupted data), that is `fork-campaign`, not an epoch.
 
 ## After the run — reconcile with the prediction, and check cheap before you spend
 You wrote a predicted range before running (`campaign.md` §Bound expectations BEFORE you run). Hold the
@@ -177,12 +240,15 @@ out only from a regime where it would have shown, had it been real.
 Before accepting a positive result, ask the same, plus: did the experiment move the goalposts
 (re-check §Metric integrity)? Did it land inside the range you predicted? Is it a ceiling move
 (physical) or a gap-to-ceiling move (suspect)? Does the guardrail pass? Does it generalize across the
-whole {{GENERALIZATION_AXIS}}, not a lucky subset? Confirm with ≥2–3 independent experiments and an
-independent-agent verification before calling a method the best or writing a DISCOVERY.
+whole {{GENERALIZATION_AXIS}}, not a lucky subset? Confirm with ≥2–3 independent experiments and the
+independent verification the preset requires before calling a method the best or writing a DISCOVERY
+(under `minimal`, the claim audit at the end of the campaign is that verification).
 Counter confirmation bias explicitly, as a ritual: state the result you hoped for, make the strongest
 case that it is wrong, name the one observation that would refute it (and check you ran it), and give
 a fair hearing to the unwelcome alternative conclusion (it is noise; a rival explains it too; it is an
-artifact). Depth: `{{VERIFY_SKILL}}` §5c.
+artifact). Depth: `{{VERIFY_SKILL}}` §5c. Whatever you conclude, the self-check you record (loop step 7)
+is what a reviewer reads first: a claimed effect with no change behind it, or a change with no stated
+effect, is a red flag in its own right.
 
 ## Rigor — replicate before concluding
 
@@ -213,14 +279,21 @@ own checks, decided at setup (for sim-heavy work the V&V&UQ method is the physki
 `docs/SIMULATION_VALIDATION.md`); `verify` reads them, `correctness-suite` encodes the
 checkable ones as standing regression gates.
 
-**In supervised mode, routine verification is the DRIVER's job, not yours.** After your unit (or the
-last unit of its block) is accepted, the driver spawns a dedicated verification agent that runs
-`{{VERIFY_SKILL}}` for it and stamps the scoreboard's `verified` column from the verdict artifact —
-you never grade your own work, and you do not need to run verify at the end of a routine unit. You
-DO still invoke `{{VERIFY_SKILL}}` yourself when something inside your unit demands it before you
-act: a result that beats its envelope, a suspicion the metric leaked, a mid-unit claim you are about
-to build on. In an attended session there is no driver, so the pre-promotion verification below is
-yours to run.
+**In supervised mode, routine verification is the DRIVER's job, not yours — and how much of it runs is
+the campaign's verification preset** (`configs/loop.json` `verify.preset`;
+the physkit plugin's `docs/reference/verification-presets.md`). When the preset owes your accepted unit an independent check,
+the driver spawns a verification agent (re-executing the unit when it is cheap and reproducible,
+reviewing it from the frozen record otherwise), stamps the scoreboard's `verified` column from the
+verdict artifact, and writes the unit's label into its checks artifact — you never grade your own work,
+never lower the preset, and do not run verify at the end of a routine unit. A unit the preset owes
+nothing keeps the label your self-check gave it (`self-checked`, or `unverified`), and that label travels
+with the number; a promotion under `minimal` still says `unverified`, because a self-check is not
+independent. You DO still invoke `{{VERIFY_SKILL}}` yourself when something inside your unit demands
+it before you act: a result that beats its envelope, a suspicion the metric leaked, a mid-unit claim you
+are about to build on. In an attended session there is no driver, so the pre-promotion verification
+below is yours to run, at the depth the driver would have decided (re-execution when the unit's measured
+solve is within a quarter of `worker.iteration_timeout_hours` and `campaign.reproducible` is true; review
+from the frozen record otherwise — the checks artifact's `verification.re_execution` says which).
 - Validate every fit even when it converged cleanly: re-run from the config, recompute the metric from
   scratch, confirm it reproduces within tolerance.
 - Falsify with code, not prose, and confirm the numbers are real. Write verification scripts and
@@ -232,7 +305,8 @@ yours to run.
   `{{PRIMARY_METRIC}}` and the guardrail, replicates with perturbed params, checks for metric
   contamination{{VERIFY_EXTRA_CHECKS}}, and returns CONFIRMED / PROVISIONAL / QUESTIONABLE ASSUMPTION /
   REFUTED / INCONCLUSIVE
-  with evidence. A promotion is not real until this returns CONFIRMED. Run that verifier on a model at
+  with evidence. Where the preset requires it, a promotion is not real until this returns CONFIRMED;
+  under `minimal` a promotion is real only stamped `unverified`. Run that verifier on a model at
   least as capable as the loop; a different capable model is preferable, for mechanism diversity. Never
   use a weaker model: a weak verifier yields false CONFIRMs. Mechanical sub-tasks the loop delegates
   (search, citation checks, figure generation, validation) can run on a lighter model, since a
@@ -268,8 +342,10 @@ attended session, record it yourself the same turn you promote — a row acting 
 backing a Findings entry, with a blank `verified` is a hygiene failure that `campaign-status` flags.
 The PreToolUse hook (`scripts/guard_promotion.py`) guards the mechanical promotion surfaces,
 **subject-matched**: a write to `configs/RECOMMENDED.json`, or a scoreboard edit that introduces a
-`CONFIRMED` or `NEW BEST` token, needs a CONFIRMED verdict with a named refuter **for the experiment
-being promoted** — no other experiment's verdict counts; recording a system-level finding in the
+`CONFIRMED` or `NEW BEST` token, needs — wherever the preset requires one — a CONFIRMED verdict with a
+named refuter **for the experiment being promoted**, no other experiment's verdict counts; under a
+preset that requires none (`minimal`) the write must carry the word `unverified` instead; recording a
+system-level finding in the
 project overview (`../../../PROJECT.md` §Updates from discoveries) must cite the verdict artifact by
 path (a legacy project's `../../../DISCOVERIES.md` write stays hook-gated and fail-closed). The journal's Findings section is not hook-gated — it is working memory — but the same
 rule binds it: every entry cites its verdict, an INCONCLUSIVE kill never lands, and
@@ -281,7 +357,9 @@ rule binds it: every entry cites its verdict, an INCONCLUSIVE kill never lands, 
 A lean view: the NEXT pointer, open threads, one line per recent experiment — and §Findings, the
 append-only settled-knowledge record. Write a §Findings entry only after multiple consistent
 experiments confirm the finding on `{{PRIMARY_METRIC}}` (guardrail noted) and `{{VERIFY_SKILL}}`
-returned CONFIRMED; cite `results/verdicts/<id>.json` in the entry — hard gate #1 in `CLAUDE.md`.
+returned CONFIRMED; cite `results/verdicts/<id>.json` in the entry — hard gate #1 in `CLAUDE.md`. Under
+a preset that owes no independent check (`minimal`), Findings wait for the claim audit and cite its
+artifact (`results/verdicts/audit_<NN>.json`) instead.
 Full narratives are not copied here; trimming §Recent experiments loses nothing, and §Findings is
 never trimmed. When a finding changes the physical understanding, also update
 `../../../PROJECT.md` (the effect, its equations, references — §Updates from

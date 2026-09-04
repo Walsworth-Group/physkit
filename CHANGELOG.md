@@ -1,13 +1,526 @@
 # Changelog — physkit
 
 All notable changes to the kit are recorded here. Format follows
-[Keep a Changelog](https://keepachangelog.com/); the kit version lives in `.claude-plugin/plugin.json`.
+[Keep a Changelog](https://keepachangelog.com/); the release version is shared by the Claude and Codex
+plugin manifests.
 
 Dates are UTC. Each entry cites the run/finding that motivated it (the kit's own
 `campaign-review → improve-kit` loop) so a future reviewer can trace the "why".
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.11.0] - 2026-09-03
+
+The verification-levels release: one preset per campaign (`verify.preset`), the honest verification label as
+the invariant, the correctness suite scheduled and metered, the claim audit, the measurement and safe
+driver defaults that preceded them, and an in-place upgrade path for existing campaigns. Every entry below
+was written under `[Unreleased]` as it shipped; the two PR series were #78 and #79 on `kit/metric-epochs` (#77).
+
+### Added — in-place campaign upgrade (`skills/new-campaign/scripts/upgrade_campaign.py`)
+
+Re-scaffolding a running campaign re-answers an interview whose answers already sit in the rendered
+files (the user's finding on the first campaign due for the presets: too token-intensive to repeat).
+The script three-way merges every kit-owned campaign file against the template the campaign was
+rendered from (the kit commit stamped in `campaign.md`, fetched with `git`) and the current template,
+keeping campaign edits and conflicting only where both sides touched the same lines; placeholder-only
+hunks are resolved from the campaign's own rendered values; kit-only files an older kit did not ship
+are copied; `configs/loop.json` gets the preset (required argument), `campaign.reproducible`, and
+`driver.verifier_retries`, and loses the legacy verification keys; the project-level `AGENTS.md` twin
+is materialized for a pre-twin project; backups, an upgrade log under `results/diagnostics/`, and a
+provenance line in `campaign.md` and the logbook. `docs/MIGRATING.md` opens with the procedure and the
+five conflict-resolution rules. Proof: the photophysics10 campaign (v0.10.0 scaffold, 2 200-line
+runner with its own ledger mode) upgraded on a scratch copy — 15 genuine conflicts across five files,
+each resolved by one of the five rules; validator clean; preflight ran the sixteen-check legacy suite
+whole (206 s) and refused the over-budget every-set by name; two `machinery` declarations brought it to
+34 s under `moderate`. Under `intensive` the same declarations change nothing (machinery fires every
+unit there), so preflight's refusal now names each slow check's row and, under such a preset, says the
+way out is a preset whose machinery row runs on code change, a `gates` declaration, or a cheaper check.
+Also: preflight's `campaign:` line prints `verification=` only when the legacy key is present.
+
+### Changed — verification levels, Phases 2–10: one preset, the honest label as the invariant, the suite scheduled and metered, the claim audit
+
+The second half of the verification-levels build (ADR-0021; the user's re-decision that verification is
+a labelled investment the researcher sizes per problem). Evidence and design:
+`case-studies/photophysics10_verification-cost_2026-09-02.md`,
+`synthesis/VERIFICATION_LEVELS_BRAINSTORM_2026-09.md`.
+
+- **One choice: `configs/loop.json` `verify.preset`** — `minimal` · `light` (the default) · `moderate` ·
+  `intensive`. Each is a fixed internal table of seven rows × triggers the runner resolves, prints at
+  preflight, and stamps into every checks artifact; the standardized descriptions are
+  `docs/reference/verification-presets.md`, which `new-campaign` presents verbatim in one interview step
+  together with the metric-revision dial. An unknown preset is refused, never defaulted; an older file
+  without one is read through `campaign.verification` (per-block → the intensive table, promotion-only
+  → the light table). `campaign.verification` is gone from the template.
+- **The constitution moved, in lockstep.** "Promotion follows the verdict … only CONFIRMED graduates"
+  became "promotion follows the label": *every exported claim carries an honest verification label;
+  `unverified` is a legitimate label, a softened one is not* — verbatim in `docs/CORE.md`,
+  `docs/PRINCIPLES.md`, the campaign `CLAUDE.md` (HARD GATE 1, now "No promotion without its
+  verification label", subject-matched to the preset), and `campaign.md`; a Tier 0 check pins the four.
+  Labels: `unverified` · `self-checked` · `<verdict>/review` · `<verdict>/re-execution` ·
+  `<verdict>/audit`. A PROVISIONAL / QUESTIONABLE result is never relabelled `unverified`.
+- **The suite is scheduled and metered.** The runner hosts the suite run (`--suite-worker`: per-check
+  names, rows, cost, and the files each executed, in `results/correctness_state.json`); checks declare
+  a row with `@check(row="invariants|machinery|gates", depends_on=(...), every="...")`. Invariants run
+  every unit inside a budget of a tenth of the measured unit cost (floor 30 s): preflight refuses an
+  over-budget set by name, and a check that grows slow mid-campaign is demoted to promotion-time,
+  loudly, never silently skipped. Machinery checks run at setup, when the code they executed moves
+  (compared as code), or every unit, by preset; a FROZEN-core change makes everything due. Gates run
+  after the solve of a promotion candidate, recorded against it; the promotion guard refuses a
+  promotion whose promotion-time checks never ran for that experiment. `--run-suite all|due|<row>|
+  <names> [--for EXP]` runs it on demand. An undeclared flat `CHECKS` list behaves as before.
+- **The worker's self-check is an artifact.** `--self-check EXP --ran … --change "what=>expected=>observed"
+  …` writes the checks artifact's `self_check` block, directed at the recorded `changes`, and raises the
+  label to `self-checked` — never further.
+- **The driver decides the independent check per unit.** On accept it asks the preset what it owes:
+  re-execution when the trigger fires and the unit is cheap and reproducible, review when it fires
+  otherwise, nothing when nothing fires (said in the log; the label stays what the self-check made it).
+  The verifier's prompt carries the driver's mode line (blinded and different-model lines under
+  `intensive`); the promotion-time checks run for the experiments before the spawn; after the verdict
+  the label is stamped. The guard reads the promoted experiment's preset from its own artifact:
+  `minimal` promotes only with the word `unverified` in the write (suite relaxed to not-RED); `light`
+  keeps the established rule; `moderate`/`intensive` require a re-executed CONFIRMED where the unit was
+  eligible.
+- **Bookends.** The suite template ships four contract checks (`baseline_reproduces`,
+  `noise_floor_measured`, `metric_discriminates`, `synthetic_recovery`) that `new-campaign` Step 3.7
+  fills before anything is frozen and the validator asks for; and the new `claim-audit` skill runs the
+  seven campaign-scale checks at the end (`default`: a reconciliation script + one fresh agent;
+  `panel`: four information-partitioned roles + a blinded adjudicator), spawned by the driver at a
+  graceful STOP or an empty queue, composed by `final-report`, which prints downgraded labels rather
+  than blocking and waits for the audit while any exported claim's label is non-independent.
+- **Skills threaded:** `verify` (mode given, not chosen; verdict `mode` + `mode_basis`; item 1 never
+  backgrounds), `correctness-suite` (rows, triggers, budget, contract checks), `new-campaign` (Step 3.7;
+  topic 8b; measure the baseline here), `campaign-status` (labels, self-check coverage, preset),
+  `run-campaign` (the new lines), `report` (labels in the ledger), `final-report`.
+- **Tests.** Tier 1: suite protocol, triggers, budget, self-check, verification-gate guard cases,
+  preset validator cases; Tier 2: preset surface, budget refusal and demotion, the L-series (moderate
+  re-execution, minimal none, light review, not-reproducible review), block scenarios under intensive,
+  the capstone spawn. Goldens re-pinned with reasons. Final suite: contracts 339/339, Tier 0 152/152,
+  Tier 1 281/281, Codex verifier 80/80, Tier 2 139/139 (+ the capstone checks).
+
+### Added — verification levels, Phase 0/1: measurement, verifier reliability, computed re-execution depth, the change manifest, and safe driver defaults
+
+The first half of the verification-levels build (the user's 2026-09-02 re-decision that verification
+is a labelled investment the researcher sizes per problem; the preset surface follows in the next
+release). Evidence: `case-studies/photophysics10_verification-cost_2026-09-02.md` — a campaign whose
+own logs could not say where its twelve supervised hours went.
+
+- **Where the time goes is now on record.** Every driver decision line carries `utc=`; every spawn ends
+  with a stamped `done: status=… elapsed=… turns=…` line and a row in `results/diagnostics/spawns.tsv`.
+  The correctness suite is timed (`results/correctness_state.json` `wall_s`), and the runner writes
+  `results/timing.tsv` (gates / suite / snapshot / solve / record per experiment); the measured solve
+  time travels with `result_<NN>.json` and the checks artifact (`run`).
+- **Re-execution depth is computed per unit, not set at scaffold time.** A unit is re-executed by the
+  verifier when its measured solve time is within a quarter of `worker.iteration_timeout_hours` and
+  `campaign.reproducible` is true; otherwise it is reviewed from the frozen record. The decision is
+  recorded in `results/checks_<NN>.json` under `verification.re_execution` and the `verify` skill reads
+  it. `verify.full_reproduction_threshold_s` is gone from the template (a legacy value still caps);
+  `campaign.reproducible` is new (absent: false under a hardware-in-the-loop `configs/instrument.json`,
+  else true).
+- **Verification starts from what changed.** The runner records, per experiment, what moved since the
+  last verified unit — code compared as code (a comment is not a change), config keys, version tags —
+  in the checks artifact's `changes` block; `python scripts/run_campaign.py --diff <exp> [--since <exp>]`
+  prints the full diff from the two snapshots. The verifier prompt opens with that summary and the rule:
+  verify the delta and its interaction with the unchanged parts; what did not change since the last
+  CONFIRMED verdict inherits that coverage.
+- **A verifier that returns without its artifact is retried, and told why.** `driver.verifier_retries`
+  (inherits `planner_retries` when absent); the driver names the ok-but-no-artifact shape (a refuter
+  launched in the background and abandoned — the measured cause) and the retry prompt carries a
+  `RETRY:` note naming the missing verdicts; the verifier prompt now carries the never-background rule.
+- **Safe driver defaults.** The post-exit grace for a detached runner ends after two silent runner
+  ticks instead of the five-minute stale window (every measured wait had ended on the latter, seven
+  times in eight for nothing). The plateau clock counts *supervised* time, persisted across launches
+  (an outage is no longer a plateau), and `plateau.units` works; a REFUTED verdict and a changed
+  `configs/RECOMMENDED.json` now trigger the planner as `loop.json` always said they would. A block's
+  finished units are verified once the queue head has left the block (the straggler deadlock is gone).
+  A unit whose save-set already exists is accepted from the record, never re-run. Failure records name
+  which save-set parts were missing. The worker and planner prompts carry the runner's CLI line so no
+  agent reads the runner's source to learn its flags.
+- **Tests.** Tier 1 `test_verification_record` (12 cases), Tier 2 Scenarios A (ledger), V2 (retry), P1–P5
+  (block release, deadlock shape, saved-unit accept, plateau by units, REFUTED trigger); the Codex
+  verifier goldens re-pinned with reasons. Suite: contracts 339/339, Tier 0 145/145, Tier 1 227/227,
+  verifier 80/80, hook 31/31, Tier 2 121/121.
+
+### Changed — metric epochs, Phase B: the doctrine, the role files, the prompts, and the skills
+
+Phase A made a metric revision *safe*; this makes it *usable* by an agent, by putting the procedure
+where agents read. Threaded coherently across every locus the recon inventory found (a stale twin is a
+doctrine fork):
+
+- **The constitution, in lockstep.** The three verbatim twins of "Never manipulate the frozen
+  evaluation" — `docs/CORE.md`, `docs/PRINCIPLES.md`, the campaign `CLAUDE.md` — each gain one
+  sentence: frozen means locked against quiet change, not immutable; a metric found wrong is revised
+  as a declared, verified, versioned epoch, never edited in place. `PRINCIPLES.md`'s comparability
+  principle carries the epoch rule (verified kill, direction, `pending` until ratified, rows keep their
+  version); its promotion principle carries promote-and-label; the frozen-core paragraph and the
+  index's `frozen` gloss say what metric integrity now protects. A Tier 0 check pins the three twins.
+- **`roles/worker.md` §Metric epochs** — the procedure: is it really the metric; verify the kill-claim
+  (`semantics` needs REFUTED / EVIDENCE AGAINST, `mechanics` needs the reproducing correctness check);
+  name the direction (`easier` needs REFUTED); `cautious` → a `## METRIC-REVISION PROPOSAL` block in
+  `results/ESCALATE.md`, `autonomous` → enact in order (bump, entry, spec + scorer, selftest, suite,
+  re-baseline); re-baseline as ordinary block units; one JOURNAL Findings line. The hard boundary in
+  §Metric integrity now says "never on your own" and points here. `campaign.md` §The ONE metric
+  carries the epoch-vs-fork rule (ruler wrong but save-sets valid → epoch; artifacts tainted →
+  `fork-campaign`), and its §FROZEN / promotion / scoreboard / decision-record sections no longer
+  contradict the mechanism they ship with. `metric.py`'s header says the same.
+- **Prompts.** The worker spawn prompt names the epoch path; the planner's names the re-baseline
+  obligation; the verifier's says a verified kill of the metric is what an epoch cites (and to
+  ESCALATE when only the user can weigh it). `audit_prompt_surface.py` guards the tokens. The
+  logbook entry now carries `(metric epoch <version>)` on its Result line.
+- **Skills.** `verify`: kill-claims include "the metric is wrong"; Step 0 reads the current epoch; the
+  kill-claim section says which tier opens an epoch; fairness rule 9 no longer REFUTES a *declared*
+  epoch outright (undeclared still does); the fence says it adjudicates the claim but never opens the
+  epoch. `run-campaign`: the concierge relays ratification and the dial on the user's word only;
+  narrates the `METRIC-REVISION PROPOSAL` halt kind; in `autonomous` mode spawns a bounded repair
+  agent for a mechanics-class preflight failure (cautious hands back as before); reads the launch
+  NOTICE to the user. `campaign-status`: the current-best carries its epoch; a new hygiene check lists
+  epochs and their standing, surfaces pending ones (`easier` first), confirms binding and re-baseline;
+  the fork-vs-epoch boundary points at `campaign.md`. `final-report`: names the headline's epoch and
+  standing; a pending headline says so; nothing is compared across epochs silently. `fork-campaign`,
+  `correctness-suite`, `discovery-loop`, `new-campaign` (topic 3 and Step 3.5), the cheatsheet,
+  `PLACEHOLDERS`, the JOURNAL template, the handoff template, and `GETTING_STARTED` carry one-line
+  pointers.
+
+The P0-5 goldens for `VERIFIER_PROMPT` and the `verify` skill were re-pinned for these deliberate
+changes; `build_prompt`, `_spawn_agent`, and `_service_verification` are unchanged from Phase A.
+
+### Added — metric epochs: the FROZEN metric is epoched, not immutable (ADR-0020, Phase A infrastructure)
+
+Campaigns were stalling on metric questions the loop could not act on: a scorer discovered to overfit, a
+scorer measuring noise-free data when the campaign targets low SNR. "Never manipulate the frozen
+evaluation" had drifted into "the metric can never change", which faithfully optimizes the wrong thing.
+ADR-0020 (user re-decision of standing doctrine, 2026-09-01, with three amendments) reframes the metric
+as **epoched, provenance-stamped, and never self-servingly changed**: a revision opens a new *metric
+epoch*, bumps `metric_version`, re-scores retained contenders, and stays `pending` until the user
+ratifies it — promote-and-label, never quarantine.
+
+This entry ships the infrastructure (plan rows ME-1, ME-2, ME-3 and the D7 config guard of
+`synthesis/METRIC_EPOCH_PLAN_2026-09.md`); the role-file procedures and doctrine text follow.
+
+- **The metric-epoch record lives in existing files — no new structural file.** Declarations go in
+  `configs/loop.json` as `campaign.metric_epochs`, keyed by `metric_version` and present only once a
+  campaign has revised its metric (the co-designed first epoch is implicit); entries carry `kind`
+  (`mechanics` | `semantics`), `evidence`, `expected_direction`, and `status`, are append-only, and
+  standing is never deleted. The scorer hash each epoch is bound to is runner state, kept with the other
+  runner state in `results/correctness_state.json` (`scorer_hash_by_version`). The narrative is one line
+  in the JOURNAL's Findings; no separate decision-record entry is required.
+- **The undeclared-change gate.** `frozen_core.scorer_hash()` (the core hash *without* the correctness
+  suite, so a new regression check is never read as a metric change) is bound to the epoch on its first
+  experiment; from then on the runner refuses to spend — before the selftest's cost, after its verdict —
+  when the scorer's code on disk matches no declared epoch — the hash is over the normalized code, so a
+  comment, docstring, or reformat is not a change and raises no alarm. Preflight runs the same check
+  read-only. This also
+  closes a live hole: `check_comparability` certified cross-version rankings as `pass` whenever the
+  scorer changed without a `metric_version` bump. The incumbent is now chosen within the current
+  `(metric_version, data_version)` only, and the checks artifact names how many rows an epoch boundary
+  set aside (`checks.comparability.excluded`) plus a new three-valued `checks.epoch`.
+- **`campaign.metric_revision`** (`configs/loop.json`; `cautious` default | `autonomous`;
+  `semi-autonomous` reserved and refused, ADR-0020 D8 deferred) — who may revise the metric. Stamped into
+  every manifest and checks artifact; announced at launch when non-cautious; a mid-run change of any
+  campaign property is now logged at hot-reload with its transition (previously only driver knobs were).
+- **The dial is attended-session-only (D7).** The driver sets `PHYSKIT_ROLE` in every spawned role's
+  environment; `guard_promotion` gains a `configs/loop.json` surface that refuses a spawned role's change
+  to `metric_revision` (every other knob passes), a fail-closed check of `campaign.metric_epochs` (append-only;
+  a semantics epoch cites a CONFIRMED kill verdict against the old metric — REFUTED-tier only for an
+  `easier` ruler; a spawned role may open an epoch only under `autonomous`, only as `pending`; ratification
+  is attended-only and final), and a promotion-path check (a rolled-back or undeclared epoch does not
+  promote; a pending one does). `run_campaign.py --set-metric-revision MODE` moves the dial from an
+  attended session and refuses under the marker. The Codex adapter forwards both files to the shared guard.
+- `validate_campaign.py` twins the enum and checks the ledger (new-era trees only); `RECOMMENDED.json`
+  records `_metric_version`.
+
+Known limit, consistent with ADR-0018: a hook is a guardrail, not a sandbox — a shell-side flip bypasses
+it, and the hot-reload log line plus the manifests are what make it visible. Ships with the runner: a
+campaign frozen with an older runner is untouched; a blank `metric_version` is not enforced.
+The P0-5 golden baseline for `_spawn_agent` was re-pinned for the one added line (the role marker);
+`build_prompt` and `_service_verification` hashes are unchanged.
+
+Deterministic evidence: contracts **340/340**, Tier 0 **136/136**, Tier 1 gates **211/211** (48 new cases:
+dial, epoch gate, config guard, ledger guard), supervisor lock **26/26**, paid-process containment
+**27/27**, instruction twins **34/34**, Codex backend **51/51**, direct verifier **80/80**, Codex hook
+**31/31**, Tier 2 **100/101** — the single failure is the pre-existing `feed lines truncated to
+feed_line_chars` case, which fails identically on untouched `main` (a console-encoding artefact of the
+non-ASCII stub line under Python 3.14/cp1252; unrelated to this change). Repository-unchanged check
+green; no model call was made.
+Sign-off (user, 2026-09-01); `synthesis/DECISION_RECORDS.md` ADR-0020; BUILD_BACKLOG ME-1..3, ME-7 (D7 part).
+
+### Fixed — prediction subject is enforced before experiment spend
+
+The prediction spend gate now requires every `predictions/<exp_name>.json` object to carry that exact
+`exp_name` before any solve runs, for `range`, `direction`, and `none` modes. Previously, a missing or
+wrong subject passed the runner but was later rejected by the Codex verifier as wrong-subject evidence,
+leaving accepted science with verification debt that could never clear. The gate's embedded schema
+examples now show the common subject field in every mode.
+
+`new-campaign` validation also checks every existing prediction JSON in a managed campaign against its
+filename stem. It does not require future predictions early: absence remains valid during scaffolding and
+the runner still requires the file immediately before spend. Unmarked legacy campaigns retain their
+existing validation behavior. Existing experiments affected by this bug must be rerun from a correctly
+subjected pre-run prediction; adding `exp_name` after the solve would misrepresent preregistration.
+
+The bug report was independently reproduced on a fresh rendered campaign: campaign validation and
+preflight passed, a subjectless `none` prediction completed the experiment, and the direct verifier then
+returned `missing or wrong-subject evidence`. After the fix, all three modes reject missing/wrong subjects
+before evaluation and exact subjects pass through the verifier contract. Deterministic evidence is green:
+contracts **339/339**, Tier 0 **120/120**, shared/frozen-Claude gates **163/163**, supervisor lock **27/27**,
+paid-process containment **27/27**, instruction twins **35/35**, Codex backend **51/51**, direct verifier
+**80/80**, Codex hook **31/31**, and Tier 2 **96/96**, plus hardware, landmine, cleanup, repository-identity,
+syntax, and diff checks. No model call was made.
+
+### Added — launch-time role-setting confirmation
+
+`run-campaign` now confirms the active harness and the campaign's planner/worker model and effort before
+every stopped-campaign start, restart, or resume. When reliable live concierge metadata is unavailable,
+it says so and asks the user to check the app picker rather than guessing. A difference is informational:
+the user may keep the campaign settings, copy the concierge pair to both roles, configure the roles
+separately, or blank the overrides to inherit harness defaults. No setting is changed without explicit
+approval and no app-level setting is mutated.
+
+The driver preflight now prints the selected backend and each role's validated model/effort pair, labelling
+blank values `default/inherited`. This line is read-only and uses the same harness-specific selection
+functions as the launch path. The Claude-visible effect is the same informational preflight line and
+confirmation question; Claude argv, prompts, hooks, streaming, verifier policy, and launch behavior are
+unchanged.
+
+Deterministic evidence is green: cross-harness contracts **339/339**, Tier 0 **120/120**, frozen Claude
+gates **151/151**, supervisor lock **27/27**, paid-process containment **27/27**, instruction twins
+**35/35**, Codex backend **51/51**, direct verifier **80/80**, Codex hook **31/31**, and Tier 2 **96/96**,
+plus hardware, landmine, cleanup, repository-identity, syntax, diff, and both edited-skill validators.
+No live model call was made.
+
+### Added — active-harness setup and per-role reasoning effort
+
+`new-campaign` now asks whether Claude Code, Codex, or a switchable pair will launch the campaign and,
+for switchable campaigns, which harness launches first. The answer seeds `driver.backend` without pruning
+the existing dual-compatible scaffold, so a later stopped-and-relaunched campaign can still switch with
+`--backend` and does not gain a second set of files.
+
+Planner and worker launches now have independent harness-native effort controls in `configs/loop.json`.
+Claude reads `model` + `claude_effort` and passes a nonblank effort through Claude Code's documented
+`--effort` flag; Codex reads `codex_model` + `codex_reasoning_effort` and passes a nonblank effort through
+the documented launch-scoped `model_reasoning_effort` configuration override. Blank values inherit the
+harness configuration and add no effort flag. Claude permission flags independently follow the v0.10.4
+`driver.permission_mode` policy. The established Claude nested verifier uses the planner pair; the Codex
+direct verifier uses the worker pair. Scaffold validation and
+driver preflight reject cross-harness or unsupported effort vocabulary before a paid spawn.
+
+The Claude-visible change is limited to the optional `claude_effort` fields, their validation, launch
+flag, and planner-effort inheritance by the existing nested verifier. Claude prompts, hooks, stream
+handling, and verifier policy are unchanged; blank effort still adds no effort flag. The implementation follows the
+[Codex configuration reference](https://developers.openai.com/codex/config-reference/) and
+[Claude Code model configuration](https://code.claude.com/docs/en/model-config), and was also parser-
+checked against the installed Codex 0.149.1 and Claude CLIs on Windows.
+
+Deterministic evidence is green: contracts **339/339**, Tier 0 **120/120**, shared gates **151/151**,
+supervisor lock **27/27**, paid-process containment **27/27**, instruction twins **35/35**, Codex backend
+**47/47**, direct verifier **80/80**, Codex hook **31/31**, and Tier 2 **96/96**, with hardware, landmine,
+cleanup, repository-identity, syntax, diff, and both edited-skill validators passing. No installed-cache
+or live-model campaign claim is made; the next gate is a local reinstall and user-run campaign.
+
+### Verified — installed Codex closed-loop release acceptance (P0-7b)
+
+The installed v0.10.1 candidate completed the bounded Codex acceptance sequence on Windows. A trusted
+project loaded the shipped synchronous canonical-`apply_patch` hook, allowed an ordinary edit, and
+blocked a protected promotion edit without changing its target. A fresh direct-refuter canary used
+distinct worker and refuter threads, rejected a planted impossible score, published the canonical
+subject-bound verdict, queued the corrective control, cleared verification debt, and left the installed
+cache unchanged. A short installed campaign then accepted exactly three units across STOP/resume,
+refused a concurrent supervisor, and closed containment with zero survivors.
+
+The installed soak reached exactly **20 accepted units** (`000`–`018` plus corrective `022`) with 20
+result/check/verdict triplets, **32 unique Codex thread IDs**, no pending verification, shelves,
+declines, operational failures, ESCALATE, or driver residue, and a clean STOP. Its retained-run evidence
+reports `PASS_RUNTIME`; Windows Job cleanup recorded no errors or survivors, and the installed cache
+remained byte-identical to source. A synthetic-fixture policy fork at unit 10 was hash-preserved and
+resolved through the supported inbox workflow before exact preflight and retained-campaign resume.
+
+Two live outer scripts retained honest test-only false negatives after their runtime objectives passed:
+the verifier script's JOURNAL prose matcher rejected valid regrouped wording (30/31 structured checks),
+and the short-loop script required an exact queue suffix even though the planner may insert, reorder,
+and regroup work (39/40 checks). Neither caused a runtime change. Commit `2baa9fe` clarifies only the
+neutral-soak fixture policy (+14/−1 test lines, zero shipped lines).
+
+Final Windows deterministic evidence is green: contracts **339/339**, Tier 0 **113/113**, frozen
+Claude gates **147/147**, supervisor lock **27/27**, process containment **27/27**, instruction twins
+**35/35**, Codex backend **41/41**, direct verifier **79/79**, Codex hook **31/31**, and Tier 2
+**86/86**, plus landmine, cleanup, and repository-identity checks. Final installed-package smoke passes
+**15/15**, including exact source/cache file and byte parity. P0-7b adds no shipped runtime or
+configuration surface. Claude launch, prompts, flags, hooks, streaming, and nested-verifier behavior
+remain frozen; no live-Claude or real Claude↔Codex-switching claim is made by this Codex-owned effort.
+
+### Fixed — Codex JSONL ignores out-of-band merged diagnostics (P0-1b)
+
+A real installed-template verifier run exposed that Codex can emit benign diagnostic fragments into the
+same captured stream as its JSONL protocol. The Codex event observer now treats valid non-object JSON
+values and noncanonical brace/bracket fragments as diagnostics only, so they cannot poison a turn that
+later records both a thread ID and terminal success. Broken lines that present the canonical object-event
+discriminator still fail closed.
+
+This correction is confined to the Codex adapter; the Claude command, stream handling, prompts, flags,
+hooks, and verifier path are unchanged. Separately draining Codex stdout and stderr would broaden process
+plumbing and is deliberately deferred. The focused rendered adapter gate passes **41/41**, including
+benign scalar/array and brace/bracket diagnostics plus malformed canonical-event refusal. The complete
+no-model suite remains green: contracts **339/339**, Tier 0 **113/113**, frozen Claude gates **147/147**,
+lock **27/27**, instruction twins **35/35**, direct verifier **71/71**, Codex hook **31/31**, and Tier 2
+**86/86**, with landmine setup, cleanup, and repository identity passing. Refreshed-install and integrated
+live acceptance remain P0-7b gates.
+
+### Added — Codex direct-refuter campaign policy (P0-5)
+
+New campaigns declare `verify.strategy: auto`: Codex treats one fresh driver-spawned thread at the
+worker's Codex model as the independent refuter, while Claude and custom harnesses retain the established
+nested-refuter path. Codex candidates stay under `.codex-pending/<nonce>/` until the driver validates all
+ten verdict fields, the canonical experiment/evidence subject, the generating worker's thread, and the
+captured verifier thread. Only then does the driver atomically publish the canonical verdict with an
+additive finalization stamp. Failed or interrupted attempts restore the exact owed queue group before any
+new planner or worker work. Documented space/hyphen kill-tier spellings normalize on publication.
+
+The Claude verifier prompt, command, flags, stream handling, `build_prompt`, `_spawn_agent`, complete
+legacy verification service, shared verify skill, hooks, and promotion guard remain byte-identical.
+Claude-visible additions are the inert `auto` setting, strategy validation/dispatch, packaged helper and
+documentation, plus additive Codex verdict metadata ignored by existing consumers. Explicit
+`legacy-nested` remains available on Codex; `driver-direct` is rejected for non-Codex backends.
+
+Windows deterministic evidence: source contracts **339/339**, Tier 0 **111/111**, frozen Claude gates
+**147/147**, supervisor lock **27/27**, instruction twins **35/35**, Codex launch/preview **39/39**,
+focused Codex verifier **71/71**, Codex promotion hook **31/31**, and Tier 2 **86/86**, with Tier 3b,
+cleanup, and the repository-content snapshot passing. Runtime growth is exactly the approved 300-line
+cap (247-line helper, +46 net runner, +7 validator); tests/fixtures add +492 net lines. The installed
+seeded-fault verifier canary remains the P0-7b release gate; no Claude live-conformance claim is made.
+
+### Added — native Codex campaign launch adapter (P0-1)
+
+The campaign driver now selects `claude`, `codex`, or a legacy custom command through a small harness
+perimeter. Codex launches use the documented non-interactive `codex exec` JSONL protocol, an absolute
+executable, UTF-8 stdin, and `workspace-write`; completion requires a terminal success event plus a
+captured thread ID. Worker snapshots and a diagnostic session ledger record the actual backend/thread.
+Codex prompt adaptation is limited to the fixed role prefix, leaving delivered project context and
+verbatim user notes unchanged. Legacy loop files without a backend field still select Claude.
+
+The Claude command, flags, model field, prompt constants, prompt-final argv delivery, stream renderer,
+`subprocess.Popen` call, retry/timeout behavior, hooks, and verifier remain unchanged. New templates use
+`driver.backend: auto`, which deliberately asks for an explicit choice if both or neither supported CLI
+is available; role-specific `codex_model` fields are ignored on the Claude path.
+
+Windows evidence: contracts **338/338**, static checks **111/111**, frozen Claude gates **147/147**,
+supervisor lock **27/27**, instruction twins **35/35**, focused Codex-launch checks **38/38**, Codex
+promotion hook **31/31**, and Tier 2 **86/86**, with Tier 3b setup and cleanup checks passing. A refreshed
+Codex install is byte-identical and passes **15/15** installed-package checks. One real installed-template
+Helmholtz-pair smoke launch completed through Codex JSONL and durably recorded its thread provenance.
+
+### Changed — full Codex plugin is campaign-capable (P0-6, ADR-0019)
+
+The Codex manifest now carries the required interface metadata, and the `new-campaign`, `run-campaign`,
+and `campaign-status` descriptions are loader-valid YAML within Codex's routing limit. Shared campaign
+skills resolve bundled doctrine, templates, scripts, validators, and report assets relative to the
+active `SKILL.md`; no skill depends on the Claude-only `CLAUDE_PLUGIN_ROOT`. Missing package resources
+halt scaffolding instead of falling back to an unrelated checkout. The full Codex plugin is now the
+documented campaign-capable install; the standalone skills projection remains general-use only.
+
+The established Claude manifests, marketplace, hook settings, promotion guard, campaign runner,
+verifier, and worker/planner prompts are unchanged. Claude-visible skill changes are limited to
+loader-safe descriptions, equivalent relative links to the same bundled resources, and an explicit
+label on the pre-existing Claude transcript archive step.
+
+Windows evidence: plugin and three campaign-entry skill validators pass; source contracts pass
+**333/333**; the complete no-model suite remains green at Tier 0 **111/111**, frozen Claude gates
+**147/147**, supervisor lock **27/27**, instruction twins **35/35**, Codex promotion hook **31/31**,
+and Tier 2 **86/86**, with Tier 3b setup and repository-cleanup checks passing. A same-version Codex
+refresh produced an exact 108-file cache, and the opt-in installed-package smoke passes **15/15**,
+including scaffolding and validation entirely from the installed copy.
+
+### Added — Codex promotion gate at the apply_patch perimeter (P0-3, ADR-0018)
+
+New managed campaigns render a synchronous project-local Codex `PreToolUse` hook plus a small adapter
+for the documented canonical `apply_patch` envelope. The adapter parses every atomic add/delete/update/
+move and multi-file operation, resolves native paths from hook `cwd`, and sends only protected surfaces
+through the established subject-matched verdict and correctness policy. A denial in any protected
+operation blocks the whole patch; malformed protected controls and protected moves fail closed.
+A protected promotion must also be a separate single-file patch, preventing an atomic co-mutation from
+invalidating its frozen core, verdict, or correctness state after the pre-patch check.
+Scoreboard change blocks are checked independently and must name one experiment, so existing context or
+one verified row cannot mask a different unverified promotion.
+
+The existing `guard_promotion.py.tmpl`, `.claude/settings.json.tmpl`, and `run_campaign.py.tmpl` are
+unchanged. Managed validation checks Codex file/schema/matcher/synchronous-command presence; unmarked
+legacy Claude campaigns remain exempt. Codex project-hook trust is still an explicit fresh-task `/hooks`
+review, and the compatibility claim is deliberately limited to canonical `apply_patch`; live trust and
+specialized mutation-path canaries belong to P0-7b.
+
+Windows deterministic evidence: documented fixture contracts **191/191**, focused rendered-hook tests
+**31/31**, Tier 0 **111/111**, frozen Claude gates **147/147**, supervisor lock **27/27**, instruction
+twins **35/35**, Tier 2 **86/86**, and Tier 3b setup PASS, with exact cleanup and repository snapshot
+unchanged. The Claude hook template remains 492 bytes, SHA-256 `16f2d877…`.
+
+### Added — native Claude/Codex instruction twins with a resume gate (P0-2, ADR-0017)
+
+New project and campaign scaffolds render each existing `CLAUDE.md.tmpl` once, then materialize
+byte-identical exact-case regular `CLAUDE.md` and `AGENTS.md` files. One 219-line generated checker
+validates the project-to-campaign chain, rejects unsafe overrides or one-sided drift, and offers a
+dry-run unified diff plus explicit atomic reconciliation from either named source. Preflight checks
+before probing the CLI, and every worker/planner/verifier or smoke launch rechecks before model spend.
+
+The change is conditional on the managed marker/new runner: stamped legacy Claude campaigns are not
+rewritten and still validate without `AGENTS.md`. Claude command construction, prompts, flags, stream
+rendering, hooks, verifier policy, and queue mechanics are unchanged. Broader migration, host-specific
+tails, launch pins, snapshot hashes, and campaign-status integration remain deferred.
+
+Windows deterministic validation: the instruction-focused suite passes **35/35**, including the
+documented CLI, both reconciliation directions, replacement-failure cleanup, project-scope downgrade
+refusal, missing-runner-wiring refusal, validator drift, and the pre-smoke recheck. The complete no-model suite is green at contracts
+**163/163**, Tier 0 **110/110**, existing Tier 1 **147/147**, supervisor lock **27/27**, Tier 2
+**86/86**, and Tier 3b setup PASS, with exact fixture cleanup and repository contents unchanged. The
+symlink refusal case ran on this Windows host. Exact Claude argv/events, prompt construction, hook
+settings and behavior, verifier policy, and frozen legacy validation remain pinned.
+
+### Added — exclusive live-supervisor ownership (P0-4, ADR-0016)
+
+Each generated campaign now carries a small cross-platform OS-lock helper. `--supervise` acquires
+`results/.supervisor.lock` before logging, preflight, queue access, or model spend and holds it through
+the existing supervisor cleanup; a second Claude/Codex supervisor refuses with bounded, best-effort owner diagnostics.
+The file persists after release for diagnosis, but file existence is never treated as ownership. Normal
+Claude commands, prompts, hooks, heartbeat semantics, verifier behavior, and non-supervisor modes are
+unchanged. Hard-crash containment of possibly detached children is explicitly deferred for Claude-owner
+review rather than bundled into this Codex compatibility fix.
+
+Windows validation: simultaneous process contention, normal/exception/crash release, metadata tamper,
+unsafe paths, nonblocking refusal, legacy validation, and wrapper ordering all pass (27/27); the full
+no-model suite is green at fixture contracts
+163/163, Tier 0 99/99, existing Tier 1 147/147, Tier 2 86/86, and Tier 3b setup PASS.
+
+### Fixed — current guidance follows the v0.10.1 artifact layout
+
+The cross-harness P0-7a semantic-lint refresh (approved compatibility plan, 2026-08-25) exposed
+surviving references to the retired campaign `DISCOVERIES.md`, copied doctrine snapshot, split
+project documents, and internal-only decision labels. Current maintainer guidance, shipped skills,
+reference maps, and template comments now point to `JOURNAL.md` §Findings + verdicts,
+`RECOMMENDED.json`, `PROJECT.md`, and the version stamp. References that intentionally describe a
+legacy layout are explicitly marked as such. This is a documentation/example correction only; it
+does not change campaign runtime behavior.
+
+### Added — P0-7a cross-harness compatibility baseline
+
+The structured-loop suite now builds owned, stage-marked full-project fixtures in isolated Windows
+temporary directories instead of maintaining a repo-local rendered campaign. Mutable tiers receive
+fresh copies; helpers reject existing, relative, repo-contained, unowned, copied-marker, and
+out-of-order destinations. The suite snapshots tracked, ordinary-untracked, and ignored file content
+and proves its detector catches same-status mutations before asserting that the source worktree is
+unchanged.
+
+Stale v0.10.0 assertions were refreshed to the v0.10.1 promotion, verification, artifact, and
+instruction contracts. Reusable command, JSONL event, hook-payload, verdict, plugin-manifest, and
+Windows-path fixtures now separate current Claude conformance from explicitly synthetic Codex cases
+owned by later P0 work. Tier 1 distinguishes allow/deny/block from crashes and fail-open paths, uses
+isolated scratch trees, and validates quoted Windows hook commands. Tier 2 exercises positive
+verification scheduling, verdict consumption, scoreboard stamping, and backlog clearing without
+claiming the independent-identity guarantees reserved for P0-5. The live landmine canary now stages a
+coherent v0.10.1 project, uses the production prompt builder, and has a no-model preflight that proves
+its baseline, current ledgers, neutral assignment, and discriminating premise.
+
+Final deterministic validation on Windows: fixture contracts 163/163, Tier 0 99/99, Tier 1 147/147,
+Tier 2 85/85, Tier 3b setup PASS, cleanup PASS, and repository contents unchanged. No live model,
+installed-cache, or Codex-runtime conformance claim is made here; those remain later P0/release tests.
 ## [0.10.4] - 2026-08-27
 
 ### Changed — spawned workers/planners now default to `--permission-mode auto`, not full bypass

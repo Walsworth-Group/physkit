@@ -241,7 +241,8 @@ Operational doctrine: the **`model-selection`** skill.*
 
 ## Cross-archetype constants (fill these the same way for ANY archetype)
 These are settled doctrine in the generic `campaign.md` and apply regardless of archetype:
-- ONE **frozen metric**; scoring math never changes mid-campaign.
+- ONE **frozen metric**; scoring math is never changed in place mid-campaign — a revision is a declared
+  metric epoch (new `metric_version`, verified, re-baselined).
 - **Exp 000 baseline gate** = the floor + an end-to-end pipeline/convention validation.
 - The **FROZEN / READ-ONLY / Mutable** code tripartition.
 - **A-priori metric bounding** (predict before you run; an out-of-range result is a flag, not a win).

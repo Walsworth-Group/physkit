@@ -1,6 +1,6 @@
 {
   "name": "physkit",
-  "version": "0.10.4",
+  "version": "0.11.0",
   "description": "A dual-use toolkit for rigorous physical-science work: a general layer of skills for framing problems, verifying results, designing simulations, debugging, and reporting; and a campaign layer that scaffolds and runs autonomous-research loops. Honesty and independent verification are the frozen core.",
   "author": {
     "name": "Walsworth Group",
@@ -19,6 +19,19 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "PhysKit",
-    "shortDescription": "Rigorous physics-research skills + an autonomous-research campaign layer"
+    "shortDescription": "Rigorous physics-research skills + an autonomous-research campaign layer",
+    "longDescription": "Frame, verify, simulate, debug, and report physical-science work, or scaffold and operate a rigor-gated autonomous research campaign with reproducible records and independent verification.",
+    "developerName": "Walsworth Group",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Frame a physical-science problem rigorously.",
+      "Verify this result independently before I rely on it.",
+      "Scaffold an autonomous research campaign."
+    ]
   }
 }

@@ -9,7 +9,7 @@
 - Full goal: `campaign.md` §Mission · task queue: `results/queue.json`
 
 ## 2. Current state (incl. in-flight reasoning)
-- **Current best / result:** <value + where it lives (config/snapshot)> · **verification:** <CONFIRMED / PROVISIONAL / unverified>
+- **Current best / result:** <value + where it lives (config/snapshot)> · **verification:** <CONFIRMED / PROVISIONAL / unverified> · **metric epoch:** <metric_version · standing; any pending epoch awaiting ratification>
 - **Done:** <the settled pieces>
 - **In-flight, and why:** <the hypothesis being tested, why, what was expected, what had just been learned>
 - **Open threads:** <live questions>
@@ -21,6 +21,7 @@
 <activate env, e.g. source .venv/bin/activate>
 # correctness gates (expect: all pass / suite GREEN)
 python scripts/metric.py --selftest
+python scripts/run_campaign.py --preflight   # names the metric epoch + its standing
 <run the correctness-suite, e.g. make check>
 # reproduce the current best (expect: <STATED VALUE> ± tol)
 <command that re-derives the current-best number from its snapshot>

@@ -22,6 +22,7 @@ Campaign validation fails (exit 1) on anything new-campaign left unresolved:
     code stubs),
   * an illegal campaign property in configs/loop.json "campaign" - an out-of-enum prediction_mode /
     noise_model, or prediction_mode 'none' with no recorded reason (mirrors the runner's preflight),
+  * an existing prediction JSON whose `exp_name` does not exactly match its filename stem,
   * no project home above the campaign, or no "## Standing constraints" section in the project's
     PROJECT.md (new layout) or PROJECT_ORIENTATION.md (old layout) - the section the driver
     delivers (a pre-merge project - one still carrying shared/PHYSICS.md - is named as such, with
@@ -71,6 +72,7 @@ TEXT_EXT = {".md", ".py", ".json", ".tsv", ".txt", ".cfg", ".ini", ".yaml", ".ym
 # false positives on legitimate LaTeX (\frac{{a}}, x_{{ij}}) and Python f-string ({{...}}) braces.
 PLACEHOLDER = re.compile(r"\{\{[A-Z_][A-Z0-9_]*\}\}")
 LEAK_LITERALS = ("[[OPTIONAL", "[PROPOSED]")
+DUAL_INSTRUCTION_MARKER = "<!-- physkit-dual-instructions:v1 -->"
 # Windows drive-letter (C:\ or C:/) or UNC (\\server) absolute paths — the realistic portability breaker
 # for this Windows/shared-drive project. Applied to CONFIG files only (not prose, which has legit examples).
 ABS_PATH = re.compile(r"(?:[A-Za-z]:[\\/])|(?:\\\\[A-Za-z0-9_.$-]+\\)")
@@ -135,6 +137,21 @@ def _read_text(path: Path) -> str | None:
             return None
     except OSError:
         return None
+
+
+def check_agent_instructions(root: Path, errors: list[str], *, chain: bool) -> None:
+    """Use the shipped canonical checker without executing campaign-local Python."""
+    checker_path = (Path(__file__).resolve().parents[3] / "templates" / "campaign"
+                    / "scripts" / "sync_agent_instructions.py")
+    try:
+        namespace = {"__name__": "physkit_instruction_checker"}
+        exec(compile(checker_path.read_bytes(), str(checker_path), "exec"), namespace)
+        if chain:
+            namespace["check_chain"](root)
+        else:
+            namespace["check_pair"](root, required=True)
+    except Exception as exc:
+        errors.append(f"Claude/Codex instruction consistency failed: {exc}")
 
 
 def _md_has_section(path: Path, heading: str) -> bool:
@@ -260,6 +277,13 @@ def project_root_of(campaign: Path) -> Path | None:
 PREDICTION_MODES = ("range", "direction", "none")
 NOISE_MODELS = ("stochastic", "deterministic")
 VERIFICATION_MODES = ("per-block", "promotion-only")
+VERIFY_PRESETS = ("minimal", "light", "moderate", "intensive")
+VERIFY_ROWS = ("invariants", "machinery", "gates", "self_check", "review", "re_execution", "capstone")
+METRIC_REVISION_MODES = ("cautious", "autonomous")
+AGENT_BACKENDS = ("auto", "claude", "codex", "custom")
+VERIFY_STRATEGIES = ("auto", "legacy-nested", "driver-direct")
+CLAUDE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+CODEX_EFFORTS = ("minimal", "low", "medium", "high", "xhigh")
 
 
 def check_loop_files(root: Path, errors: list[str]) -> None:
@@ -295,15 +319,51 @@ def check_loop_files(root: Path, errors: list[str]) -> None:
                               "campaign.prediction_mode_reason - record why this campaign cannot "
                               "honestly bound its answer. Running unbounded is a legitimate choice; "
                               "making it without a recorded reason leaves the control unowned.")
-            vmode = str(camp.get("verification") or "per-block").strip().lower()
-            if vmode not in VERIFICATION_MODES:
-                errors.append(f"loop.json campaign.verification is {vmode!r}; expected one of "
-                              + " | ".join(VERIFICATION_MODES))
-            if vmode == "promotion-only" and not str(camp.get("verification_reason") or "").strip():
-                errors.append("loop.json sets campaign.verification='promotion-only' with an empty "
-                              "campaign.verification_reason - record why per-block verification is "
-                              "not affordable or applicable here. Turning routine verification down "
-                              "is a legitimate choice; an unrecorded one leaves the control unowned.")
+            verify_block = cfg.get("verify") if isinstance(cfg.get("verify"), dict) else {}
+            preset = verify_block.get("preset")
+            if preset is not None:
+                p = str(preset).strip().lower()
+                if p not in VERIFY_PRESETS:
+                    errors.append(f"loop.json verify.preset is {p!r}; expected one of "
+                                  + " | ".join(VERIFY_PRESETS) + " (docs/reference/verification-presets.md)")
+            else:
+                # An older loop.json: the previous kit's campaign.verification is still read.
+                vmode = str(camp.get("verification") or "per-block").strip().lower()
+                if vmode not in VERIFICATION_MODES:
+                    errors.append(f"loop.json campaign.verification is {vmode!r}; expected one of "
+                                  + " | ".join(VERIFICATION_MODES) + " (or set verify.preset)")
+                if vmode == "promotion-only" and not str(camp.get("verification_reason") or "").strip():
+                    errors.append("loop.json sets campaign.verification='promotion-only' with an empty "
+                                  "campaign.verification_reason - record why per-block verification is "
+                                  "not affordable or applicable here, or set verify.preset instead.")
+            rmode = str(camp.get("metric_revision") or "cautious").strip().lower()
+            if rmode not in METRIC_REVISION_MODES:
+                errors.append(f"loop.json campaign.metric_revision is {rmode!r}; expected one of "
+                              + " | ".join(METRIC_REVISION_MODES)
+                              + (" ('semi-autonomous' is reserved - its rules are not defined yet)"
+                                 if rmode == "semi-autonomous" else ""))
+            backend = str((cfg.get("driver") or {}).get("backend") or "auto").strip().lower()
+            if backend not in AGENT_BACKENDS:
+                errors.append(f"loop.json driver.backend is {backend!r}; expected one of "
+                              + " | ".join(AGENT_BACKENDS))
+            verify_cfg = cfg.get("verify") or {}
+            verify_strategy = verify_cfg.get("strategy", "auto") if isinstance(verify_cfg, dict) else None
+            if not isinstance(verify_strategy, str) or verify_strategy.strip().lower() not in VERIFY_STRATEGIES:
+                errors.append("loop.json verify.strategy must be " + " | ".join(VERIFY_STRATEGIES))
+            for role in ("worker", "planner"):
+                role_cfg = cfg.get(role) or {}
+                if "codex_model" in role_cfg and not isinstance(role_cfg["codex_model"], str):
+                    errors.append(f"loop.json {role}.codex_model must be a string")
+                for field, allowed in (("claude_effort", CLAUDE_EFFORTS),
+                                       ("codex_reasoning_effort", CODEX_EFFORTS)):
+                    if field not in role_cfg:
+                        continue
+                    value = role_cfg[field]
+                    if not isinstance(value, str):
+                        errors.append(f"loop.json {role}.{field} must be a string")
+                    elif value.strip() and value.strip().lower() not in allowed:
+                        errors.append(f"loop.json {role}.{field} must be blank or one of: "
+                                      + " | ".join(allowed))
         except Exception as exc:
             errors.append(f"loop.json does not parse as JSON ({exc})")
     queue_files = list(root.glob("results*/queue.json"))
@@ -313,6 +373,23 @@ def check_loop_files(root: Path, errors: list[str]) -> None:
             assert isinstance(q.get("next"), list) and isinstance(q.get("shelved"), list)
         except Exception as exc:
             errors.append(f"queue.json does not parse as a queue ledger ({exc})")
+
+
+def check_prediction_subjects(root: Path, errors: list[str]) -> None:
+    """Existing pre-run evidence must name the subject its filename assigns to it.
+
+    Predictions are created incrementally, so absence is valid here and remains the runner's spend-gate
+    decision. Any prediction that does exist must already satisfy the verifier's immutable subject rule.
+    """
+    for path in sorted((root / "predictions").glob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except Exception as exc:
+            errors.append(f"{path.relative_to(root)} does not parse as JSON ({exc})")
+            continue
+        actual = str(payload.get("exp_name", "")) if isinstance(payload, dict) else ""
+        if actual != path.stem:
+            errors.append(f"{path.relative_to(root)} has exp_name={actual!r}; expected {path.stem!r}")
 
 
 def check_routing_table(root: Path, errors: list[str]) -> None:
@@ -407,6 +484,109 @@ def check_hook_wiring(root: Path, errors: list[str]) -> None:
                   " (`py -3` on Windows, `python3` on macOS/Linux) in .claude/settings.json.")
 
 
+def check_codex_hook_wiring(root: Path, errors: list[str]) -> None:
+    """New managed campaigns must expose the shared promotion policy to canonical apply_patch."""
+    settings = root / ".codex" / "hooks.json"
+    text = _read_text(settings)
+    if text is None:
+        errors.append("missing Codex promotion-hook settings: .codex/hooks.json")
+        return
+    try:
+        cfg = json.loads(text)
+    except Exception as exc:
+        errors.append(f".codex/hooks.json does not parse as JSON ({exc})")
+        return
+    hook_map = cfg.get("hooks") if isinstance(cfg, dict) else None
+    entries = hook_map.get("PreToolUse") if isinstance(hook_map, dict) else None
+    if not isinstance(entries, list):
+        errors.append(".codex/hooks.json must declare hooks.PreToolUse as a list")
+        return
+    matched = [entry for entry in entries
+               if isinstance(entry, dict) and entry.get("matcher") == "^apply_patch$"]
+    if not matched:
+        errors.append(".codex/hooks.json has no exact canonical apply_patch PreToolUse matcher")
+        return
+    hooks = [hook for entry in matched
+             for hook in (entry.get("hooks") if isinstance(entry.get("hooks"), list) else [])
+             if isinstance(hook, dict)]
+    wired = [hook for hook in hooks
+             if hook.get("type") == "command"
+             and "guard_promotion_codex.py" in str(hook.get("command", ""))
+             and "guard_promotion_codex.py" in str(hook.get("commandWindows", hook.get("command", "")))]
+    if not wired:
+        errors.append(".codex/hooks.json does not invoke scripts/guard_promotion_codex.py")
+    elif any(hook.get("async") not in (None, False) for hook in wired):
+        errors.append("Codex promotion PreToolUse hook must be synchronous (async must be absent or false)")
+
+
+EPOCH_KINDS = ("mechanics", "semantics")
+EPOCH_STATUSES = ("pending", "ratified", "rolled-back")
+
+
+CONTRACT_CHECKS = ("baseline_reproduces", "noise_floor_measured", "metric_discriminates", "synthetic_recovery")
+
+
+def check_contract_checks(root: Path, errors: list[str]) -> None:
+    """The setup audit's four contract checks must exist in the suite (new-campaign Step 3.7) unless
+    tests/CORRECTNESS_NA.md records why the campaign has no machinery to check. Presence only: their
+    outcome is the runner's to record (a skip-stub is allowed to ship; a missing name is a scaffold that
+    skipped the audit)."""
+    suite = root / "tests" / "correctness_checks.py"
+    if not suite.is_file():
+        return                      # the required-file check already reports an absent suite
+    if (root / "tests" / "CORRECTNESS_NA.md").is_file():
+        return
+    try:
+        text = suite.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return
+    missing = [name for name in CONTRACT_CHECKS if f"def {name}(" not in text]
+    if missing:
+        errors.append("tests/correctness_checks.py lacks the setup audit's contract check(s): "
+                      + ", ".join(missing) + " - fill them (new-campaign Step 3.7; the suite template "
+                      "ships them as stubs), or record tests/CORRECTNESS_NA.md with the reason")
+
+
+def check_metric_epochs(root: Path, errors: list[str]) -> None:
+    """loop.json campaign.metric_epochs (the metric-epoch record) - absent while the campaign is on its
+    co-designed first metric; once present, an object keyed by metric_version whose entries carry a legal
+    kind and status, naming the current metric_version, and not pointing it at a rolled-back epoch."""
+    loop_files = list(root.glob("configs*/loop.json"))
+    if not loop_files:
+        return
+    try:
+        camp = (json.loads(_read_text(loop_files[0]) or "") or {}).get("campaign") or {}
+    except Exception:
+        return   # check_loop_files already reports an unparseable loop.json
+    block = camp.get("metric_epochs")
+    if block is None:
+        return
+    if not isinstance(block, dict):
+        errors.append("loop.json campaign.metric_epochs must be a JSON object keyed by metric_version")
+        return
+    for vid, e in block.items():
+        if not str(vid).strip() or not isinstance(e, dict):
+            errors.append("loop.json campaign.metric_epochs: every entry is keyed by a metric_version and is an object")
+            return
+        if str(e.get("kind", "")) not in EPOCH_KINDS:
+            errors.append(f"loop.json campaign.metric_epochs[{vid!r}]: kind must be " + " | ".join(EPOCH_KINDS))
+        if str(e.get("status", "")) not in EPOCH_STATUSES:
+            errors.append(f"loop.json campaign.metric_epochs[{vid!r}]: status must be " + " | ".join(EPOCH_STATUSES))
+    mv = str(camp.get("metric_version") or "").strip()
+    bound = {}
+    for state in root.glob("results*/correctness_state.json"):
+        try:
+            bound = (json.loads(_read_text(state) or "") or {}).get("scorer_hash_by_version") or {}
+        except Exception:
+            bound = {}
+        break
+    if block and mv and mv not in block and mv not in bound:   # the first (bound) epoch needs no entry
+        errors.append(f"loop.json campaign.metric_version {mv!r} has no entry in campaign.metric_epochs "
+                      f"(declared: {', '.join(str(k) for k in block)}) - a metric_version bump is an epoch; declare it")
+    elif block and mv and mv in block and str(block[mv].get("status")) == "rolled-back":
+        errors.append(f"loop.json campaign.metric_version {mv!r} points at a ROLLED-BACK epoch")
+
+
 def validate_campaign(root: Path) -> list[str]:
     errors: list[str] = []
 
@@ -419,6 +599,34 @@ def validate_campaign(root: Path) -> list[str]:
     for label, pattern in CAMPAIGN_REQUIRED_GLOBS:
         if not list(root.glob(pattern)):
             errors.append(f"missing {label}: no file matches '{pattern}'")
+
+    # New runners import this helper; legacy Claude runners predate it and remain valid.
+    runner = root / "scripts" / "run_campaign.py"
+    runner_text = _read_text(runner) or ""
+    managed_instructions = DUAL_INSTRUCTION_MARKER in (
+        (_read_text(root / "CLAUDE.md") or "") + (_read_text(root / "AGENTS.md") or ""))
+    if (runner.is_file()
+            and "import supervisor_lock as _supervisor_lock"
+            in runner_text
+            and not (root / "scripts" / "supervisor_lock.py").is_file()):
+        errors.append("missing supervisor ownership lock: scripts/supervisor_lock.py")
+    instruction_import = "import sync_agent_instructions as _agent_instructions" in runner_text
+    codex_backend_import = "import codex_backend as _codex_backend" in runner_text
+    if managed_instructions and not instruction_import:
+        errors.append("managed Claude/Codex instructions require runner checker wiring")
+    if instruction_import or managed_instructions:
+        if not (root / "scripts" / "sync_agent_instructions.py").is_file():
+            errors.append("missing Claude/Codex instruction checker: scripts/sync_agent_instructions.py")
+        check_agent_instructions(root, errors, chain=True)
+    if codex_backend_import and not (root / "scripts" / "codex_backend.py").is_file():
+        errors.append("missing Codex launch adapter: scripts/codex_backend.py")
+    if "import codex_verifier" in runner_text and not (root / "scripts" / "codex_verifier.py").is_file():
+        errors.append("missing Codex verifier policy: scripts/codex_verifier.py")
+    if managed_instructions:
+        if not (root / "scripts" / "guard_promotion_codex.py").is_file():
+            errors.append("missing Codex promotion adapter: scripts/guard_promotion_codex.py")
+        check_codex_hook_wiring(root, errors)
+        check_prediction_subjects(root, errors)
 
     # 1b. The project home + its background doc. A campaign with no home is a legacy bare tree — lift it
     #     into a project (new-campaign Step 0.1) rather than authoring campaign-local physics/conventions.
@@ -440,6 +648,8 @@ def validate_campaign(root: Path) -> list[str]:
 
     # 1d. The loop driver's config + queue ledger parse and carry the keys the driver dereferences.
     check_loop_files(root, errors)
+    check_metric_epochs(root, errors)
+    check_contract_checks(root, errors)
     check_hook_wiring(root, errors)
     check_routing_table(root, errors)
 
@@ -460,6 +670,9 @@ def validate_project(root: Path) -> list[str]:
         if not (root / rel).is_dir():
             errors.append(f"missing required project dir ({layout} layout): {rel}/")
     check_orientation(root, errors)
+    if DUAL_INSTRUCTION_MARKER in ((_read_text(root / "CLAUDE.md") or "")
+                                   + (_read_text(root / "AGENTS.md") or "")):
+        check_agent_instructions(root, errors, chain=False)
 
     # 1b. New layout: PROJECT.md must carry the §Lineage index, and the retired root docs whose
     #     content it now owns must be GONE - a surviving LINEAGE.md or PROJECT_ORIENTATION.md is a

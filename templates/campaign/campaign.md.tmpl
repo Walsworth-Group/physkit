@@ -23,9 +23,19 @@ These are what the campaign tests. Updating them as evidence arrives is success,
 - <what we expect / suspect — and how a result would confirm or kill it>
 - <the first-instinct answer, recorded so it can be checked against what actually worked>
 
-## The ONE metric (FROZEN — never edited mid-campaign)
+## The ONE metric (FROZEN — revised only as a declared epoch, never edited in place)
 `{{PRIMARY_METRIC}}` = {{METRIC_DEFINITION}}. {{PRIMARY_DIRECTION}} = better. Computed by
-`{{FROZEN_SCORER_PATH}}` (FROZEN). You change what FEEDS the metric, never how it is computed.
+`{{FROZEN_SCORER_PATH}}` (FROZEN). You change what FEEDS the metric, never how it is computed — unless
+the metric itself is found wrong, which is a **metric epoch** (`roles/worker.md` §Metric epochs): a new
+`metric_version`, a verified kill of the old metric (or, for a scorer that did not compute this
+specification, the check that reproduces the discrepancy), this section updated, and the retained
+contenders re-scored. The epoch record is `configs/loop.json` `campaign.metric_epochs` — the block is
+absent until the first revision; with no block, the current `metric_version` is the co-designed first
+epoch, ratified, and it never needs an entry of its own; who may open one is `campaign.metric_revision`,
+the user's dial. **Epoch, not fork:** when
+the ruler was wrong but the save-sets are valid and re-scorable, open an epoch and the ledger survives;
+when the artifacts themselves are tainted (a forward-model bug, corrupted data), that is
+`fork-campaign` — a clean break with a fresh ledger.
 - **Hard bounds:** {{METRIC_HARD_BOUNDS}}.
 - **Plausible a-priori range:** {{METRIC_PLAUSIBLE_RANGE}}. Predict before you run. A result outside
   this range is a red flag to investigate, not a triumph. What the spend gate accepts as a prediction is
@@ -137,10 +147,11 @@ each idea came from is part of the record. When an idea comes from a related sol
 analogy and what transfers: the closest prior art's approach, not just its citation. A method that
 worked on a nearby problem is often the fastest lever to try.
 
-## FROZEN / out of scope (NEVER change; NEVER ask for)
+## FROZEN / out of scope (never changed quietly; the scorer only as a declared metric epoch)
 - **Out of scope / explicitly not claimed:** {{OUT_OF_SCOPE}}
-- **FROZEN** (no edit without re-validation + user sign-off): the scoring math `{{FROZEN_SCORER_PATH}}`;
-  {{FROZEN_LIST}}; the experimental data (read-only).
+- **FROZEN** (never edited in place; a change to the scoring math is a declared metric epoch —
+  `roles/worker.md` §Metric epochs — re-validated and ratified by the user): the scoring math
+  `{{FROZEN_SCORER_PATH}}`; {{FROZEN_LIST}}; the experimental data (read-only, and never revised).
 - **READ-ONLY** (use, don't edit): {{READONLY_LIST}}.
 - **MUTABLE**: {{MUTABLE_LIST}} (+ `configs/` — a new file per experiment).
 [[OPTIONAL — the campaign has a data/distribution choice that must be held fixed:
@@ -241,8 +252,9 @@ scored a decoder on wrong test data. See the project `CLAUDE.md` fork-and-archiv
 than this campaign's own resolution: the {{SPREAD_NOUN}} spread if `campaign.noise_model` is
 `stochastic`, the numerical `campaign.tolerance` if it is `deterministic` (the runner records which, and
 the verdict, in `results/checks_<NN>.json`), (2) does not materially worsen `{{GUARDRAIL_METRIC}}`, (3) is
-no less parsimonious without justification, and (4) survives independent verification
-(`roles/worker.md` §Independent verification).
+no less parsimonious without justification, and (4) survives the independent verification its preset
+requires (`roles/worker.md` §Independent verification) — or, under `minimal`, is promoted stamped
+`unverified`, which the claim audit at the end of the campaign then checks.
 {{PROMOTION_CONFIRM_RULE}}
 [[OPTIONAL — metric has ceilings:
 Distinguish **ceiling moves** (forward/registration/preprocessing raised the bound: real, physical)
@@ -261,14 +273,21 @@ accumulates) / **INCONCLUSIVE** (cause unattributed, never graduates; queue a fi
 
 The failed-experiment population is more bug-contaminated than the winning one: most implementation
 errors degrade performance. An unexamined negative is how a campaign silently kills a live branch. A
-claimed **invalidation** ("prior results are tainted") gets a verify verdict before the plan
-reprioritizes, shelves, or forks on it.
+claimed **invalidation** ("prior results are tainted", "the metric is wrong") gets a verify verdict
+before the plan reprioritizes, shelves, forks, or opens a metric epoch on it.
 
 Promotion compares only within one `(metric_version, data_version)`. Never rank a row against one scored
-under a different metric or dataset version; re-score first, per §`results/scoreboard.tsv` below.
+under a different metric or dataset version; re-score first, per §`results/scoreboard.tsv` below. A
+`metric_version` bump is a metric epoch (§The ONE metric): the runner refuses to run under a version no
+epoch declares, sets earlier rows aside rather than ranking them, and the checks artifact names the
+boundary until the contenders are re-scored. A pending epoch promotes with its standing on the row
+(promote-and-label); a rolled-back one does not.
 
-**A non-CONFIRMED verdict does not promote a clean "best":** a PROVISIONAL / QUESTIONABLE ASSUMPTION row
-may act as working current-best only with its caveat recorded beside it. And **no claim-splitting**: a
+**Every exported claim carries an honest verification label; `unverified` is a legitimate label, a
+softened one is not.** Under this campaign's preset (§Verification) a promotion either holds the
+CONFIRMED verdict the preset requires — quoted with its mode — or, where the preset checks nothing,
+promotes stamped `unverified`; a PROVISIONAL / QUESTIONABLE ASSUMPTION row may act as working
+current-best only with its caveat recorded beside it, and never as `unverified`. And **no claim-splitting**: a
 promoted config may not shed the unphysical part it rests on. A headline number is inseparable from its
 config, and a fitted parameter outside its physical range blocks promotion until it is explained. Report
 each number with its **metric path**: the frozen PRIMARY vs any relaxed/auxiliary score.
@@ -277,10 +296,13 @@ each number with its **metric path**: the frozen PRIMARY vs any relaxed/auxiliar
 The *procedure* is the kit's and is not restated here: `{{VERIFY_SKILL}}` adjudicates every finding
 through an independent refuter (assume-wrong; recompute every number; residual-nature analysis), and
 `correctness-suite` maintains the standing regression gates in `tests/correctness_checks.py`, green-gated
-on every run. In supervised mode the driver runs verification **per block**: after each completed
-unit — or the last unit of a batch of related units sharing a queue `block` id — it spawns a
-verification agent, and the block is not cleared until every verdict artifact exists
-(`configs/loop.json` `campaign.verification`; turning this down requires a recorded reason). Bounds live in §The ONE metric; the physics inventory and domain of validity in
+on every run. How much verification runs, and when, is this campaign's **preset** (`configs/loop.json`
+`verify.preset`, one of `minimal` · `light` · `moderate` · `intensive`;
+the physkit plugin's `docs/reference/verification-presets.md` is the one description): the driver spawns the independent
+check the preset owes an accepted unit — per promotion candidate, or per batch of related units sharing
+a queue `block` id — decides its depth from the unit's measured cost (re-execution when cheap and
+reproducible, review from the frozen record otherwise), and does not clear a unit until its verdict
+artifact exists. Every result carries the preset it ran under and its label. Bounds live in §The ONE metric; the physics inventory and domain of validity in
 `../../PROJECT.md` §Standing constraints. For a simulation-heavy campaign the V&V&UQ method
 is the physkit plugin's `docs/SIMULATION_VALIDATION.md`. What belongs here is only what generic doctrine
 cannot supply — the checks specific to this campaign. Append new ones as the work uncovers them; when a
@@ -309,13 +331,16 @@ narrative one. Every experiment's numbers live here: the primary metric, every s
 metric/sanity score, and the experiment-type **run numerics** (e.g. epochs trained + best epoch,
 iterations, wall-clock). Append-only. Never delete or rename a column mid-campaign: it breaks
 comparability. Keep the PRIMARY column position stable. A new column requires the run-writer to emit it
-first. The `verified` column carries the independent-verification verdict, blank until run. The `tier`
+first. The `verified` column carries the independent-verification verdict, blank until the driver stamps
+it from a verdict artifact; under a preset that owes a unit no independent check it stays blank and the
+unit's `label` in `results/checks_<NN>.json` is the record. The `tier`
 column records the run-length tier (Scout / Confirmation / Extended) so cap-compliance stays
 machine-auditable on every row. The `metric_version` and `data_version` columns tag the FROZEN metric and
 dataset this row was scored under: a "current best" or ranking is valid only within one
 `(metric_version, data_version)` pair. Never compare across versions; this is the single most common
 silent landmine. When either changes, bump the tag and re-score saved contenders under the new version
-before comparing; every row must carry both tags. The full per-experiment breakdown is also saved to
+before comparing; every row must carry both tags. A row is never re-labelled when its epoch is rolled
+back: the version it carries is the record. The full per-experiment breakdown is also saved to
 `results/result_<NN>.json`.
 
 ---
@@ -327,7 +352,9 @@ obvious). The source-authority ledger from setup seeds the first entries — one
 resolved from a source, with its value, the artifact it is PINNED to, its provenance tag
 (PINNED / REPORTED / INFERRED / RECALLED, or REASONED), and the lower-authority sources quarantined and
 why. Append-only: never rewrite a closed entry; supersede it and link the two. A decision that outlives
-this campaign is promoted to `../../PROJECT.md` §Durable decisions.
+this campaign is promoted to `../../PROJECT.md` §Durable decisions. A metric epoch needs no entry here:
+its record is the `campaign.metric_epochs` entry, the verdict it cites, the §The ONE metric diff, and
+one line in the JOURNAL's Findings.
 
 <!-- ### ED-001 — <one-line title>  (YYYY-MM-DD · active · <method / model / convention / tooling>)
 **Decision.** …
