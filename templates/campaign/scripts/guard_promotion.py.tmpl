@@ -37,10 +37,11 @@ is further rejected if STALE - recorded against a different FROZEN/core hash tha
 file set is scripts/frozen_core.py). No finding built on a red/empty/absent suite, or on a green that no
 longer matches the code it certified, is trustworthy.
 
-Settled findings are RECORDED in results/JOURNAL.md's Findings section, each citing its verdict - but the
-journal is working memory, edited every cycle, and is deliberately NOT a gated surface: the mechanical
-authorities downstream trusts are the scoreboard's verified column and RECOMMENDED.json, which are. A
-findings entry with no verdict citation is an open thread, not a finding; campaign-status audits that.
+Settled findings are RECORDED as the ledger's `finding` cells (results/scoreboard.tsv), written by the
+runner through `--record <exp> --finding`, each citing its verdict; results/JOURNAL.md is working
+memory, edited every cycle, and is deliberately NOT a gated surface: the mechanical authorities
+downstream trusts are the scoreboard's verified column and RECOMMENDED.json, which are. A finding cell
+with no verdict citation is an open question, not a finding; campaign-status audits that.
 
 A normal scoreboard row append (no promotion token) is recording, not promotion - never gated. Writes
 to anything else are always allowed; unparseable stdin is allowed + logged (we cannot even tell what is
@@ -91,7 +92,26 @@ def _allow():
     sys.exit(0)
 
 
+_LOG_ROOT = None   # the campaign root of the file being written, set by main() once it is known
+
+
+def _log_denial(reason: str) -> None:
+    """Every denial lands in results/guard_denials.log - the count that decides whether this hook earns
+    its keep (a guard that never denies is either a deterrent or dead weight; only the log can tell)."""
+    root = _LOG_ROOT or _env_campaign_root()
+    if root is None:
+        return
+    try:
+        log = root / "results" / "guard_denials.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now(timezone.utc).isoformat()}\tDENY\t{reason[:300]}\n")
+    except Exception:
+        pass
+
+
 def _deny(reason: str):
+    _log_denial(reason)
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
         "permissionDecision": "deny",
@@ -132,7 +152,7 @@ def _is_project_ledger(fp: Path | None) -> bool:
     project holding an imported old ledger will not have.
 
     The campaign-level results*/DISCOVERIES.md surface this hook once guarded no longer exists: settled
-    findings live in the journal's Findings section, and the file dissolved (V6). What remains
+    findings live in the ledger's `finding` cells (runner-written), and the file dissolved (V6). What remains
     ledger-shaped is the project record, which the old guard could never validate (its `_campaign_root`
     cannot resolve above a campaign, so every project-level write hit an unsatisfiable deny). This
     predicate knows about project roots, closing that deliberately deferred gap.
@@ -757,6 +777,8 @@ def main():
         return
     fp = Path(fp_str) if fp_str else None
     root = _campaign_root(fp) if fp else None
+    global _LOG_ROOT
+    _LOG_ROOT = root
 
     # ---- surface 0: configs/loop.json - the metric_revision dial (attended-session-only, fail-open-
     #      logged) and the campaign.metric_epochs record (append-only, evidence-checked, FAIL-CLOSED) ----

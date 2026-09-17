@@ -68,4 +68,5 @@ background process):
 
 ## Record
 Log the running evaluation count, the budget, and the sample-efficiency comparison in the JOURNAL and
-scoreboard. When you stop a direction, note the stopping decision and its trigger.
+the ledger's `note` cell (`--record <exp> --ledger-note`). When you stop a direction, note the stopping
+decision and its trigger.

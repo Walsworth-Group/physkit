@@ -76,8 +76,8 @@ artifact of a broken pipeline.
 
 ### Record the floor
 {{FLOOR_RECORD_RULE}}
-<!-- Append the exp000 row to results/scoreboard.tsv and write the JOURNAL entry. This value is the
-     "current best" until a verified promotion replaces it. -->
+<!-- The runner writes the exp000 ledger row; `--record` it and put the floor under the JOURNAL's
+     §Where we stand. This value is the "current best" until a verified promotion replaces it. -->
 
 ## Dataset / inputs
 
@@ -119,9 +119,10 @@ fastest way to catch bugs, leakage, and good-news-too-good results.
 - Write the prediction before the run, in the shape this campaign's `prediction_mode` requires
   (`configs/loop.json` `campaign`; this campaign is `{{PREDICTION_MODE}}`). `range` → a defensible numeric
   `[low, high]` from physical units, known system properties, and the literature, not from hope.
-  `direction` → which way `{{PRIMARY_METRIC}}` should move and versus which prior experiment, and why.
+  `direction` → which way `{{PRIMARY_METRIC}}` should move and versus which prior experiment.
   `none` → the reasoning alone, for a campaign that cannot bound its answer. The runner refuses to spend
-  an evaluation without one. {{APRIORI_BOUND_NOTES}}.
+  an evaluation without one. The rationale is ONE SENTENCE - the number and the one basis it rests on;
+  the bound notes below are cited, not restated. {{APRIORI_BOUND_NOTES}}.
 - Respect physical bounds and scales. {{PHYSICAL_BOUNDS_NOTES}}. A fitted parameter that runs to a
   non-physical value is a result about the model being wrong, not a free win.
 
@@ -142,7 +143,8 @@ do not keep tweaking one knob.
 ### Idea sources — novel ideas welcome, cite the borrowed ones
 Well-founded novel ideas that go beyond the published literature are in scope; the campaign is not
 limited to known approaches. When a hypothesis comes from a specific source (a paper, a doc, the user),
-cite that source on the JOURNAL `Hypothesis` line, and in `LITERATURE.md` if it exists. Tracking where
+cite that source in the config's `_hypothesis` (the runner carries it onto the logbook's `Hypothesis`
+line), and in `LITERATURE.md` if it exists. Tracking where
 each idea came from is part of the record. When an idea comes from a related solved problem, note the
 analogy and what transfers: the closest prior art's approach, not just its citation. A method that
 worked on a nearby problem is often the fastest lever to try.
@@ -266,7 +268,8 @@ successive best so the progression is inspectable.
 
 **Steering-negatives are promotions too.** A negative result the campaign will act on (killing a
 lever/topology branch, declaring a ceiling, shelving a direction, or contradicting its a-priori
-prediction) is recorded in `results/JOURNAL.md` §Findings under the same verdict rule, graded on the
+prediction) is recorded as its ledger row's `finding` cell (`--record <exp> --finding`) under the same
+verdict rule, graded on the
 kill tiers: **REFUTED** (mechanism
 understood, so it prunes) / **EVIDENCE AGAINST** (clean single negative, shelved, revivable,
 accumulates) / **INCONCLUSIVE** (cause unattributed, never graduates; queue a fix-and-rerun unit).
@@ -326,10 +329,12 @@ assumptions.
 
 ## `results/scoreboard.tsv` (schema)
 `{{SCOREBOARD_COLUMN_LIST}}`
-PRIMARY = `{{PRIMARY_METRIC_COL}}`. This is the campaign's quantitative record; the JOURNAL is the
-narrative one. Every experiment's numbers live here: the primary metric, every supplemental
-metric/sanity score, and the experiment-type **run numerics** (e.g. epochs trained + best epoch,
-iterations, wall-clock). Append-only. Never delete or rename a column mid-campaign: it breaks
+PRIMARY = `{{PRIMARY_METRIC_COL}}`. This is the campaign's quantitative record and one-line timeline;
+the logbook is the narrative one, the JOURNAL the working memory. Every experiment's numbers live here:
+the primary metric, every supplemental metric/sanity score, the experiment-type **run numerics** (e.g.
+epochs trained + best epoch, iterations, wall-clock), and the narrative cells — `what`,
+`expected_vs_found`, `verified`, `note`, `finding` — every cell runner-written (the last two through
+`--record`); nobody edits this file by hand. Append-only. Never delete or rename a column mid-campaign: it breaks
 comparability. Keep the PRIMARY column position stable. A new column requires the run-writer to emit it
 first. The `verified` column carries the independent-verification verdict, blank until the driver stamps
 it from a verdict artifact; under a preset that owes a unit no independent check it stays blank and the
@@ -354,7 +359,7 @@ resolved from a source, with its value, the artifact it is PINNED to, its proven
 why. Append-only: never rewrite a closed entry; supersede it and link the two. A decision that outlives
 this campaign is promoted to `../../PROJECT.md` §Durable decisions. A metric epoch needs no entry here:
 its record is the `campaign.metric_epochs` entry, the verdict it cites, the §The ONE metric diff, and
-one line in the JOURNAL's Findings.
+one line in the JOURNAL's §Where we stand.
 
 <!-- ### ED-001 — <one-line title>  (YYYY-MM-DD · active · <method / model / convention / tooling>)
 **Decision.** …

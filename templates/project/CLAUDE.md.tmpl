@@ -26,7 +26,7 @@ project-level dirs (`scripts/`, `models/`, …, created on demand); one `reports
 4. **Findings at their true tier.** A session finding, or an unverified result, is recorded as such — it does
    **not** enter `PROJECT.md` §Updates from discoveries unless it passed `verify`, and every entry there cites
    the source campaign's verdict artifact by path. The full evidence stays in the campaign that produced it
-   (`results/JOURNAL.md` §Findings + `results/verdicts/`); the project holds the synthesis and the pointer,
+   (the `finding` cells of `results/scoreboard.tsv` + `results/verdicts/`); the project holds the synthesis and the pointer,
    never a copy trusted on its own.
 5. **Invalidating updates fork-and-archive — they do not silently carry forward.** If a change (e.g. a fixed
    forward-model bug, a corrected dataset) **invalidates or makes misleading** a campaign's prior findings,

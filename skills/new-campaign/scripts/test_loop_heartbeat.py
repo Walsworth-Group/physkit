@@ -35,7 +35,7 @@ def reset(rows=0, journal=True):
     if journal:
         (R / "JOURNAL.md").write_text(
             "# JOURNAL\n\n**NEXT:** sweep the tip-sample distance at fixed drive\n\n"
-            "## Open threads\n- exp 002 residual is structured, unexplained\n- (placeholder bullet)\n",
+            "## Open questions\n- exp 002 residual is structured, unexplained\n- (placeholder bullet)\n",
             encoding="utf-8")
 
 

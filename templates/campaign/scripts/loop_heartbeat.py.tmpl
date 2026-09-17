@@ -4,7 +4,7 @@
 Enforces the campaign's loop-persistence gate: an autonomous campaign ends because a human stopped it or
 because the agent RECORDED a reason to stop — never because a turn happened to end after an experiment.
 Reads the Stop hook JSON on stdin; blocks with `{"decision":"block","reason": ...}` where the reason is
-the campaign's OWN next action (the JOURNAL NEXT pointer + open threads + the next exp id).
+the campaign's OWN next action (the JOURNAL NEXT pointer + its open questions + the next exp id).
 
 Why a hook and not an instruction: roles/worker.md already says `12. REPEAT` and CLAUDE.md already says don't
 stop prematurely, yet campaigns stopped after each completed experiment anyway. A turn ends when the model
@@ -183,7 +183,7 @@ def next_exp_id(rows):
 
 
 def journal_pointer():
-    """The campaign's own next action: the NEXT pointer and the first few open threads."""
+    """The campaign's own next action: the NEXT pointer and the first few `## Open questions`."""
     if not JOURNAL.is_file():
         return "", []
     nxt, threads, in_threads = "", [], False
@@ -191,7 +191,7 @@ def journal_pointer():
         s = line.strip()
         if s.startswith("**NEXT:**") and not nxt:
             nxt = s[len("**NEXT:**"):].strip()
-        elif s.lower().startswith("## open threads"):
+        elif s.lower().startswith("## open questions"):
             in_threads = True
         elif in_threads:
             if s.startswith("##"):
@@ -328,7 +328,7 @@ def continuation_reason(exp_id, nxt, threads, blocks, rows_since):
     if nxt:
         lines.append(f"results/JOURNAL.md NEXT: {nxt}")
     if threads:
-        lines.append("Open threads: " + " | ".join(threads))
+        lines.append("Open questions: " + " | ".join(threads))
     lines.append(
         "If you genuinely must stop, write results/stop_request.json — "
         '{"utc": "<now ISO-8601>", "reason_code": "<' + "|".join(sorted(REASON_CODES)) + '>", '

@@ -9,7 +9,166 @@ Dates are UTC. Each entry cites the run/finding that motivated it (the kit's own
 
 ## [Unreleased]
 
-_Nothing yet._
+## [0.11.1] - 2026-09-16
+
+### Changed — `final-report` merged into `report`: one document engine, the campaign material as a reference it reads in campaign mode (`skills/report/SKILL.md`, `skills/report/references/campaign-capstone.md`; `skills/final-report/` removed)
+
+`final-report` restated a third of `report` with campaign glosses and duplicated `cite-check`; the
+campaign-specific part (where the sources live, the gated `RECOMMENDED.json` as the selected
+configuration, the claim audit first, the labels and the metric epoch the report prints, the evidence
+ledger's ablation / sweep / fit / lock forms, the contenders, the `final_report/` output) is now
+`references/campaign-capstone.md`, read when `report`'s new *Where* dial says *in a campaign*. `report`
+itself gains what the capstone had and the general form lacked: a unified master parameter table
+(symbol · meaning · value · role · how set · uncertainty · evidence · source), and two tables in the
+framing section, the **physics inventory** (each effect included / excluded / parked, with the number
+behind every exclusion) and the **assumptions register** (each assumption, where it enters, what rests
+on it, its status, the check that set it; a superseded assumption stays listed with nothing load-bearing
+on it). The evidence ledger now requires every ledger row and verdict artifact to appear or be excused
+by name, and the report-time check names the model's own arithmetic as a non-source. `/physkit:report`
+in a campaign directory is the capstone; `/physkit:final-report` no longer exists (`MIGRATING.md`).
+Twenty-four skills.
+
+### Changed — the skill listing: one-line descriptions, name-only campaign spawns (every `skills/*/SKILL.md` front matter, `templates/campaign/.claude/settings.json.tmpl`, `templates/campaign/CLAUDE.md.tmpl`, `docs/CORE.md` routing table, `docs/INSTALL_MULTI_HARNESS.md`)
+
+Claude Code lists skills under a budget of 1 % of the context window (8,000 characters on a 200k
+model, 40,000 on 1M); over budget, the harness ranks skills by the *user's* usage history and lists the
+rest name-only, so which front doors were described depended on the machine, not the kit
+(`synthesis/SKILL_LISTING_PLAN_2026-09.md` §2). The 25 descriptions go from 25,218 to under 3,000
+bytes: sixteen skills keep a one-sentence description because the listing is their only router; nine
+that are always reached by name (`correctness-suite`, `claim-audit`, `final-report`, `fork-campaign`,
+`new-project`, `assumption-audit`, `experiment-design`, `model-selection`, `discovery-loop`) carry a
+short clause and gain rows in `CORE.md`'s routing table. The driver passes
+`--settings {"skillListingBudgetFraction":0.0001}` on every spawn it launches, so a spawn carries names
+only — the campaign files name the skills — about 7k tokens fewer on every turn of every spawn
+(measured: turn-0 context 156,717 → 149,492 on a field worker); an interactive session in the campaign
+directory is untouched. It hides every installed plugin's descriptions inside the spawn, not only
+physkit's, so it is a knob: `configs/loop.json` `driver.skill_listing`, `names` (default) or `full`,
+env override `AUTORESEARCH_SKILL_LISTING`. The fixture contracts test now holds the whole set under
+4,000 characters.
+
+### Changed — the record: no document is read to be written (`run_campaign.py.tmpl`, `results/JOURNAL.md.tmpl`, `results/scoreboard.tsv.tmpl`, `results/logbook.md.tmpl`, `scripts/experiment.py.tmpl`, `upgrade_campaign.py`, the role files, the skills)
+
+The 2026-09-10/11 cost work measured a unit's turns as mostly record-keeping: each owed slot hand-spliced
+into a large file (grep, view, temp file, splice, re-read - 3–5 turns per edit at 150–240k context, ~7
+targets per unit), the result comparison rebuilt with one-liners, and a JOURNAL that grew to 223 KB and
+was delivered truncated with a marker nobody acted on. Now: **`--record <exp> --analysis "..." --next
+"..." [--ledger-note "..."] [--finding "..."] [--decline "..."] [--propose <file>]`** places the worker's two
+logbook slots, the ledger's narrative cells and the queue-drop files in one validated, idempotent call;
+**`--card <exp>`** prints the result card (the metric with the delta vs the incumbent, the guardrail,
+expected vs found, every failed/unavailable check with its `needs`, the self-check summary, what changed,
+the campaign's own numbers through the new `campaign_card_fields(result, checks)` seam) and every
+`--config` run ends with it; **`--show <exp>`** prints one logbook entry. The **ledger** gains runner-written
+narrative columns - `what`, `expected_vs_found`, `note` (optional, hard-capped at 200 chars), `finding`
+(one line citing its verdict) - and the brief delivers a **projection** of its last rows (cells clipped at
+240) instead of the raw tail. The **JOURNAL keeps its name and becomes the campaign's working memory**: one
+bounded document (NEXT · Where we stand · Live hypotheses · What to try next and why · Traps and tooling ·
+Open questions · Anything else) the worker brings up to date at the end of every unit, delivered whole
+(clipped at 12 KB), archived by the driver before every spawn to `results/journal_archive/`, and owed like
+the save-set (a unit that leaves it untouched is not saved). Gone: the runner's JOURNAL row, §Recent
+experiments (the ledger projection is the timeline), §Findings as a separate list (a settled fact is its
+ledger row's `finding` cell), §Strategy notes, §Inbox, the verifier's JOURNAL verdict line. Workers never
+open the logbook or the scoreboard. `upgrade_campaign.py` adds the ledger columns (backup beside the file;
+essays in `notes` trimmed to the cap, the full text being the logbook entry) and restructures an existing
+JOURNAL (archived whole; its sections carried under "migrated" headings; verdict-cited findings written into
+the ledger cells). Evidence: `case-studies/effort_cost_test/HANDOFF_2026-09-11.md` §3 items 1–3; ADR-0023.
+Measured the same day and tightened (RC-6): **the whole record is one file and one command** — `--record
+<exp> --from-file results/record_<NN>.json` carries the self-check, the Analysis and NEXT, the ledger
+note and finding, a decline or proposal; **the card prints comparisons** (every numeric result field
+against the incumbent and the previous unit); and **the JOURNAL is written anew, never edited**: the
+driver archives the previous one and removes the working file before each spawn (the brief carries it),
+the worker writes the new file in one Write, and the driver restores the archive if none appears. The
+record half of a field unit went from 29–31 turns to 8–11 (quality held).
+
+### Added — `--show-prompt worker --unit <config>` (`run_campaign.py.tmpl`); `upgrade_campaign.py` takes its base from the newest "Upgraded in place" stamp
+
+The preview builds the prompt for a named unit — its queue entry and config in the brief, the assignment
+line filled — which is what the driver spawns; a probe (`case-studies/spawn_probe.py`) or a setup review
+sees the real thing instead of a literal `<config path>`. A second upgrade of a campaign now merges
+against the kit it was last upgraded to, not the scaffold's: the stamp the script writes says it
+supersedes the scaffold pin, and `stamp_of` honours it (a test copy at 0.10.4 had 105 definitions and
+14 kit functions flagged as campaign edits against v0.10.0; 32 and 7 against its real base).
+
+### Changed — the driver fixes from the colleague records: usage-limit backoff, the outstanding-units cap, the planner's queue schema, guard-denial telemetry (`run_campaign.py.tmpl`, `loop.json.tmpl`, `guard_promotion.py.tmpl`)
+
+`_spawn_with_backoff` wraps every role's spawn: a first-turn death within 15 s with an error result, or
+a result naming a usage/rate limit, is recorded by `_finish` (`_LIMIT_DEATH`) and the driver waits
+(doubling from `AUTORESEARCH_LIMIT_WAIT_FIRST_S`, default 5 min, up to `driver.limit_wait_max_min`,
+default 90) and relaunches, printing a `resource:` line; no retry is spent and the failure counters
+are untouched (three of three halts in one field campaign were such deaths). `_outstanding_cap()` reads
+`queue.max_outstanding_units` and the drop merge shelves agent proposals beyond it as `kind: "capped"`
+(the planner prompt reviews that shelf; preflight names the cap or its absence; a new campaign's
+default is 1). The snapshot manifest stamps `kit_version:` beside `core_hash:` - the machinery's
+provenance now that `run_campaign.py` is kit-owned and outside the core hash. The planner prompt
+carries the literal queue-entry schema. The promotion guard logs every denial to
+`results/guard_denials.log` and `campaign-status` reports the count and the driver's `resource:` waits.
+Tests: Tier 2 scenarios L (two deaths then accept; `limit_wait_max_min=0` restores the old behaviour)
+and Q (one proposal merged, the next capped); the stub's `limit_death` mode. Goldens re-pinned:
+`_spawn_agent` (the death record in `_finish`), `_service_verification` (spawns through the backoff).
+
+### Changed — the runner split: the campaign's code is `scripts/experiment.py`; `run_campaign.py` is the kit's machinery (OX-5; plan PR-2)
+
+The five experiment hooks moved out of the 4 500-line runner into a new campaign-owned
+`templates/campaign/scripts/experiment.py.tmpl`, with four optional seams the runner calls when defined
+(`residual`, `campaign_scoreboard_fields`, `campaign_checks`, `baseline_config` — the seams the one
+field campaign that forked its runner proves are needed). The runner reaches them through `_exp()`
+(imported on first use, so `--help` / `--show-prompt` work mid-edit and preflight names an import
+error) and `_seam()`; `unimplemented_hooks()` reads `experiment.py`; the worker's brief delivers
+`experiment.py` by value and the prompt says the runner is not the worker's to read or edit. The runner
+keeps its name and every documented flag, so no command changed. Not core-hashed (`frozen_core.py`'s
+docstring now says so for both files). `upgrade_campaign.py`: the runner moves from MERGE to COPY,
+`experiment.py` is created-if-absent-never-touched, and `split_runner` extracts a pre-split campaign's
+hooks and helpers by AST, naming any kit-owned function the campaign edited in place as a conflict to
+port into the seams. `validate_campaign.py` requires `experiment.py` unless the runner is pre-split.
+Threaded: `new-campaign` Step 3.5 and the code bullet, campaign `CLAUDE.md` map row, `roles/worker.md`
+(step 2, the save-set, §Where to look), `PLACEHOLDERS.md`, the doctrine index (new row), MIGRATING.
+Tests: the toy generator writes `experiment.py`; `seed_artifacts` fills `baseline_config`; Tier 0/1/3b/3d
+re-targeted; one golden re-pinned (`build_prompt`, the brief's new section). Motivation: the colleague's
+audit — the runner Read 64 times in one campaign because the hooks lived inside it.
+
+### Changed — the writing record: the runner writes what it can derive, the worker owes Analysis and NEXT (`templates/campaign/scripts/run_campaign.py.tmpl`, `configs/_template.json.tmpl`, `results/logbook.md.tmpl`, `results/JOURNAL.md.tmpl`, `roles/worker.md.tmpl`, `campaign.md.tmpl`, `CLAUDE.md.tmpl`)
+
+Motivated by a colleague's audit of the Fable 5 collective-pulse campaign (filed as
+`case-studies/collective-pulse_worker-time-attribution_fable5_2026-09-07.md`): ~7 KB prediction + ~7 KB
+config before each run, a ~2,400-word logbook entry after, half of all characters written being
+bookkeeping, around solves of under a minute. Now `append_logbook` writes the Levers line (from the
+config's new `_levers` list), the Expected-vs-found line (the same `check_prediction_outcome` judgement
+the checks artifact records), and a Verification line that starts `pending`; `--self-check` and the
+driver's `_stamp_label` raise it through `_set_logbook_field`, which never overwrites a hand-written
+line; `append_journal_row` appends the JOURNAL §Recent experiments row (idempotent on the id). New
+mechanical check `levers` (`check_levers`): a config key that moved without being declared in
+`_levers` is a `fail` the worker answers by name; no `_levers` reads `unavailable`. The driver's
+`_unit_saved_missing` treats a blank Analysis as an unsaved unit. The config template drops
+`_predicted` (its `append_logbook` fallback was unreachable), `_narrative`, `_tier_doc`. The worker
+prompt and role file state the record owed per unit and its size; the prediction rationale is one
+sentence; the logbook template asks for one paragraph of judgement, not a five-question form;
+campaign-status reads "completed" as filled-and-answered, never long. No length is measured, warned
+or refused (user's call). `case-studies/writing_counts.py` counts characters per artifact from a tree.
+Tests: Tier 1x (`test_writing_record`); the toy's configs declare `_levers`.
+ workers and planners orient from the prompt, never the tree (`templates/campaign/scripts/run_campaign.py.tmpl`, the role files, `CLAUDE.md`, `README.md`, the JOURNAL template)
+
+Motivated by the photophysics10 spawn logs (three launches, 2026-08-20 … 26): per unit, workers
+re-read `campaign.md` three to nine times in chunks, `roles/worker.md` up to five times, a 2 006-line
+JOURNAL up to seven times and the runner's own source up to fifteen times, at 30–300 turns per unit;
+the driver delivered only §Standing constraints, while `roles/worker.md` claimed it "assembles this
+file + campaign.md into your prompt" — never built. Now `build_prompt` appends `_brief(role, config)`:
+`campaign.md` minus its §Decision record, the role file, the JOURNAL working window (NEXT · Open
+threads · Findings · the last 15 Recent rows; other sections named as on disk), the worker's queue
+entry + config, the scoreboard tail; the planner adds `queue.json` and `LITERATURE.md`. Per-section
+cap 24 000 chars with a loud truncation marker; `brief[role]: … KB (…)` printed at preflight (WARN
+above 200 k chars or on truncation) and before every spawn; `--show-prompt` reports it. The worker
+and planner prompts say "orient from the brief, never from the tree" and enumerate the only reads
+outside it (the unit's checks artifact; a logbook grep or slice; `PROJECT.md` depth when a result
+needs physics; `--help`), and the worker's runner-CLI line now lists `--self-check` and `--diff` — the
+missing flags were one reason workers opened the source. Transport: the prompt goes over stdin
+(Windows caps argv at 32 767 chars), fed from its own thread; the spawn env carries
+`PHYSKIT_PROMPT_STDIN=1` and `PHYSKIT_SPAWN_PROMPT_SHA256`, which the snapshot manifest records
+instead of rebuilding a prompt the worker's own journal edits would have changed. Threaded:
+`roles/worker.md` §Where to look rewritten as the closed list; `CLAUDE.md`, `README.md`, the JOURNAL
+template, `new-campaign`, `campaign-status` (truncation as the consolidation trigger), `run-campaign`
+(the feed line), the doctrine index, MIGRATING; ADR-0022. Tests: the stub agent reads stdin and keys
+its role on the prompt's opening sentence; the Claude transport row in `compatibility_cases.json` is
+`stdin`; two goldens re-pinned with reasons. Not verified live: a real `claude -p` spawn over stdin
+(the CLI's auth had expired in the build session) — Tier 3 is the check.
 
 ## [0.11.0] - 2026-09-03
 

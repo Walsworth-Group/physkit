@@ -143,7 +143,7 @@ filled by that skill and documented by it, not here.
 | `{{LEVER_COLUMNS}}` | The lever columns in the scoreboard (tab-separated). |
 | `{{FROZEN_LIST}}` | What is FROZEN besides the scorer. |
 | `{{READONLY_LIST}}` | Read-only files (use, don't edit). |
-| `{{MUTABLE_LIST}}` | Mutable files. |
+| `{{MUTABLE_LIST}}` | Mutable files: `scripts/experiment.py` (the campaign's hooks and helpers) and the campaign modules it imports — never `scripts/run_campaign.py`, the kit's machinery. |
 | `{{STRUCTURAL_LEVERS}}` | The biggest structural levers to escalate to when stuck. |
 | `{{STUCK_N}}` | How many flat experiments before "stuck". |
 | `{{REANCHOR_DOCS}}` | Docs to re-read when stuck / at a checkpoint. |
@@ -156,7 +156,7 @@ filled by that skill and documented by it, not here.
 ### Logging & scoreboard
 | Placeholder | Meaning |
 |---|---|
-| `{{SCOREBOARD_COLUMN_LIST}}` | The full scoreboard schema string (in campaign.md). |
+| `{{SCOREBOARD_COLUMN_LIST}}` | The full scoreboard schema string (in campaign.md), including the runner-written narrative columns `what` · `expected_vs_found` · `verified` · `note` · `finding`. |
 | `{{PRIMARY_METRIC_COL}}` | The scoreboard column holding the primary metric. |
 | `{{PRIMARY_SPREAD_COL}}` | The column holding the replicate spread. |
 | `{{GUARDRAIL_COL}}` | The column holding the guardrail value. |
@@ -304,14 +304,14 @@ in wall-clock, whichever trips first.
 | `{{UNIT_COST_S}}` | Typical wall-clock seconds for one unit (number, order-of-magnitude is fine). |
 | `{{UNIT_COST_DISK_MB}}` | Megabytes one unit adds to `results/` (number; save-set + snapshot + bulk artifacts). Derived from the artifact plan, not asked. Arms the driver's disk floor (refuses to launch / halts below ~3 units of headroom); `0` disables it. Human-readable twin: `{{DISK_PER_EXP}}`. |
 | `{{AGENT_BACKEND}}` | Harness that will launch first: `claude` or `codex`. A switchable campaign still records its first launcher here; `--backend` overrides it later. |
-| `{{PLANNER_CADENCE_K}}` | Spawn the planner every k accepted units (also the default outstanding-units cap). |
+| `{{PLANNER_CADENCE_K}}` | Spawn the planner every k accepted units. |
 | `{{PLANNER_MODEL}}` | Claude model for the planner agent (judgment role — heavier tier); blank inherits Claude Code's configured default. |
 | `{{PLANNER_CLAUDE_EFFORT}}` | Claude planner effort: blank (inherit), `low`, `medium`, `high`, `xhigh`, or `max`; support is model/version dependent. |
 | `{{PLANNER_CODEX_MODEL}}` | Codex model for the planner agent; blank inherits Codex's configured default. |
 | `{{PLANNER_CODEX_REASONING_EFFORT}}` | Codex planner reasoning effort: blank (inherit), `minimal`, `low`, `medium`, `high`, or `xhigh`. |
 | `{{PLATEAU_M_UNITS}}` | Plateau trigger: no accepted result in m units. |
 | `{{PLATEAU_M_HOURS}}` | Plateau trigger: no accepted result in this much wall-clock (whichever trips first). |
-| `{{MAX_OUTSTANDING_UNITS}}` | Max units queued beyond planner review (default = `{{PLANNER_CADENCE_K}}`). |
+| `{{MAX_OUTSTANDING_UNITS}}` | Max AGENT proposals queued ahead of a planner review; the rest wait on the `capped` shelf. Default `1` (one proposal at a time - the setting a colleague needed to get anywhere); raise it only when the problem rewards breadth and the planner reviews often. |
 | `{{WORKER_MODEL}}` | Claude model for iteration workers (lightest that reliably does the task); blank inherits Claude Code's configured default. |
 | `{{WORKER_CLAUDE_EFFORT}}` | Claude worker effort: blank (inherit), `low`, `medium`, `high`, `xhigh`, or `max`; support is model/version dependent. |
 | `{{WORKER_CODEX_MODEL}}` | Codex model for iteration workers; blank inherits Codex's configured default. |

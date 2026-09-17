@@ -1,17 +1,7 @@
 ---
 name: assumption-audit
 description: >-
-  Convert a stalled optimizer into a diagnostician. Reach for it when an optimization — a campaign or any
-  sustained tuning effort — has plateaued in a way that lever escalation does not fix: one-lever
-  experiments across two or more lever families pinned at the same floor, or the current best sitting far
-  from its own a-priori expectation. The discipline: stop
-  tuning and audit what every experiment INHERITS — enumerate the calibrations, derived quantities, and
-  classifications the current best carries, rank them by would-being-wrong-reproduce-this-stall crossed
-  with provenance weakness, and spend ONE discriminating experiment that SOLVES for the top suspect's
-  value from scratch (never one that merely confirms the incumbent). Distinct from pivoting (choosing the
-  next lever), debug (broken code), and verify (checking a result): this hunts a wrong inherited value
-  that sits upstream of every lever. A plateau caused by a bad assumption cannot be escaped by any lever
-  downstream of it — only by re-opening the assumption.
+  Audit inherited values when an optimization plateaus.
 ---
 
 # assumption-audit — when optimization stalls, audit what it inherits

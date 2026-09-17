@@ -37,9 +37,10 @@ session never pays the context cost of campaign material (`layer: campaign`, `lo
 - Lead with a routing table, not the content. A one-line "when X → load Y" pointer costs almost nothing
   and defers the cost until X happens.
 - Split records into append-only and working. Keep the full narrative in a logbook that is never trimmed
-  and never read in full, so it cannot bloat the loop, and a lean working journal of recent entries plus
-  open threads that you drop from freely. The logbook holds the history. The same discipline governs the
-  scoreboard and the diagnostics logs.
+  and never read in full, so it cannot bloat the loop, and a bounded working journal — where things
+  stand, live hypotheses, what to try next, open questions — that you bring up to date rather than
+  append to. The logbook holds the history. The same discipline governs the scoreboard and the
+  diagnostics logs.
 - Summarize forward. When a thread closes, replace its detail with a one-line outcome and a pointer to
   where the detail lives. Carry conclusions, not transcripts.
 - Distill in the background. On a long run, have a lighter-model sub-agent periodically extract decisions,

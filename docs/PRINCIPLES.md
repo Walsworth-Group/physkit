@@ -41,7 +41,7 @@ protocol.
 
 | # | Context | Core idea (one line) | Primarily enforced via |
 |---|---|---|---|
-| 1 | **Scientific integrity & honesty** | Find what is true, not an exciting result; never move the goalpost quietly (a metric revision is a declared, verified epoch); label and contextualize every number. | CORE doc; `report` / `final-report`; metric labels |
+| 1 | **Scientific integrity & honesty** | Find what is true, not an exciting result; never move the goalpost quietly (a metric revision is a declared, verified epoch); label and contextualize every number. | CORE doc; `report`; metric labels |
 | 2 | **Verification & correctness** | Assume wrong until *independently* verified; check by mechanism-diverse and certifying means; grade claims. | `verify`; `correctness-suite`; this doc §2 |
 | 3 | **Problem-solving & getting unstuck** | A crash is a bug, not a bad idea; debug by ladder; diagnose before pivoting; treat anomalies and residuals as information. | `debug`; `roles/planner.md` (Getting Unstuck); `campaign-status` |
 | 4 | **Experimental design & rigor** | Name the levers each experiment moved, and weigh what moving several together costs (the cost is attribution, not validity); bound expectations a priori; replicate; tier when compute warrants. | `campaign.md` (the levers); `roles/worker.md` loop; `verify` |

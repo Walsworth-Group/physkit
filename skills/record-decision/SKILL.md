@@ -1,15 +1,8 @@
 ---
 name: record-decision
 description: >-
-  Capture the "why" behind a non-obvious engineering or modeling decision as a short, durable record —
-  decision, the alternatives considered, why this one, the conditions it depends on, and what would make you
-  revisit it. Use when you make a choice a future reader (or you, in six months) would otherwise have to
-  reverse-engineer: picking one method/library/parameterization/approximation over another, adopting a
-  non-obvious convention, accepting a trade-off, or making an assumption a result will rest on. Phrasings
-  like "record this decision", "document why we chose...", "write an ADR", "note the reasoning here". It is
-  distinct from conventions (the rules themselves) and the experiment journal (what happened) — this is the
-  rationale and its expiry conditions. Pairs with verify/frame-problem (record the why of a non-obvious
-  check or a parked physical effect).
+  Record the why of a non-obvious decision: alternatives, reasons, dependencies, what would trigger
+  a revisit.
 ---
 
 # record-decision — capture the why, and when to revisit it

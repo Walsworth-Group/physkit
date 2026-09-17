@@ -1,15 +1,8 @@
 ---
 name: frame-problem
 description: >-
-  Frame a physical-science problem before doing the work — the "think before you act" step. Use once the
-  goal is clear (after any goal-clarifying back-and-forth) and BEFORE building a model, writing a
-  simulation, deriving a result, or starting a fit: phrasings like "how should I approach...", "frame
-  this problem", "what physics matters here", "set up the model for...", "before I simulate/derive/fit...",
-  "I want to compute/estimate <quantity>". It produces three things and surfaces them for confirmation:
-  (1) a physics inventory — every relevant effect tagged accounted-for or not, and WHY; (2) a verification
-  plan — how you will know the answer is right, decided up front; (3) a decomposition into small steps with
-  verification between the ones that matter. Skip only for trivial one-step questions. Composed by
-  new-campaign and simulation-design; pairs with dimensional-analysis for a-priori bounds.
+  Frame a physics problem before modeling, simulating, deriving, or fitting: physics inventory,
+  verification plan, decomposition into checked steps.
 ---
 
 # frame-problem — scope the physics before you do the work

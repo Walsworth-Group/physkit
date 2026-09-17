@@ -1,16 +1,7 @@
 ---
 name: model-selection
 description: >-
-  Decide which of several competing physical models or hypotheses best explains the data — and, when needed,
-  design the experiments that best discriminate them. Use when the goal is to choose or rank explanations
-  rather than optimize within one: comparing candidate mechanisms/theories, "which model fits best without
-  overfitting", Bayesian model comparison, hypothesis discrimination, or designing a decisive
-  discriminating experiment. Static mode compares models on fixed data via marginal likelihood / Bayes
-  factors / cross-validated predictive performance / information criteria, penalizing complexity (Occam) and
-  reporting uncertainty and priors. Active mode (for expensive sequential experiments) composes
-  experiment-design / archetype H with a utility that rewards experiments where the models DISAGREE most.
-  Throughout it guards against the true model lying outside the candidate set (model-form error) and credits
-  the recovered mechanism, not just the fit. This is the operational doctrine for campaign archetype I.
+  Compare and discriminate competing physical models (campaign archetype I).
 ---
 
 # model-selection — choose the explanation, honestly

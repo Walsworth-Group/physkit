@@ -1,28 +1,23 @@
 ---
 name: campaign-status
 description: >-
-  Run a periodic health check, journal consolidation, or experiment checkpoint for an autoresearch
-  campaign, or a cross-campaign checkpoint at a project root. Use for campaign or project status,
-  "where do we stand", plateau and current-best review, hygiene checks, or trimming a long journal. In a
-  campaign, summarize progress against baselines, flag unverified bests and plateaus, check records and
-  the metric self-test, consolidate working memory, and point to orthogonal next directions. At a project
-  root, report across the lineage and check sibling FROZEN/MUTABLE consistency. Read-mostly; never edit
-  the scoreboard, results, or frozen physics. Not for scaffolding, loop-process control, forking,
-  verifying one finding, or final reporting.
+  Health check or checkpoint for a campaign or project root: where do we stand, plateaus, current
+  best, records. Read-mostly.
 ---
 
 # campaign-status — the operator's checkpoint
 
-A running campaign drifts. The journal grows, an unverified result becomes the current best, one lever is
-over-mined while an orthogonal one sits untried, and a plateau goes unnamed. This skill is the periodic step
-back: it reports where the campaign stands, fixes hygiene, trims the journal, and re-points the loop at the
-most promising orthogonal directions.
+A running campaign drifts. The JOURNAL falls behind, an unverified result becomes the current best, one lever
+is over-mined while an orthogonal one sits untried, and a plateau goes unnamed. This skill is the periodic step
+back: it reports where the campaign stands, fixes hygiene, checks the JOURNAL is bounded and current, and
+re-points the loop at the most promising orthogonal directions.
 
 PhysKit resource links in this skill are relative to the directory containing this `SKILL.md`, not to
 the campaign working directory. Resolve them to absolute paths before invoking a bundled script.
 
-**Read-mostly.** Its only writes are: consolidating the JOURNAL, updating the **NEXT** pointer, appending
-a dated checkpoint note, and snapshotting the session transcript to `transcripts/` for provenance. It never
+**Read-mostly.** Its only writes are: the JOURNAL — the **NEXT** pointer, `## Where we stand`, and a short
+dated checkpoint note under `## Anything else` or wherever it belongs (keep the bounded document bounded) —
+and snapshotting the session transcript to `transcripts/` for provenance. It never
 edits the scoreboard, results, configs, or anything FROZEN.
 
 ## Two scopes — campaign checkpoint (default) vs project checkpoint
@@ -51,8 +46,8 @@ At a project root, step back over the whole investigation, not one loop:
    froze must not be mutated by B. Surface any
    conflict or undeclared cross-campaign dependency loudly: an undeclared dependency is how a forward-model
    change invalidates a sibling's results without anyone noticing (the `fork-campaign` trigger).
-3. **Promotion and provenance hygiene.** Verified system-level findings from a campaign's journal
-   Findings section are recorded in `PROJECT.md` §Updates from discoveries, each citing its verdict
+3. **Promotion and provenance hygiene.** Verified system-level findings from a campaign's ledger
+   `finding` cells are recorded in `PROJECT.md` §Updates from discoveries, each citing its verdict
    artifact by path — check for uncited entries (an old-layout project promotes to `DISCOVERIES.md`
    instead, hook-gated). Durable decisions live in `PROJECT.md` §Durable decisions
    (old layout: `PROJECT_ORIENTATION.md`), and **the guarded overview sections (§Mission, §Standing
@@ -73,7 +68,9 @@ At a project root, step back over the whole investigation, not one loop:
 
 ## When to invoke
 - Every N experiments (the checkpoint cadence, a step of the campaign definition's Experiment Loop).
-- When the JOURNAL has grown long (~150+ lines) and needs consolidation.
+- When the driver reports the JOURNAL over its cap — a `preflight WARN: brief[worker]` line, or
+  `(TRUNCATED)` in a per-spawn `brief[…]` line, means the JOURNAL is being delivered clipped at 12 KB
+  with a loud marker.
 - On demand: "where do we stand?", "is the campaign healthy?", "run a checkpoint".
 - **Not only on a count.** Reflection is the campaign's error-correction step. Do not let it wait for the
   experiment counter. Reflect also after a surprising result, at a plateau, before any "we're done / at the
@@ -85,7 +82,7 @@ Read the campaign's `CLAUDE.md` and follow its **§Where things live** table —
 the primary metric and direction, the guardrail, the baseline/floor, the levers, the checkpoint cadence N
 (a step of the Experiment Loop, not a `loop.json` knob), and whether literature search is enabled. *No
 table means the campaign predates it: read `docs/charter*.md` directly.* The checkpoint procedure it
-points to is this skill; the per-unit iteration contract is in `roles/worker.md`. (Journal consolidation
+points to is this skill; the per-unit iteration contract is in `roles/worker.md`. (The JOURNAL check
 is step 3 of this skill; it no longer has a separate protocol file.)
 Also read `campaign.md` §Mission (goal, the decision served, done-criteria), §Loosely-held
 expectations, and §Verification. The checkpoint re-checks orientation against these, not
@@ -114,7 +111,7 @@ conclusion that has not been adopted (the effect is noise; a rival explanation c
 Depth: `verify`.
 
 ### 1. Health summary
-From `results/scoreboard.tsv` and `results/JOURNAL.md` (including its Findings section):
+From `results/scoreboard.tsv` (its `finding` cells included) and `results/JOURNAL.md`:
 - **Current best vs references.** State the current-best primary metric and its margin over the
   baseline (exp 000) and over the trivial/degenerate references. A trivial reference beating the current
   best is a red alert. A non-physical trivial winner indicates a metric or units problem, not a target.
@@ -134,8 +131,11 @@ Flag anything wrong; do not silently fix it.
 - Every scoreboard row has a matching `results/result_<NN>.json` and its config in `configs/`. A result
   that exists only in the console is not saved.
 - **No orphaned result: every row has a written narrative and a graded verdict.** A `result_<NN>.json`
-  (or scoreboard row) with no completed `logbook.md`/`JOURNAL.md` entry and no graded outcome is an
-  **orphan**. Results sitting on disk while their analysis and verdict were deferred are lost at a session
+  (or scoreboard row) with no completed `logbook.md` entry and no graded outcome is an
+  **orphan**. "Completed" means the Analysis and NEXT slots are non-blank and every failed check is
+  answered by name - never that the entry is long. The runner writes the other lines (Expected vs
+  found, Levers, Verification) and the ledger row; a three-line Analysis that answers its flags is a
+  complete entry, a 2,000-word one that answers none is an orphan with prose. Results sitting on disk while their analysis and verdict were deferred are lost at a session
   boundary, and that is a recurring ledger leak. Flag every orphan to be completed now.
 - **Every mechanical check is answered, not just recorded.** Read every `results/checks_<NN>.json`.
   For each experiment, three things matter and they are different:
@@ -150,6 +150,9 @@ Flag anything wrong; do not silently fix it.
     been silently unavailable for forty runs is worth more attention than one that failed once.
   - a check that is **absent entirely** (no `checks_<NN>.json` beside a `result_<NN>.json`) means that
     experiment predates this artifact or bypassed the runner. Say which.
+  - the **`levers`** check is HARD GATE 2 as data: a `fail` names a config key that moved without being
+    declared in the config's `_levers`; `unavailable` on every experiment means the campaign's configs
+    never declare their levers (pre-`_levers` configs read that way, legitimately).
   - the **`self_check`** block is the worker's own record (written through `--self-check`, never by
     hand): report how many experiments have it `recorded` versus `absent`, and, for the recorded ones,
     whether every change the runner listed under `changes` was considered (`changes_unconsidered`
@@ -159,6 +162,12 @@ Flag anything wrong; do not silently fix it.
     `<verdict>/re-execution`) is what every exported claim carries: tally them, and name any promoted
     row whose label is below what its preset requires.
   Do not fix a flag by editing the checks file — it is the runner's output, not a worksheet.
+- **What the promotion guard denied.** `results/guard_denials.log` holds one line per denial (utc, the
+  reason). Report the count and the reasons: it is the evidence for whether the hook earns its keep
+  in this campaign (a guard that never denies is a deterrent or dead weight; only the log can tell),
+  and a denial the worker then worked around by hand is a finding.
+- **What the driver waited out.** `resource:` lines in the driver log are usage-limit deaths the
+  driver relaunched instead of counting as failures; report their number and total wait.
 - **The campaign's declared properties still match what it is doing.** `configs/loop.json` `campaign`
   records `prediction_mode` and `noise_model`. Both are setup-time decisions, so a change is a real
   event: compare the current values against the `prediction_mode` / `noise_model` lines stamped in the
@@ -176,11 +185,11 @@ Flag anything wrong; do not silently fix it.
   - `predictions/` exists and every scoreboard row has its `predictions/<exp_name>.json` — report
     coverage as n/N (the runner's spend gate makes new gaps impossible; a gap means the tree predates the
     gate or bypassed the runner);
-  - `results/verdicts/` exists and **every journal Findings entry cites a verdict artifact that resolves**
-    (exists, CONFIRMED, named refuter; kill entries carry a graduating tier) — except a metric-epoch
+  - `results/verdicts/` exists and **every ledger `finding` cell cites a verdict artifact that resolves**
+    (exists, CONFIRMED, named refuter; kill findings carry a graduating tier) — except a metric-epoch
     line (`metric epoch <version> opened …`), whose evidence is its `campaign.metric_epochs` entry.
-    The Findings section is not
-    hook-gated — this audit is its enforcement, so an uncited entry is a loud flag, not a note;
+    The `finding` cells are not
+    hook-gated — this audit is their enforcement, so an uncited finding is a loud flag, not a note;
   - `configs/loop.json` `verify.preset` is one of `minimal` · `light` · `moderate` · `intensive` (the
     driver's preflight line prints the table it resolves to, and every `checks_<NN>.json` stamps the
     preset it ran under — report a mid-campaign change of preset as a fact about the record, with the
@@ -254,8 +263,8 @@ Flag anything wrong; do not silently fix it.
   refuses an undeclared scorer change, so a `METRIC EPOCH` refusal in the driver log is a finding.
   Confirm the re-baseline happened: after an epoch, the retained contenders have rows under the new
   version and the newest checks artifacts no longer report an epoch boundary
-  (`checks.comparability.excluded`). The JOURNAL's Findings carries one line per epoch.
-- **No premature "done / blocked / at-ceiling."** If the JOURNAL (its Findings included) declares the campaign
+  (`checks.comparability.excluded`). The JOURNAL's `## Where we stand` carries one line per epoch.
+- **No premature "done / blocked / at-ceiling."** If the JOURNAL, or a ledger `finding`, declares the campaign
   finished, optimal, or blocked on new data, confirm an adversarial attempt to beat it was made:
   an orthogonal lever tried, or a reasoned argument that any further gain is non-physical. An unfalsified
   "we're done" is a flag to resume, not to accept. Surface it loudly and queue the orthogonal directions
@@ -266,10 +275,10 @@ Flag anything wrong; do not silently fix it.
   physkit's own record: the newest `handoff` (in `archive/`), the JOURNAL, and the scoreboard. Confirm the
   latest handoff covers the most recent work; a handoff that read only the campaign tree can misstate its
   own state. Any external resume digest (for example a user-maintained `_claude-archive/INDEX.md`) is
-  advisory only. If its stated latest or "Active range" date lags the newest session log or JOURNAL entry,
+  advisory only. If its stated latest or "Active range" date lags the newest session log or JOURNAL update,
   flag it stale ("digest ends `<date>`, work ran to `<date>`") and advise regenerating it with whatever
   produced it. Never let an external digest override physkit's own handoff or journal on resume.
-- **Dispute records are intact** (the JOURNAL's append-only verifier/user challenges) — never trimmed.
+- **Dispute records are intact** (the logbook's `Disputes & responses` lines) — never trimmed.
 - PROVISIONAL findings are tracked and not treated as settled.
 - The metric self-test still passes (`python scripts/metric.py --selftest`), and diagnostics were
   tee'd to logs rather than left in the console.
@@ -295,26 +304,27 @@ blocks the checkpoint if it errors. The transcript holds the full conversation a
 `transcripts/` as sensitive. This helper is Claude-specific; on Codex, skip this substep without treating
 the checkpoint as failed. A Codex transcript export is not claimed until a native source is defined.
 
-### 3. Consolidate the journal (if long)
-If the JOURNAL exceeds ~150 lines (or the campaign's stated trigger):
+### 3. Check the JOURNAL is bounded and current
+The JOURNAL is the campaign's working memory, bounded by construction: the worker brings it up to date at
+the end of every unit, editing what changed and leaving the rest. This step confirms that held.
 
-1. **The full record is safe, so trim freely.** Every entry already exists verbatim in
-   `results*/logbook.md` (append-only) and every number in `results*/scoreboard.tsv`. Consolidation
-   prunes the JOURNAL's *working window* and loses nothing. Say this to yourself before trimming — an
-   agent that treats the JOURNAL as the record trims too timidly and the working memory stays unusable,
-   which is the failure this step exists to fix.
-2. **Graduate settled findings.** A finding confirmed by multiple experiments AND an independent
-   verification (CONFIRMED) moves into the JOURNAL's §Findings, citing its verdict artifact.
-3. **Keep the live window** — roughly the last 10–15 experiments plus every open thread, PROVISIONAL or
-   QUESTIONABLE-ASSUMPTION finding, and unresolved dispute. **Drop** older entries from §Recent
-   experiments rather than compressing them in place; a one-line pointer (exp id → outcome) is optional,
-   since the logbook already holds them. **§Findings is never trimmed** — it is the settled record, the
-   one part of the journal consolidation must not touch.
+1. **Under the cap** (~120 lines). Over it, the fix is an edit in place, not an archive pass: fold what is
+   settled into one line under `## Where we stand`, drop what the ledger and the logbook already hold, and
+   keep the rest. A settled fact is also its ledger row's `finding` cell, written by the worker through
+   `--record <exp> --finding` and citing its verdict — recommend it where a row is missing one.
+2. **Current.** The `**NEXT:**` line points at the directions the campaign is actually taking next, and
+   `## Where we stand` reflects the newest accepted experiments, with confidence and the ledger id or
+   verdict behind each line. A stale NEXT is the failure this step exists to catch: the next worker
+   resumes from it.
+3. **The full record is safe, so edit freely.** Every narrative already exists verbatim in
+   `results*/logbook.md` (append-only) and every number in `results*/scoreboard.tsv`. Editing the JOURNAL
+   loses nothing. Say this to yourself before editing — an agent that treats the JOURNAL as the record
+   edits too timidly and the working memory stays unusable.
 4. **Preserve the NEXT pointer** at the top, so the loop resumes cleanly.
 
 **Never edit or trim the append-only files** — `results*/logbook.md`, `results*/scoreboard.tsv` and the
 `results*/diagnostics/` logs hold the record permanently. Negative-result lessons and dispute records
-live there for good; keep the open ones in the JOURNAL window until resolved, but trimming the window
+live there for good; keep the open ones in the JOURNAL until resolved, but editing the JOURNAL
 never loses them.
 
 ### 4. Re-plan (diagnose before pivoting)
@@ -335,14 +345,15 @@ classifications) with their provenance, and spend one discriminating experiment 
 suspect's value from scratch rather than confirming the incumbent.
 
 ### 5. Report
-Append a short dated checkpoint note to the JOURNAL (best metric, trend, top issues, next directions),
+Put a short dated checkpoint note in the JOURNAL (best metric, trend, top issues, next directions) under
+`## Anything else` or wherever it belongs, keeping the document under its cap,
 and give the user a concise status: current best and margin over baseline/trivial, verified or not, trend,
 the top 1–3 issues, and the next directions. Surface any hygiene flag loudly. An unverified current-best,
 or a trivial reference beating the field, is worth interrupting for.
 
 ## Notes
 - For a large campaign the hygiene scan and the per-lever progress summary can be fanned out to subagents
-  and synthesized centrally, but keep the consolidation and the **NEXT** pointer edits in one place. Those
+  and synthesized centrally, but keep the JOURNAL edits and the **NEXT** pointer in one place. Those
   fan-out scans suit a lighter model; keep the synthesis and the NEXT-pointer judgment on the strong one.
 - This skill recommends `verify` and literature searches. It does not run experiments or promote
   results itself.

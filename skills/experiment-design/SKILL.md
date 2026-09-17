@@ -1,17 +1,7 @@
 ---
 name: experiment-design
 description: >-
-  Choose which experiment, measurement, or simulation to run NEXT to learn the most per costly evaluation —
-  active / optimal / sequential experimental design. Use when the campaign's core loop is deciding what to
-  sample next rather than improving a fixed model: Bayesian optimization, active learning, adaptive
-  sampling, a self-driving/autonomous lab, design-of-experiments, or "which experiment is most informative
-  now". It serves two objectives with the same machinery — (a) find an optimum, and (b) estimate parameters
-  to a target precision — by maintaining a calibrated surrogate or posterior, picking the next experiment
-  (or batch) via an acquisition/information utility, tracking the evaluation budget, and stopping when the
-  posterior is decisive. (To DISCRIMINATE between competing models/hypotheses, see model-selection /
-  archetype I, which composes this skill's active machinery with a discrimination utility.) This is the
-  operational doctrine for campaign archetype H; composes verify, correctness-suite, and the
-  expensive-evaluation protocol.
+  Next-experiment selection, Bayesian optimization and active learning (campaign archetype H).
 ---
 
 # experiment-design — spend each costly experiment on the most informative question

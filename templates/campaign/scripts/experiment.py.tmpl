@@ -1,0 +1,132 @@
+"""scripts/experiment.py - THIS campaign's code: the five experiment hooks and the optional seams.
+
+The one script a campaign edits. scripts/run_campaign.py is the kit's machinery (the gates, the checks,
+the snapshot, the driver, the prompts): it calls the functions below and is replaced wholesale on a kit
+upgrade - never edit it per campaign. Everything the runner records about an experiment comes from
+these hooks; everything it needs from the campaign, it asks for here.
+
+Required (preflight refuses to launch while any is still a stub):
+  validate_method(cfg)                 hard-fail on a lever value nothing dispatches on
+  run_experiment(cfg) -> prediction    the levers live here, dispatched on the config
+  load_target(cfg) -> target           what the FROZEN metric scores against
+Called every experiment (working stubs below; make them real):
+  guardrail(prediction, cfg) -> dict   the co-tracked diagnostic ({{GUARDRAIL_METRIC}}); logged, not primary
+  save_figure(label, prediction, target, residual) -> Path
+Optional seams (define one to extend the record; omit it and the runner uses its default):
+  residual(prediction, target)                        what save_figure's residual panel shows (None = none)
+  campaign_scoreboard_fields(cfg, diags, score) -> dict   extra scoreboard columns (levers, diagnostics, run numerics)
+  campaign_checks(exp_id, label, score, diags, cfg) -> dict   name -> {"status": "pass"|"fail"|"unavailable", "detail": ...}
+  campaign_card_fields(result, checks) -> dict        extra lines of the result card (name -> value): the
+                                                      campaign's own comparison numbers the analysis needs
+  baseline_config() -> dict                           the exp 000 config that `--baseline` runs
+Helpers this campaign needs (a forward model, a fitter, a data reader) live here or in sibling modules
+you add to scripts/; the per-experiment snapshot copies the whole directory, so every run stays
+reproducible after later edits.
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import numpy as np
+
+import metric  # the FROZEN scorer (compute_metric, selftest)
+
+# The same paths the runner uses (it derives them the same way; a campaign never moves these).
+ROOT = Path(__file__).resolve().parent.parent
+RESULTS = ROOT / "results"
+IMAGES = RESULTS / "images"
+DIAG = RESULTS / "diagnostics"
+SNAPSHOTS = RESULTS / "snapshots"
+PREDICTIONS = ROOT / "predictions"
+SCOREBOARD = RESULTS / "scoreboard.tsv"
+
+
+def validate_method(cfg: dict) -> None:
+    """HARD-FAIL if a lever named in `cfg` isn't actually wired to any effect in run_experiment().
+
+    TODO(campaign): maintain a set/dict of the method names each lever field actually dispatches on
+    (e.g. {"registration": {"none", "rigid", "affine"}, "decoder": {"linear", "mlp"}}) and assert every
+    lever value in `cfg` is a recognized member before running. A lever whose value doesn't match any
+    dispatch branch silently falls through to a default/no-op - the experiment runs, writes a
+    scoreboard row, and looks like a real test of that lever when it changed nothing. This has actually
+    happened (an unwired lever burned a full evaluation before being caught by a manual review, not by
+    the runner) - fail loudly here instead of relying on someone noticing.
+    """
+    raise NotImplementedError("Implement validate_method() - hard-fail on any cfg lever value the "
+                              "dispatch in run_experiment() doesn't actually recognize.")
+
+
+def run_experiment(cfg: dict) -> dict:
+    """Execute the method described by `cfg` and return its prediction + any intermediates.
+
+    TODO(campaign): this is where the LEVERS live - registration / forward / preprocessing / decoder /
+    design / training, dispatched on fields in `cfg`. Keep side effects isolated; return arrays. Call
+    `validate_method(cfg)` first so an unrecognized lever value fails loudly instead of silently no-op'ing.
+    """
+    raise NotImplementedError("Implement run_experiment() - dispatch the method from the config.")
+
+
+def load_target(cfg: dict):
+    """Load the evaluation target (the data the metric scores against).
+
+    TODO(campaign): for a fixed-data campaign, read the experimental data here (READ-ONLY).
+    """
+    raise NotImplementedError("Implement load_target() - load the data the metric scores against.")
+
+
+def guardrail(prediction, cfg: dict) -> dict:
+    """Compute the co-tracked guardrail ({{GUARDRAIL_METRIC}}); logged, NOT primary.
+
+    TODO(campaign): implement the necessary-but-not-sufficient check (sanity / overfit / robustness).
+    Return a dict of named diagnostics.
+    """
+    return {}  # TODO
+
+
+def save_figure(label: str, prediction, target, residual=None) -> Path:
+    """Save the standard per-experiment visualization (see roles/worker.md, 'The save-set').
+
+    TODO(campaign): draw the panel(s) that make a result inspectable at a glance. Always save a
+    visualization of a notable result, even a tangent.
+    """
+    IMAGES.mkdir(parents=True, exist_ok=True)
+    out = IMAGES / f"{label}_summary.png"
+    # TODO(campaign): matplotlib figure -> out
+    return out
+
+
+# ---- optional seams (delete any you do not need; the runner falls back to its defaults) -------------
+def residual(prediction, target):
+    """What save_figure's residual panel shows. TODO(campaign): prediction - target, if meaningful."""
+    return None
+
+
+def campaign_scoreboard_fields(cfg: dict, diags: dict, score: float) -> dict:
+    """Extra scoreboard columns for this campaign - the lever values, the guardrail numbers, run numerics
+    (epochs, iterations, wall_clock, n_free_params, seed, n_reps). Keys become columns; add them AFTER the
+    lever columns and BEFORE `notes` in results/scoreboard.tsv's header, and never rename one
+    mid-campaign. TODO(campaign): fill from cfg + diags."""
+    return {}
+
+
+def campaign_checks(exp_id: str, label: str, score: float, diags: dict, cfg: dict) -> dict:
+    """This campaign's own mechanical checks, merged into results/checks_<NN>.json beside the kit's:
+    {name: {"status": "pass"|"fail"|"unavailable", "detail": "...", "needs": "..."}}. A `fail` is a flag
+    the worker answers by name. TODO(campaign): the checks only this campaign can make (a deliverable
+    present, a conservation sum, a fit that converged)."""
+    return {}
+
+
+def campaign_card_fields(result: dict, checks: dict) -> dict:
+    """Extra lines of the result card the runner prints at the end of every run (`--card <exp>` reprints
+    it): the campaign's own comparison numbers, computed from the result JSON and the checks artifact
+    (e.g. per-condition splits, a census, a reference-row delta). name -> value; keep each a line."""
+    return {}
+
+
+def baseline_config() -> dict:
+    """The exp 000 config `--baseline` runs: the simplest defensible baseline (campaign.md, 'Baseline
+    gate'). It also validates the data/scoring chain end-to-end; the expected floor is in campaign.md.
+    TODO(campaign): the baseline's levers."""
+    return {"exp_name": "exp000_baseline", "_comment": "baseline gate"}

@@ -1,19 +1,7 @@
 ---
 name: new-project
 description: >-
-  Scaffold a PROJECT — the home for a whole investigation into one physical system, above individual campaigns.
-  EVERY campaign lives in one, so this runs on the default path: `new-campaign` invokes it automatically
-  whenever no project home exists. Use it directly when the user starts a new line of research, or when lifting
-  a legacy bare campaign into a home: phrasings like "start a new project", "set up the ASI investigation",
-  "make a home for this whole line of work", "we'll have several campaigns on this system".
-  It interviews for the physical system, end goal, and the CANONICAL shared data + background knowledge, then
-  generates the project tree: a short README.md front door, PROJECT.md — THE overview (mission, the
-  §Standing constraints every campaign delivers into its spawned prompts, system knowledge, durable
-  decisions, and §Lineage, the index of every attempt), a project CLAUDE.md, data/ or a data pointer, and
-  campaigns/, sessions/, reports/ — so that every future campaign shares one data copy by relative path and
-  every version/finding is indexed in one place. Composes new-campaign for the first campaign. NOT for
-  a single campaign inside an existing project (that is new-campaign), nor for ad-hoc work (that is a session —
-  see the project CLAUDE.md).
+  The project home above campaigns; new-campaign invokes it.
 ---
 
 # new-project — the home for a whole investigation

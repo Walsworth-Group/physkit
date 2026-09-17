@@ -1,16 +1,8 @@
 ---
 name: handoff
 description: >-
-  Write a cold-resumable handoff so a fresh agent (or you, weeks later, with no memory of the session) can
-  pick up long or complex work without the original context. Use at the end of a work session, before
-  pausing a campaign, when handing off to another person or agent, or whenever context is about to reset.
-  It captures four things: the vision and goal, the current state including the in-flight reasoning (what
-  you were doing and why), a concrete "run this to confirm state" command that verifies the environment and
-  reproduces where things stand, and a prioritized roadmap of next steps. Prior handoffs are archived, never
-  overwritten, so the trail of reasoning is preserved. It resumes from the project lineage (PROJECT.md
-  §Lineage; old layout: LINEAGE.md — the cross-campaign index)
-  and checks whole-tree portability. Pairs with campaign-status (health) and campaign.md §Mission
-  (goal/done-criteria).
+  Cold-resumable handoff for a fresh agent: goal, state and in-flight reasoning, a confirm-state
+  command, next steps. Use before pausing or a context reset.
 ---
 
 # handoff — make the work cold-resumable

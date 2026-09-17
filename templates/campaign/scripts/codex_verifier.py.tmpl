@@ -48,20 +48,20 @@ to `<VERDICT> (results/verdicts/<exp_id>.json)`; put each refuter `Concern:` and
 action on the existing one-line `**Disputes & responses**` field, semicolon-delimiting multiple pairs and
 never adding nested bullets; set `**Status**` to `refuted` for REFUTED, `open` for INCONCLUSIVE, otherwise
 the verdict token. Leave every other field in that logbook entry, including `**NEXT**`, byte-identical;
-then complete the legacy prompt's one-line `results/JOURNAL.md` verdict record with the
-experiment, verdict, and canonical `results/verdicts/<exp_id>.json` path. Whenever this verification
+write no `results/JOURNAL.md` line - the driver stamps the verdict into the ledger's `verified` cell,
+and the logbook entry is the verifier's only narrative surface. Whenever this verification
 proposes a follow-up through `results/queue_drop/` - including every REFUTED or INCONCLUSIVE - in that
-subject line's outcome/next text write the literal label `Follow-up: queued`, then one space, then that
-proposal's exact `config` path as Markdown inline code. Make this a standalone clause starting at the
-outcome/next field beginning or
+entry's `**Disputes & responses**` text write the literal label `Follow-up: queued`, then one space,
+then that proposal's exact `config` path as Markdown inline code. Make this a standalone clause
+starting at the field beginning or
 immediately after a period or semicolon; end it immediately after the inline-code path.
 After the path, allow only an optional period/semicolon before any other text; add or update exactly
-one subject line, never duplicate it, and preserve every other logbook/JOURNAL line."""
+one such clause per subject, never duplicate it, and preserve every other logbook line."""
     if subjects is not None:
         exact = "\n".join(
             f"- Experiment {json.dumps(stem)}: write exactly "
             f"`results/verdicts/.codex-pending/{nonce}/{eid}.json`; set JSON `\"exp_id\"` "
-            f"exactly to {json.dumps(eid)}; cite the published verdict in queue/JOURNAL exactly as "
+            f"exactly to {json.dumps(eid)}; cite the published verdict in the queue drop and the logbook exactly as "
             f"`results/verdicts/{eid}.json`. In `results/logbook.md`, anchor the edit to the exact "
             f"section-header prefix `## {eid} - {stem} -`; its field labels repeat in other entries, "
             "so never use an unanchored field-only or global replacement."

@@ -1,16 +1,8 @@
 ---
 name: simulation-design
 description: >-
-  Design a simulation BEFORE writing its code — the simulation-specialized form of frame-problem. Use when
-  about to build or commission a simulation, solver, forward model, surrogate, or synthetic-data generator,
-  or phrasings like "I need to simulate...", "let's model... numerically", "build a forward model for...",
-  "should I write this solver or use a package?". It produces, up front: a survey and choice of mature tools
-  vs from-scratch code; the model's assumptions and domain of validity (starting from the physics
-  inventory); and the simulation's Verification, Validation & UQ PLAN — which analytic limits / manufactured
-  solutions / convergence studies will establish the code is right, which independent data will validate it
-  (on held-out data — calibration is not validation), and how uncertainty will be quantified. Think the
-  simulation and its checks through before implementing, not code-then-debug. Feeds correctness-suite (which
-  executes the plan); draws on docs/SIMULATION_VALIDATION.md.
+  Design a simulation before coding it: tools vs from-scratch, assumptions and validity, the
+  verification, validation, and UQ plan.
 ---
 
 # simulation-design — plan the simulation and its verification before you code

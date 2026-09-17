@@ -1,17 +1,7 @@
 ---
 name: fork-campaign
 description: >-
-  Fork a campaign when a change INVALIDATES or makes misleading its prior findings — the honest,
-  clean-break response to contamination (design §4.4b). Use when a bug or correction means the campaign's
-  ledger can no longer be trusted to steer the next effort: phrasings like "this forward-model bug means
-  the CNN was scored on wrong test data", "our metric was wrong so the rankings are invalid", "fork the
-  campaign", "the baseline was contaminated — start clean but keep what still holds", "archive this and
-  redo it right". It scaffolds a FRESH-LEDGER sibling campaign, moves the source into campaigns/_archive/
-  (frozen, read-only, still indexed in the lineage for provenance), carries forward ONLY findings that survive
-  independent RE-verification (each re-checked with provenance), and records the fork + what was invalidated
-  + what carried over in the project lineage (PROJECT.md §Lineage; old layout: LINEAGE.md). NOT for a routine fix that preserves rankings (that's a version bump —
-  new-campaign / campaign-status), and NOT for a materially new approach with no inheritance (that's a fresh
-  new-campaign). Composes new-campaign (the scaffold) and verify (the re-validation gate).
+  Fresh-ledger sibling when a bug invalidates a campaign's findings.
 ---
 
 # fork-campaign — the invalidation clean break
@@ -65,13 +55,13 @@ still-valid, not the reverse.
   `<date>`, the invalidation reason, and "read-only — do not resume; superseded by `campaigns/<new>/`."
 - Filesystem read-only permissions are unreliable on a shared drive. The `FROZEN.md` marker and the
   lineage status are the enforcement, not permissions.
-- Its `results/` — `JOURNAL.md` (Findings included), `scoreboard.tsv`, the logbook — do not become working
-  documents of the new effort. They are read-only history. The new campaign starts from a clean ledger,
-  never by copying these forward.
+- Its `results/` — `JOURNAL.md`, `scoreboard.tsv` (its `finding` cells included), the logbook — do not
+  become working documents of the new effort. They are read-only history. The new campaign starts from a
+  clean ledger, never by copying these forward.
 
 ### 3. Scaffold the fresh-ledger campaign (compose `new-campaign`)
 Invoke `new-campaign` in the project to create a new sibling `campaigns/<NN>_<slug>/` with a clean scoreboard
-and JOURNAL (an empty Findings section included). Carry over, deliberately and explicitly:
+and a fresh JOURNAL (its template sections, empty). Carry over, deliberately and explicitly:
 - the corrected infrastructure (the fixed forward model, metric, or dataset), validated before it is re-frozen.
   Run `correctness-suite`: the sign and convention round-trip plus the symmetry self-tests that would have
   caught the original bug. Add the check that failed as a standing regression gate.
@@ -88,10 +78,10 @@ in step 4.
 For each prior finding the user wants to keep, re-verify it from scratch under the corrected setup: re-run
 `verify`, which spawns an independent refuter, recompute every number on the fixed infrastructure, and grade it
 again. Then:
-- A finding that returns CONFIRMED under the corrected setup carries forward into the new campaign's
-  journal Findings section, tagged with its provenance: "carried from `<src>` and re-verified after the
-  fork on `<date>`, verdict CONFIRMED" and citing the NEW verdict artifact. A finding never carries
-  forward on the strength of the old verdict.
+- A finding that returns CONFIRMED under the corrected setup carries forward as its new row's `finding`
+  cell and under `## Where we stand` in the new JOURNAL, tagged with its provenance: "carried from `<src>`
+  and re-verified after the fork on `<date>`, verdict CONFIRMED" and citing the NEW verdict artifact. A
+  finding never carries forward on the strength of the old verdict.
 - A finding that does not survive is left in the archive, not carried. If it had been promoted, note in
   the lineage that the fork retracted it.
 - No claim-splitting, no silent inheritance. A number is inseparable from the infrastructure it was scored

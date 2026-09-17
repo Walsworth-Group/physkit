@@ -1,15 +1,16 @@
 # scoreboard.tsv — the PERMANENT ledger for {{CAMPAIGN_TITLE}}. One row per experiment.
-# RULES: tab-separated; append-only. Never delete or rename a column mid-campaign (it breaks
+# RULES: tab-separated; append-only in ROWS. Never delete or rename a column mid-campaign (it breaks
 #   comparability with earlier rows). Keep the PRIMARY column ({{PRIMARY_METRIC_COL}}) position stable.
-#   Add campaign-specific columns AFTER the lever columns and BEFORE `notes`; a new column requires the
+#   Add campaign-specific columns AFTER the lever columns and BEFORE `verified`; a new column requires the
 #   run-writer ({{EVAL_WRITER}}) to emit it. exp_id: 000 = baseline gate, 001 = first method, then 002,003,…;
-#   sub-runs 000a/000b; non-config probes prefixed `#`. `verified` = independent-agent verdict (blank
-#   until run). `notes` carries "NEW BEST", "CONFIRMS expN", "PROVISIONAL — adapted eval", etc.
-# This is the campaign's QUANTITATIVE record (the JOURNAL is narrative). Every experiment's numbers live
-#   here: the primary metric, every supplemental metric / sanity score (DIAGNOSTIC columns), and the
-#   experiment-type RUN numerics (e.g. epochs trained + best epoch for ML; iterations / wall-clock /
-#   n_free_params for fits; seed / n_reps). If a *_COLUMNS group is empty for this campaign, remove it
-#   AND its adjacent tab so the header has no blank column.
+#   sub-runs 000a/000b; non-config probes prefixed `#`.
+# THE RUNNER WRITES EVERY CELL. The row lands when the experiment records; the NARRATIVE cells are stamped
+#   in place afterwards: `what` (the config's one-line `_comment`) and `expected_vs_found` at record time;
+#   `verified` from the verdict artifact (the driver); `note` (optional, at most 200 chars, for what the
+#   numbers do not show) and `finding` (one line citing its verdict, when a result settles something) through
+#   `python scripts/run_campaign.py --record <exp> [--ledger-note "..."] [--finding "..."]`. Never edit this
+#   file by hand. The narrative of an experiment is its `results/logbook.md` entry; the campaign's working
+#   memory is `results/JOURNAL.md`. This ledger is the one-line timeline the brief delivers as a projection.
 # COMPARABILITY (the most common silent landmine): `metric_version` / `data_version` tag the FROZEN metric
 #   and the dataset/version this row was scored under (e.g. `v1`, `v2_corrected`). A "current best" / ranking
 #   claim is valid ONLY WITHIN one (metric_version, data_version) pair — NEVER compare a number across
@@ -19,4 +20,4 @@
 # `tier` = the run-length tier from campaign.md §{{RUN_NOUN}} Caps (Scout / Confirmation / Extended; `Baseline` for exp 000).
 #   Keep it on EVERY row so scout/confirmation cap-compliance stays machine-auditable — a real campaign lost
 #   its tier tag partway through and cap-compliance became unverifiable.
-exp_id	timestamp	metric_version	data_version	tier	description	{{LEVER_COLUMNS}}	{{PRIMARY_METRIC_COL}}	{{PRIMARY_SPREAD_COL}}	{{GUARDRAIL_COL}}	{{DIAGNOSTIC_COLUMNS}}	{{RUN_COLUMNS}}	verified	notes
+exp_id	timestamp	metric_version	data_version	tier	what	{{LEVER_COLUMNS}}	{{PRIMARY_METRIC_COL}}	{{PRIMARY_SPREAD_COL}}	{{GUARDRAIL_COL}}	{{DIAGNOSTIC_COLUMNS}}	{{RUN_COLUMNS}}	expected_vs_found	verified	note	finding

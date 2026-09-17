@@ -40,7 +40,9 @@ codex plugin add physkit@physkit
 ```
 
 Confirm with `codex plugin list`, then start a new Codex task so it loads the refreshed plugin context.
-Skills appear as `$physkit:<name>` and can also be selected implicitly from their descriptions.
+Skills appear as `$physkit:<name>` and can also be selected implicitly from their descriptions. The
+descriptions are deliberately one line; nine skills carry only a short clause and are reached by name
+from `docs/CORE.md`'s routing table, a campaign's files, or a composing skill.
 
 For an update from the same local checkout, do not register the marketplace again. Refresh the cached
 package with `codex plugin add physkit@physkit`, verify it with

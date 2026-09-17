@@ -29,7 +29,7 @@ each preset means; `campaign-status` and the claim audit read the same words.
   artifact, `<VERDICT>/audit`. The first two are *non-independent*; the rest are *independent* labels.
   `unverified` is a legitimate label; a softened one is not — a recorded verdict is never replaced by a
   weaker label, and a self-check never counts as independent.
-- **The claim audit** at the end of the campaign (`claim-audit`; composed by `final-report`) checks what
+- **The claim audit** at the end of the campaign (`claim-audit`; composed by `report` in campaign mode) checks what
   no per-unit verifier can: inherited assumptions, selection bias, ledger reconciliation, narrative
   against evidence, search adequacy, physical plausibility against the literature, and a stranger's
   reproduction of the headline. A shareable report waits for it while any exported claim lacks an
@@ -49,8 +49,8 @@ label says · the end-of-campaign audit · when to choose it · rough cost.
   the promotion must say `unverified` (in `RECOMMENDED.json` as `"verification_label": "unverified"`; on
   the scoreboard row as UNVERIFIED). The guard refuses a promotion that does not carry the word. A
   self-checked unit still promotes as `unverified`: a self-check is not independent.
-- **The label.** `unverified`, or `self-checked` where the worker recorded one. Findings and a
-  shareable report wait for the claim audit; its artifact is the citation a Finding needs.
+- **The label.** `unverified`, or `self-checked` where the worker recorded one. The ledger's `finding`
+  cells and a shareable report wait for the claim audit; its artifact is the citation a finding needs.
 - **End of campaign.** The default claim audit: a reconciliation script plus one fresh-context agent
   over the exported claims, with a stranger's reproduction of the headline.
 - **Choose it when** the problem is one the agent will likely get right first time, a wrong answer costs

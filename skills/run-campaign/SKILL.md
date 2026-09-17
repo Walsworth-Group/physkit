@@ -1,13 +1,8 @@
 ---
 name: run-campaign
 description: >-
-  Launch, monitor, and steer a scaffolded autoresearch campaign's supervised loop. Use for requests to
-  start, run, restart, stop, or inspect the loop, and for process-level questions about what it is doing
-  or why it halted. Run the deterministic driver's preflight, launch its supervisor, narrate progress
-  from diagnostics and queue state, relay user notes through the inbox, diagnose halt categories, and
-  perform graceful stop control. This is a concierge, never an experiment executor: it does not run loop
-  units itself or edit results, ledgers, configs, or FROZEN files. Not for scaffolding, substantive
-  campaign progress or plateau review (campaign-status), retrospectives, or result verification.
+  Launch, monitor, and steer a campaign's supervised loop, and stop it gracefully. A concierge,
+  never an experiment executor.
 ---
 
 # run-campaign — the loop's cockpit
@@ -22,7 +17,7 @@ fresh-context workers, and this session is the cockpit around it — launcher, m
 launch/stop controls (the `--supervise` process and `results/STOP`); (3) launch-config repairs only
 (`configs/loop.json` knobs, the harness executable override, a missing tool on PATH), because configs are
 user-owned and are not ledgers. Never run a loop unit. Never edit the ledgers (`results/queue.json`,
-scoreboard, logbook, journal incl. its Findings) or anything FROZEN on your own judgment. Where a repair to
+the scoreboard incl. its `finding` cells, logbook, journal) or anything FROZEN on your own judgment. Where a repair to
 one of those is needed (a corrupt queue, a resolved ESCALATE), propose the exact edit and apply it only
 on the user's explicit go-ahead. The science happens in the driver's workers, and everything you relay
 travels through artifacts, so this session holds no scientific state and is disposable by design. While
@@ -131,6 +126,8 @@ not proven safe by kernel-lock release; inspect and stop that child before relau
 ### 3. Monitor
 On request, or at a periodic check-in, read; never re-derive:
 - the driver log tail: current unit, rendered worker feed, planner triggers, accepted-unit count, the
+  `brief[role]` size line before each spawn (a `(TRUNCATED)` section, or a `preflight WARN: brief` at
+  launch, is the driver reporting the JOURNAL over its cap — relay it), the
   `verification owed for …` / `no independent check owed …` lines (what the campaign's verification
   preset asked for each accepted unit, and the depth — review or re-execution — the driver decided from
   its measured cost), the `verifier[...]` lines that follow, the `suite demotions changed` line when a
@@ -206,7 +203,8 @@ the loop on your own judgment; if you believe it should stop, say so and ask.
   campaign is armed and the driver may be down: before launch, after a halt, after a crash), do not
   start executing loop units. The remedy is the block message's own first option: launch or relaunch
   the driver. If the user's intent is to stop, make the stop official (`results/STOP`) instead.
-- Composition: `campaign-status` for substance (health, plateau, hygiene, consolidation);
+- Composition: `campaign-status` for substance (health, plateau, hygiene, the JOURNAL's boundedness and
+  currency);
   `campaign-review` after the loop is finished; `verify` is the workers' tool, not yours.
 - If this session dies, nothing is lost. The driver does not notice, and any fresh session in the
   campaign root can pick the cockpit back up with this skill.

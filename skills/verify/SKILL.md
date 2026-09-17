@@ -1,20 +1,9 @@
 ---
 name: verify
 description: >-
-  Independently and adversarially check whether a result, number, equation, derivation, fit, or claim is
-  actually right — for any task, not only research campaigns. The stance is "assume you are wrong until
-  independently proven right": recompute every reported number from a fresh run, falsify with code rather
-  than prose, and prefer a mechanism-diverse independent check over an argument. Use before you rely on or
-  report a result, when a number beats its expected range or "looks too good", before promoting a campaign
-  finding to current-best or writing a DISCOVERY, or whenever someone asks "is this right / double-check
-  this". For a new or derived equation it runs a dimensional sanity-check first (dimensional-analysis);
-  for a fit or prediction it interrogates the NATURE of the residuals (systematic structure vs random
-  noise), not just their size. Also verifies NEGATIVE results and invalidation claims (kill-claims) —
-  a "this approach doesn't work", "these results are tainted", or "the metric is wrong" finding is as
-  load-bearing as a win and more likely to hide an implementation bug. Returns CONFIRMED / PROVISIONAL / QUESTIONABLE ASSUMPTION /
-  REFUTED / INCONCLUSIVE with evidence (campaign mode also writes the results/verdicts/<id>.json artifact
-  the promotion gate consumes). Not for checking citations (cite-check) or building a standing check suite
-  (correctness-suite).
+  Adversarially check a result, number, derivation, fit, or claim, negative results too: recompute,
+  falsify with code, graded verdict. Use before relying on or reporting a result, or when asked "is
+  this right?".
 ---
 
 # verify — assume you are wrong until independently proven right
@@ -259,7 +248,7 @@ is revised on.
 ## Campaign mode — promoting a finding (the full adversarial apparatus)
 
 When the claim is a candidate result in an autoresearch campaign, verification is the gate between "looks
-like a win" and recording it as settled — a journal Findings entry, a current-best, a scoreboard
+like a win" and recording it as settled — a ledger `finding` cell, a current-best, a scoreboard
 verdict token. A promotion is not real until this returns CONFIRMED. In supervised loops this mode
 runs on the driver's schedule, not the worker's judgment: after every completed unit or block the
 driver spawns a verification agent that invokes this skill per experiment (the block is not cleared
@@ -307,18 +296,19 @@ it here; it is never this session's id. The gate rejects a verdict with an empty
 BOTH promotion paths, so a refuterless CONFIRMED does not graduate and a dropped field blocks your own
 promotion. Fill the stub literally rather than reconstructing the schema from memory. `kill_tier` is set
 only for a negative or kill-claim, per *Verifying a kill-claim* below. `confounded_levers` and
-`disentangler` are set whenever more than one lever moved, per *Confounded attribution* below. A journal
-Findings entry must cite this file by name (the rule `campaign-status` audits), and a project-ledger
+`disentangler` are set whenever more than one lever moved, per *Confounded attribution* below. A ledger
+`finding` cell must cite this file by name (the rule `campaign-status` audits), and a project-ledger
 entry must cite it by path or the hook denies the write.
 
-Then put the verdict on the experiment's `**Verification**:` line. Log every concern the verifier raised,
+Then put the verdict on the experiment's `**Verification**:` line (in a supervised run the driver
+stamps it from the verdict artifact; a line you write by hand is never overwritten). Log every concern the verifier raised,
 including on a CONFIRMED, under `**Disputes & responses**:`, each with your response. Never delete a raised
 issue; if you disagree, add a counter-argument. If the disagreement is load-bearing, escalate it per §4b
 rather than settling it yourself, because your rebuttal of the checker inherits the reasoning the checker
 was called to test. Do the same for any concern the user raises.
 
 Then gate. CONFIRMED → may promote. PROVISIONAL / QUESTIONABLE ASSUMPTION → working result only: it must
-not graduate to the Findings section, and must not be reported as "current-best" or "best" without its caveat
+not be written into a `finding` cell, and must not be reported as "current-best" or "best" without its caveat
 carried inline, until the adaptation or assumption is reviewed. REFUTED → do not promote; add the refuting
 control as its own experiment. INCONCLUSIVE → run the named control before deciding. No claim-splitting: a
 headline number is inseparable from the config that produced it, so you may not promote "the number" while
@@ -380,8 +370,9 @@ So a multi-lever negative refutes the combination, not its members.
 
 ### Verifying a kill-claim (steering-negatives and invalidations)
 A negative finding that will steer the campaign — it kills a lever or topology branch, declares a ceiling
-or plateau, shelves a direction, or invalidates prior results — is recorded in the journal's Findings
-section and verified exactly like a win. The failed-experiment population is more bug-contaminated than the winning one: most
+or plateau, shelves a direction, or invalidates prior results — is recorded as a `finding` cell on its
+ledger row (through `--record <exp> --finding`, citing the verdict) and verified exactly like a win.
+The failed-experiment population is more bug-contaminated than the winning one: most
 implementation errors degrade performance, so bugs masquerade as "this approach doesn't work," and an
 unexamined negative kills a branch permanently. A claimed invalidation ("the scoreboard is tainted", "the
 metric is broken") gets this check before the campaign reprioritizes or forks on it; the false alarm is the
@@ -526,7 +517,7 @@ reproduce mode by run cost.
 - [ ] Substantial claim → an independent / mechanism-diverse route (often a fresh agent) agreed.
 - [ ] Any disputed verdict escalated to a blinded third party required to run a check neither side ran (§4b), not settled by argument between the claimant and the refuter.
 - [ ] Campaign mode: the correctness suite (`tests/correctness_checks.py`) is green, or explicitly N/A — a red suite blocks promotion.
-- [ ] Campaign mode: the verdict artifact `results/verdicts/<id>.json` written (with a named refuter) — the promotion hook and the loop driver consume it, and the Findings entry must cite it.
+- [ ] Campaign mode: the verdict artifact `results/verdicts/<id>.json` written (with a named refuter) — the promotion hook and the loop driver consume it, and the finding cell must cite it.
 - [ ] A kill-claim got the negative-refuter checklist (implementation error / strawman / insufficient search / mechanism) and a `kill_tier` — INCONCLUSIVE kills queue a fix-and-rerun, never graduate.
 - [ ] A kill-claim against the METRIC itself carries the tier a metric epoch needs (REFUTED or EVIDENCE_AGAINST; REFUTED for an easier ruler), and its verdict artifact is what the epoch entry will cite.
 - [ ] Counted the levers that moved. More than one → `confounded_levers` + a `disentangler` recorded; the causal claim graded QUESTIONABLE ASSUMPTION (the empirical one may still promote); a negative kills only the combination — every member INCONCLUSIVE, still untried, checked for masking (one lever helping while another hurts more).

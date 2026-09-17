@@ -1,17 +1,7 @@
 ---
 name: discovery-loop
 description: >-
-  Run an LLM-in-the-loop discovery search — the FunSearch-lineage loop that evolves an interpretable
-  artifact (a program, a symbolic equation, a heuristic, a design rule, a controller) against a frozen
-  evaluator, rather than tuning parameters. Use when the goal is to DISCOVER a method/expression/algorithm,
-  not optimize a fixed one: phrasings like "evolve a heuristic for...", "symbolic regression with an LLM",
-  "discover an algorithm/closure/acquisition function for...", "search program space for...", or setting up
-  the discovery archetype (G). It sets the three design axes (search engine; feedback memory —
-  prompt/reflections/concept-library; generator self-improvement), scopes generation to the lever functions
-  (harness/data frozen), spends the evaluation budget deliberately, certifies discoveries independently, and
-  delivers a human-readable artifact with its design rule extracted. Composes new-campaign (archetype G),
-  verify (certification), and the expensive-evaluation protocol. The most exploratory skill — read it before
-  building any LLM-driven search.
+  LLM discovery search over programs and rules (campaign archetype G).
 ---
 
 # discovery-loop — evolve an interpretable artifact, then certify it
@@ -169,7 +159,7 @@ value:
 - `correctness-suite` guards the FROZEN evaluator and harness.
 - `docs/reference/expensive-evaluation.md` governs the budget; `SIMULATION_VALIDATION.md` §5 governs
   simulator-scored search.
-- `report` and `final-report` document the discovered artifact, its design rule, and its
+- `report` documents the discovered artifact, its design rule, and its
   certified-vs-conjectured scope; `record-decision` captures why the genome, search engine, and memory
   were chosen.
 

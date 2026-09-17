@@ -1,14 +1,8 @@
 ---
 name: dimensional-analysis
 description: >-
-  The cheapest correctness and bounding tool in physics — use it first. Reach for it whenever there is a
-  new or derived equation or quantity to sanity-check ("do the units even work?"), a suspected units-or-sign
-  bug, or a need to bound what an answer should be before computing it (ceiling / floor / order of
-  magnitude). It does three jobs: (1) units/dimensional consistency as a bug filter; (2) a-priori bounds and
-  scaling from combining the relevant scales; (3) the dimensionless groups (Buckingham pi) and
-  nondimensionalization that reveal the problem's *real* parameters and which terms dominate or are
-  negligible. Invoked by verify, debug, and frame-problem as the first cheap check, and usable standalone.
-  Note it cannot catch a sign error or an O(1) prefactor — pair it with a limiting case for those.
+  The cheapest check, run first: units consistency, a-priori bounds and scaling, dimensionless
+  groups. Use on any new equation or suspected units bug.
 ---
 
 # dimensional-analysis — the cheapest check, run first

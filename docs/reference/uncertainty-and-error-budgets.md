@@ -114,7 +114,7 @@ bad fit; a good fit needs both.
 ## Composition
 
 `verify` grades whether the uncertainty is defensible and interrogates residual structure ·
-`report` / `final-report` consume the budget as the "honest band" · `signal-extraction-pitfalls.md`
+`report` consumes the budget as the "honest band" · `signal-extraction-pitfalls.md`
 guards the raw statistics feeding it · `systematic-errors.md` bounds the systematic rows ·
 `dimensional-analysis` checks the propagated units · `noise-and-sensitivity.md` supplies the
 a-priori statistical floor.

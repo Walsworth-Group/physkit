@@ -92,6 +92,163 @@ Read the new HARD GATE 1 in the campaign `CLAUDE.md` and the presets doc before 
 now follow the label, not the verdict alone. Results recorded before the upgrade keep the established
 promotion rule (their checks artifacts predate the presets).
 
+## To `report` as the campaign capstone — `final-report` merged away (kit ≥ v0.11.1, 2026-09-16)
+
+**What changed.** The `final-report` skill is gone. Its campaign-specific instructions are
+`skills/report/references/campaign-capstone.md`, which `report` reads when its *Where* dial says *in a
+campaign*. Nothing in a campaign tree changes; the driver's `capstone` spawn was always the claim audit,
+not this skill.
+
+**Procedure.** Where you typed `/physkit:final-report`, type `/physkit:report` from the campaign
+directory; it detects the campaign and reads the reference. A campaign `CLAUDE.md` rendered from an older
+spine may still say `campaigns: /physkit:final-report` in its report line; that line is a frozen
+snapshot and can stay, or be re-rendered by `upgrade_campaign.py`.
+
+## To the name-only skill listing in a campaign (kit ≥ v0.11.1, 2026-09-16)
+
+**What changed.** Every spawn in a campaign carried the plugin's skill descriptions in its system
+prompt (≈ 7k tokens on a 1M-context model, every turn) although the campaign's files name each skill
+to use. The driver now passes `--settings {"skillListingBudgetFraction":0.0001}` on every spawn it
+launches (workers, planners, verifiers, the capstone, the preflight smoke spawn), which lists every
+skill by name only inside the spawn; name-only skills are invoked exactly as before. This hides
+**every** installed plugin's descriptions from the spawn, not only physkit's: a campaign that wants a
+spawn routed to a third-party skill from its description names that skill in `campaign.md` or a role
+file, or turns the behaviour off. An interactive session opened in the campaign directory still sees
+the descriptions. Measured on one worker spawn of a field campaign: turn-0 context 156,717 → 149,492
+tokens.
+
+**Procedure.** Nothing in a campaign tree has to change. The knob is `configs/loop.json` `driver`
+`skill_listing`: `names` (the default, and what an older `loop.json` without the key gets) or `full`
+(the harness's own listing); env override `AUTORESEARCH_SKILL_LISTING`. The flag itself lives in
+`scripts/run_campaign.py`, which `upgrade_campaign.py` replaces wholesale.
+
+## To the bounded record — `--record`, `--card`, the ledger's narrative cells, the JOURNAL as working memory (kit ≥ v0.11.1, 2026-09-11)
+
+**What changed.** The worker's record is placed by the runner, never spliced by hand: `python
+scripts/run_campaign.py --record <exp> --analysis "<paragraph>" --next "<line>" [--ledger-note "<≤200
+chars>"] [--finding "<one line citing results/verdicts/<id>.json>"] [--decline "<why>"] [--propose
+<file>]` (validated, idempotent). Every `--config` run ends with the result card (`--card <exp>` reprints
+it); `--show <exp>` prints one logbook entry. `results/scoreboard.tsv` has narrative columns the runner
+writes: `what` (was `description`), `expected_vs_found`, `verified`, `note` (was `notes`; capped), `finding`.
+The brief delivers the ledger's last rows as a projection (`== LEDGER (last rows) ==`) and the JOURNAL
+whole (`== JOURNAL ==`, clipped at 12 KB). `results/JOURNAL.md` is now working memory with fixed sections
+(NEXT · Where we stand · Live hypotheses · What to try next and why · Traps and tooling · Open questions ·
+Anything else) that the worker brings up to date each unit; the driver archives every version to
+`results/journal_archive/` and refuses a unit whose JOURNAL was not written anew after its spawn. The
+driver removes the working file after building the brief (which carries the previous JOURNAL), so the
+worker writes the new one as a fresh file in one Write; a worker that leaves none gets the archive
+restored. The whole record is one file, `results/record_<NN>.json` (self_check, analysis, next,
+ledger_note, finding, propose/decline), and one command, `--record <exp> --from-file`; the card ends
+every run with the comparisons against the incumbent and the previous unit. The runner no longer appends
+a JOURNAL row; the verifier writes no JOURNAL line; the capstone records settled claims with `--record
+<exp> --finding`.
+
+**Migration.** `upgrade_campaign.py` does both in one pass, with backups: the ledger columns (rename,
+insert, pad; a `notes` essay over 200 chars is trimmed with a `[trimmed]` marker - the full text is the
+logbook entry) and the JOURNAL restructure (the old file archived whole in `results/journal_archive/`;
+§Findings / §Open threads / §Strategy notes carried under "migrated from the previous JOURNAL" headings
+for you to trim; every verdict-cited Findings line also written into the `finding` cell of the experiment
+it names). Then trim the migrated blocks: the file is delivered whole every spawn. An un-upgraded
+campaign keeps working - the runner writes rows under either spelling and refuses a `--ledger-note` /
+`--finding` only when the column is absent (naming the upgrade).
+
+## To the driver fixes — usage-limit backoff, the outstanding-units cap, the planner's queue schema (kit ≥ v0.11.1, 2026-09-09)
+
+**What changed.** (1) A spawn the harness kills in its first turn within seconds (`ok=False turns=1
+dur=1s`), or whose result names a usage/rate limit, is the model's usage limit, not the unit: the driver
+now waits (doubling from 5 min, up to `driver.limit_wait_max_min`, default 90) and relaunches the same
+prompt, spending no retry and never counting toward SYSTEMIC; `0` restores the old behaviour. (2)
+`queue.max_outstanding_units` — declared in `loop.json` since v0.10 and enforced nowhere — is now
+enforced at the drop merge: agent proposals beyond it wait on the shelf as `kind: "capped"` until the
+planner revives, reorders or prunes them; absent = uncapped, `1` = one proposal at a time. (3) The
+planner prompt shows the literal queue-entry schema, so an empty first queue cannot produce a
+`stem`-keyed entry and a `KeyError: 'config'` crash. (4) Every promotion-guard denial is logged to
+`results/guard_denials.log`; `campaign-status` reports the count. Evidence: the colleague records
+(`case-studies/time_records_cross-read_2026-09-07.md` §3: three of three halts in one run were
+one-second deaths counted as failures; the Opus run's launch-1 crash).
+
+**Migration.** `upgrade_campaign.py` brings in the runner (kit-owned since the split) and the guard;
+`loop.json` gains `driver.limit_wait_max_min` (add it, or the code default 90 applies). Check
+`queue.max_outstanding_units` in your `loop.json`: a pre-v0.11.1 scaffold set it to the planner cadence,
+which now binds — lower it to 1 (the new-campaign default) if you want one proposal at a time.
+
+## To the split runner — the campaign's code in `scripts/experiment.py` (kit ≥ v0.11.1, 2026-09-09)
+
+**What changed.** The five experiment hooks (`validate_method`, `run_experiment`, `load_target`,
+`guardrail`, `save_figure`) left `scripts/run_campaign.py` for a new campaign-owned
+`scripts/experiment.py`, with four optional seams the runner calls when the campaign defines them:
+`residual(prediction, target)`, `campaign_scoreboard_fields(cfg, diags, score)` (the campaign's
+scoreboard columns), `campaign_checks(exp_id, label, score, diags, cfg)` (merged into
+`results/checks_<NN>.json`), and `baseline_config()` (what `--baseline` runs). `run_campaign.py` is now
+the kit's machinery: never edited per campaign, replaced wholesale on upgrade. The worker's brief
+delivers `experiment.py` by value, and the prompt says the runner's source is not theirs to read or edit.
+Evidence: a colleague's audit found the runner Read 64 times in one campaign "because the science hooks
+live inside it", and workers writing 30–60 KB bespoke modules per unit rather than finding them.
+
+**Migration.** `upgrade_campaign.py` (above) does the split: it extracts every top-level name your
+runner added beyond the template it was scaffolded from — plus the five hooks — into
+`scripts/experiment.py` by AST, verbatim and in order, under the current template's header; then
+replaces the runner with the kit's. Three things to check by hand:
+1. Read the upgrade log. If it names **kit-owned functions the campaign edited in place** (in the
+   field campaign that was `append_scoreboard_row`, `write_checks`, `evaluate_and_record`), port those
+   edits into the seams from the backup it leaves beside the runner (`run_campaign.py.bak_*`): a
+   scoreboard column → `campaign_scoreboard_fields`; an extra check → `campaign_checks`; a second
+   figure → dispatch inside `save_figure`; the baseline dict → `baseline_config`. The upgrade exits 2
+   until you do.
+2. `python scripts/run_campaign.py --preflight`: it imports `experiment.py` and names an import error
+   or a hook still stubbed.
+3. `tests/correctness_checks.py` that imported a helper from the runner (`from run_campaign import …`)
+   now imports it from `experiment`.
+A pre-split campaign that is not upgraded keeps working: the validator accepts a runner that still
+defines `run_experiment` itself.
+
+## To the writing record — the runner writes what it can derive; the worker owes Analysis and NEXT (kit ≥ v0.11.1, 2026-09-08)
+
+**What changed.** The per-unit record a worker writes shrank to what no code knows. The runner now
+writes, at record time, the logbook's **Levers** line (from the config's new `_levers` list), the
+**Expected vs found** line (the same judgement `results/checks_<NN>.json` records under `prediction`),
+a **Verification** line that starts `pending` and is raised by `--self-check` and by the driver's
+verdict stamp (a line written by hand is never overwritten), and the JOURNAL §Recent experiments row.
+The worker authors the prediction's one-sentence rationale, the config's `_levers` / one-line
+`_comment` / `_hypothesis`, the self-check, and the logbook's **Analysis** (one paragraph; every failed
+check answered by name) and **NEXT** (one line). A new mechanical check, `levers`, fails when a config
+key moved that `_levers` does not declare (HARD GATE 2 as data). The driver treats a blank Analysis as
+an unsaved unit (retry, then shelve). No length is measured or refused anywhere; the budgets are the
+prompt's. Measurement: `case-studies/writing_counts.py`. Evidence: the colleague's audit filed as
+`case-studies/collective-pulse_worker-time-attribution_fable5_2026-09-07.md`.
+
+**Migration.** `upgrade_campaign.py` (above) brings in the runner, the role file, `CLAUDE.md`, the
+logbook and JOURNAL templates' text, and `configs/_template.json`. Existing configs without `_levers`
+read `unavailable` on the `levers` check (legitimately, named as such); add the list to new configs.
+Older logbook entries without a Verification line are not judged on it. A campaign's JOURNAL must keep
+its `## Recent experiments` table for the runner to append rows; without it the runner says so and
+the worker adds the row by hand as before. `_predicted`, `_narrative` and `_tier_doc` are gone from
+the config template; a config that still carries them is not an error.
+
+## To the compiled brief — orient from the prompt, never the tree (kit ≥ v0.11.1, 2026-09-07)
+
+**What changed.** The driver now compiles the brief into every worker and planner prompt by value:
+`campaign.md` (minus its append-only §Decision record), the role file, the project's §Standing
+constraints, the JOURNAL working window (the **NEXT** line, §Open threads, §Findings, the last rows of
+§Recent experiments), the worker's unit (its queue entry + config) and the scoreboard tail; the planner
+also gets `results/queue.json` and `LITERATURE.md`. The prompts tell the agent to orient from the brief
+and name the only reads outside it. The prompt travels over stdin (it outgrows the Windows argv cap),
+the snapshot manifest's `spawn_prompt_sha256` is the hash of the text actually delivered, and preflight
+and every spawn print `brief[role]: N KB (…)` — `(TRUNCATED)` on a section, or a `preflight WARN`, when a
+section exceeds the driver's cap. Evidence: `synthesis/BUILD_BACKLOG.md` §2026-09-07.
+
+**Migration.** `upgrade_campaign.py` (above) brings in the runner, `CLAUDE.md`/`AGENTS.md`, `README.md`,
+`roles/*.md`; nothing else is touched. Three things to check by hand:
+1. `results/JOURNAL.md` must keep the template's section names — a `**NEXT:**` line at the top,
+   `## Open threads`, `## Findings …`, `## Recent experiments …` — for the window to be extracted; any
+   other section is delivered as a name only. A journal that has grown other sections (planner strategy
+   notes, inbox acknowledgements) keeps them on disk; move anything a worker must see into the four
+   window sections.
+2. Run `--preflight` and read the `brief[worker]` line. A `(TRUNCATED)` section or a `WARN` means the
+   window is being delivered cut: consolidate the journal (`campaign-status` step 3) before launching.
+3. A custom `AUTORESEARCH_AGENT_CMD` must read the prompt from stdin when `PHYSKIT_PROMPT_STDIN=1` is
+   set (the test stub shows the two-line change); the prompt is no longer the last argv element.
+
 ## To the verification preset — `configs/loop.json` `verify.preset` (kit ≥ v0.11.0, 2026-09-03)
 
 **Symptom.** Preflight prints `preflight OK: verify: preset=… (invariants=… machinery=… gates=…
@@ -128,7 +285,7 @@ preflight names an over-budget set). Add the four contract checks the template s
 exported claim carries an honest verification label (`unverified` · `self-checked` · `<verdict>/review`
 · `<verdict>/re-execution` · `<verdict>/audit`); where the preset checks promotions only CONFIRMED
 graduates, where it does not (`minimal`) the row promotes stamped `unverified` and the guard refuses
-one that does not say so. `final-report` waits for the claim audit while an exported claim's label is
+one that does not say so. `report` (campaign mode) waits for the claim audit while an exported claim's label is
 non-independent. The verbatim sentence lives in `docs/CORE.md`, `docs/PRINCIPLES.md`, the campaign
 `CLAUDE.md` (HARD GATE 1), and `campaign.md`.
 

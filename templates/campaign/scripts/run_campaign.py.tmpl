@@ -15,7 +15,9 @@ Every run MUST leave behind, for reproducibility:
     ·  at least one figure in results/images/  ·  a tee'd log in results/diagnostics/
     ·  a reproducibility snapshot in results/snapshots/exp<NN>_<slug>/ (the config + a copy of scripts/)
     ·  an entry appended to results/logbook.md (this script appends the FACTS automatically; the agent
-       completes the narrative slots - Analysis / Verification / NEXT - afterward)
+       completes Analysis and NEXT afterward; the runner derives every other line)
+The campaign's OWN code - the experiment hooks and the optional seams - is scripts/experiment.py; this
+file is the kit's machinery and is never edited per campaign.
     ·  results/checks_<NN>.json - the MECHANICAL checks for this experiment (prediction met, change vs
        the incumbent, comparability, correctness-suite state, save-set), each pass / fail / unavailable
 A result is not "saved" until it has a scoreboard row, a result_<NN>.json, its figure, AND its snapshot.
@@ -78,6 +80,13 @@ IMAGES = RESULTS / "images"
 SCOREBOARD = RESULTS / "scoreboard.tsv"
 SNAPSHOTS = RESULTS / "snapshots"
 LOGBOOK = RESULTS / "logbook.md"
+JOURNAL = RESULTS / "JOURNAL.md"           # working memory: the worker brings it up to date each unit
+JOURNAL_ARCHIVE = RESULTS / "journal_archive"   # the driver's copy of each version: the reasoning history
+NOTE_CAP = 200          # chars: the ledger's optional `note` cell - the narrative belongs in the logbook
+FINDING_CAP = 300       # chars: the ledger's `finding` cell - one line that cites its verdict
+JOURNAL_SECTIONS = ("Where we stand", "Live hypotheses", "What to try next and why", "Traps and tooling",
+                    "Open questions", "Anything else")   # results/JOURNAL.md: the working memory's parts
+KIT_VERSION = "{{PHYSKIT_VERSION}}"      # the kit this machinery came from (stamped in every snapshot manifest)
 PREDICTIONS = ROOT / "predictions"       # a-priori predictions, one JSON per experiment (spend gate)
 VERDICTS = RESULTS / "verdicts"          # verify-skill verdict artifacts (promotion gate reads these)
 CORRECTNESS_STATE = RESULTS / "correctness_state.json"
@@ -284,11 +293,17 @@ def snapshot_experiment(cfg: dict, config_path: Path | None = None, props: dict 
     # under different constraints. Hashing the assembled worker prompt here answers "what did this
     # experiment run under" from the frozen record. Recomputed at snapshot time (inbox notes, which
     # vary per spawn and steer rather than constrain, are not part of the hash).
-    spawn_prompt = build_prompt("worker", config=str(config_path or "<config path>"))
-    spawn_hash = _hashlib.sha256((_codex_backend.adapt_prompt(spawn_prompt) if os.environ.get("AUTORESEARCH_ACTIVE_BACKEND") == "codex" else spawn_prompt).encode("utf-8")).hexdigest()
+    # The driver exports the hash of the prompt it DELIVERED (the brief carries the journal window,
+    # which the worker edits mid-unit, so a rebuild here would hash a different text); an attended
+    # run has no driver and rebuilds it.
+    spawn_hash = os.environ.get("PHYSKIT_SPAWN_PROMPT_SHA256", "").strip()
+    if not spawn_hash:
+        spawn_prompt = build_prompt("worker", config=str(config_path or "<config path>"))
+        spawn_hash = _hashlib.sha256((_codex_backend.adapt_prompt(spawn_prompt) if os.environ.get("AUTORESEARCH_ACTIVE_BACKEND") == "codex" else spawn_prompt).encode("utf-8")).hexdigest()
     (dst / "manifest.txt").write_text(
         f"argv: {' '.join(sys.argv)}\npython: {sys.version.split()[0]}\nnumpy: {np.__version__}\n"
         f"core_hash: {frozen_core.core_hash(ROOT)}\n"   # WHICH FROZEN/core code this experiment ran against
+        f"kit_version: {KIT_VERSION}\n"   # WHICH kit machinery (run_campaign.py is kit-owned, not core-hashed)
         f"spawn_prompt_sha256: {spawn_hash}\n"
         f"utc: {_utc_stamp()}\n" + prop_lines,
         encoding="utf-8",
@@ -423,58 +438,31 @@ def assert_save_set(exp_id: str, label: str, fig: Path) -> None:
                  + "\nWrite them first (result JSON + figure + snapshot); see roles/worker.md, 'The save-set'.")
 
 
-def validate_method(cfg: dict) -> None:
-    """HARD-FAIL if a lever named in `cfg` isn't actually wired to any effect in run_experiment().
-
-    TODO(campaign): maintain a set/dict of the method names each lever field actually dispatches on
-    (e.g. {"registration": {"none", "rigid", "affine"}, "decoder": {"linear", "mlp"}}) and assert every
-    lever value in `cfg` is a recognized member before running. A lever whose value doesn't match any
-    dispatch branch silently falls through to a default/no-op - the experiment runs, writes a
-    scoreboard row, and looks like a real test of that lever when it changed nothing. This has actually
-    happened (an unwired lever burned a full evaluation before being caught by a manual review, not by
-    the runner) - fail loudly here instead of relying on someone noticing.
-    """
-    raise NotImplementedError("Implement validate_method() - hard-fail on any cfg lever value the "
-                              "dispatch in run_experiment() doesn't actually recognize.")
+# ---- the campaign's own code: scripts/experiment.py -------------------------------------------------
+# The five experiment hooks (validate_method / run_experiment / load_target / guardrail / save_figure)
+# and the optional seams (residual / campaign_scoreboard_fields / campaign_checks / baseline_config)
+# live in scripts/experiment.py - the one script a campaign edits. THIS file is the kit's machinery:
+# gates, checks, the snapshot, the driver, the prompts - replaced wholesale on a kit upgrade and never
+# edited per campaign. Motivation (a colleague's audit, 2026-09): with the hooks inside this file it was
+# Read 64 times in one campaign, and every worker wrote a bespoke module rather than find them. The
+# import is deferred to first use so `--help` / `--show-prompt` work while experiment.py is mid-edit,
+# and preflight names an import error instead of a traceback.
+_EXPERIMENT = None
 
 
-def run_experiment(cfg: dict) -> dict:
-    """Execute the method described by `cfg` and return its prediction + any intermediates.
-
-    TODO(campaign): this is where the LEVERS live - registration / forward / preprocessing / decoder /
-    design / training, dispatched on fields in `cfg`. Keep side effects isolated; return arrays. Call
-    `validate_method(cfg)` first so an unrecognized lever value fails loudly instead of silently no-op'ing.
-    """
-    raise NotImplementedError("Implement run_experiment() - dispatch the method from the config.")
-
-
-def load_target(cfg: dict):
-    """Load the evaluation target (the data the metric scores against).
-
-    TODO(campaign): for a fixed-data campaign, read the experimental data here (READ-ONLY).
-    """
-    raise NotImplementedError("Implement load_target() - load the data the metric scores against.")
+def _exp():
+    """The campaign's experiment module (scripts/experiment.py), imported once, on first use."""
+    global _EXPERIMENT
+    if _EXPERIMENT is None:
+        import experiment
+        _EXPERIMENT = experiment
+    return _EXPERIMENT
 
 
-def guardrail(prediction, cfg: dict) -> dict:
-    """Compute the co-tracked guardrail ({{GUARDRAIL_METRIC}}); logged, NOT primary.
-
-    TODO(campaign): implement the necessary-but-not-sufficient check (sanity / overfit / robustness).
-    Return a dict of named diagnostics.
-    """
-    return {}  # TODO
-
-
-def save_figure(label: str, prediction, target, residual=None) -> Path:
-    """Save the standard per-experiment visualization (see roles/worker.md, 'The save-set').
-
-    TODO(campaign): draw the panel(s) that make a result inspectable at a glance. Always save a
-    visualization of a notable result, even a tangent.
-    """
-    IMAGES.mkdir(parents=True, exist_ok=True)
-    out = IMAGES / f"{label}_summary.png"
-    # TODO(campaign): matplotlib figure -> out
-    return out
+def _seam(name: str, default):
+    """An OPTIONAL function in experiment.py: the campaign's, if it defines one, else `default`."""
+    fn = getattr(_exp(), name, None)
+    return fn if callable(fn) else default
 
 
 def scoreboard_exp_ids() -> set:
@@ -526,13 +514,27 @@ def append_scoreboard_row(row: dict) -> None:
         f.write("\t".join(str(row.get(c, "")) for c in cols) + "\n")
 
 
+def _expected_vs_found(score: float, apriori: dict | None, props: dict, exp_id: str) -> str:
+    """One judgement, three readers: the checks artifact (`prediction`), the logbook line and the ledger
+    cell all carry this string, computed once from the same inputs so they can never disagree."""
+    try:
+        pc = check_prediction_outcome(score, apriori or {}, props, _prior_results(exp_id))
+        return ({"pass": "met - ", "fail": "MISSED - ", "unavailable": "no bound - "}
+                .get(pc.get("status"), "") + str(pc.get("detail", "")))
+    except Exception as exc:                        # the narrative must never cost the experiment
+        return f"(not computed: {type(exc).__name__}: {exc})"
+
+
 def append_logbook(cfg: dict, exp_id: str, label: str, score: float, diags: dict,
-                   apriori: dict | None = None) -> None:
+                   apriori: dict | None = None, expected_vs_found: str | None = None) -> None:
     """Append this experiment's entry to the append-only logbook (results/logbook.md).
 
-    The FACTS are filled automatically (metric, guardrail, artifact paths, and the hypothesis/prediction
-    read from the prediction artifact + config); the agent completes the narrative slots
-    (Analysis / Verification / NEXT) afterward. Append-only: this never edits or reads the rest of the file.
+    The FACTS are filled automatically: metric, guardrail, artifact paths, the hypothesis and the levers
+    from the config, the prediction from the prediction artifact, the expected-vs-found judgement (the
+    SAME one results/checks_<NN>.json records under `prediction`, computed from the same inputs so the
+    two never disagree), and a Verification line that starts `pending` and is raised by the artifacts
+    (the self-check, then the verdict stamp). The agent owes two slots afterward: Analysis and NEXT.
+    Append-only: this never edits or reads the rest of the file.
     """
     if apriori:
         # Mode-aware. A campaign that honestly declined to bound its answer must not have a bound-shaped
@@ -548,22 +550,31 @@ def append_logbook(cfg: dict, exp_id: str, label: str, score: float, diags: dict
         else:
             predicted_line = f"no numeric bound (prediction_mode) - {why} {src}"
     else:
-        predicted_line = cfg.get("_predicted", "(missing - the prediction gate should have caught this)")
-    # One bold-labelled field per line, as a Markdown bullet list, so fields render on separate lines
-    # (a single newline renders as a space in Markdown, which would collapse them into one paragraph).
+        predicted_line = "(missing - the prediction gate should have caught this)"
+    props = _campaign_props()
     # The epoch label travels with the narrative too: the row's metric_version is what this result
     # means, and a later reader of the logbook must not have to cross-reference the scoreboard for it.
-    mv = str(_campaign_props().get("metric_version") or "")
+    mv = str(props.get("metric_version") or "")
+    # One judgement, two readers: the checks artifact for machines, this line for the narrative. The
+    # agent used to write this line by hand from the same two numbers; it is the runner's.
+    if expected_vs_found is None:
+        expected_vs_found = _expected_vs_found(score, apriori, props, exp_id)
+    levers = cfg.get("_levers")
+    levers_line = (", ".join(str(x) for x in levers) if isinstance(levers, list) and levers
+                   else "(none declared - list the levers this config moves in the config's _levers)")
+    # One bold-labelled field per line, as a Markdown bullet list, so fields render on separate lines
+    # (a single newline renders as a space in Markdown, which would collapse them into one paragraph).
     entry = (
         f"\n## {exp_id} - {label} - {_utc_stamp()}\n"
         f"- **Hypothesis**: {cfg.get('_hypothesis', '(set _hypothesis in the config)')}\n"
         f"- **Predicted**: {predicted_line}\n"
+        f"- **Levers**: {levers_line}\n"
         f"- **Change**: {cfg.get('_comment', '')}\n"
         f"- **Result**: {{PRIMARY_METRIC}} = {score:.4f}; {{GUARDRAIL_METRIC}} = {diags}"
         + (f" (metric epoch {mv})" if mv else "") + "\n"
+        f"- **Expected vs found**: {expected_vs_found}\n"
         f"- **Analysis**: \n"
-        f"- **Expected vs found**: \n"
-        f"- **Verification**: \n"
+        f"- **Verification**: pending - label unverified (results/checks_{exp_id}.json)\n"
         f"- **Excluded data**: none\n"
         f"- **Disputes & responses**: \n"
         f"- **Status**: open\n"
@@ -577,6 +588,213 @@ def append_logbook(cfg: dict, exp_id: str, label: str, score: float, diags: dict
         return
     with open(LOGBOOK, "a", encoding="utf-8") as f:
         f.write(entry)
+
+
+def _logbook_field(text: str, exp_id: str, field: str) -> str | None:
+    """The value of one bold-labelled field in the entry headed `## <exp_id> - ...`, or None when the
+    entry or the field is absent (an entry written before the field existed is not judged on it)."""
+    head, key, in_section = f"## {exp_id} - ", f"- **{field}**:", False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            in_section = line.startswith(head)
+            continue
+        if in_section and line.startswith(key):
+            return line[len(key):].strip()
+    return None
+
+
+def _set_logbook_field(exp: str, field: str, text: str, only_if_prefix: tuple | None = ("",)) -> bool:
+    """Set one bold-labelled field of the entry headed `## <id> - ...` for `exp` (a stem or an id) - and
+    only while its present value starts with one of `only_if_prefix`, so a runner-owned line
+    (Verification: pending -> self-checked -> <verdict>) is raised by the artifacts and never overwrites
+    what a verifier or the agent wrote by hand. `only_if_prefix=None` sets the line unconditionally (the
+    worker's own slots through --record, which re-run replaces). Every byte outside that one line is
+    preserved, newline style included. Returns whether a line changed."""
+    eid = exp_id_for(exp)
+    if not eid or not LOGBOOK.is_file():
+        return False
+    try:
+        with open(LOGBOOK, encoding="utf-8", errors="replace", newline="") as f:
+            lines = f.read().splitlines(keepends=True)
+    except OSError:
+        return False
+    head, key, in_section = f"## {eid} - ", f"- **{field}**:", False
+    for i, line in enumerate(lines):
+        if line.startswith("## "):
+            in_section = line.startswith(head)
+            continue
+        if in_section and line.startswith(key):
+            current = line[len(key):].strip()
+            # "" in only_if_prefix means "a blank line may be set" - never "anything matches".
+            if only_if_prefix is not None and not any(
+                    (current == "") if pfx == "" else current.startswith(pfx) for pfx in only_if_prefix):
+                return False
+            nl = "\r\n" if line.endswith("\r\n") else ("\n" if line.endswith("\n") else "")
+            lines[i] = f"{key} {text}{nl}"
+            try:
+                with open(LOGBOOK, "w", encoding="utf-8", newline="") as f:
+                    f.write("".join(lines))
+            except OSError:
+                return False
+            return True
+    return False
+
+
+def _scoreboard_lines() -> tuple[list[str], int, list[str]]:
+    """(the ledger's lines with their endings, the header's index, the header's columns)."""
+    with open(SCOREBOARD, encoding="utf-8", errors="replace", newline="") as f:
+        lines = f.read().splitlines(keepends=True)
+    for i, L in enumerate(lines):
+        if L.strip() and not L.startswith("#"):
+            return lines, i, L.rstrip("\r\n").split("\t")
+    raise ValueError("scoreboard.tsv has no header row")
+
+
+def _column(cols: list, names: tuple) -> str | None:
+    """The header column for the first of `names` present, matched case-insensitively (a field ledger
+    spells its metric column in lower case while the result JSON key is upper case)."""
+    for n in names:
+        for c in cols:
+            if c.lower() == str(n).lower():
+                return c
+    return None
+
+
+def _set_scoreboard_cell(exp_id: str, names: tuple, text: str) -> str:
+    """Set ONE cell of the row for `exp_id`: the column is the first of `names` the header has (the
+    current spelling first, an older one second). The ledger is append-only in ROWS; a narrative cell
+    the runner owns (note, finding, verified) is stamped in place with every other byte preserved.
+    Returns the column written, or "" after printing why not."""
+    try:
+        lines, hi, cols = _scoreboard_lines()
+    except (OSError, ValueError) as exc:
+        print(f"ledger: cannot read results/scoreboard.tsv ({exc})")
+        return ""
+    col = _column(cols, names)
+    if col is None:
+        print(f"ledger: results/scoreboard.tsv has no {' / '.join(names)} column - the header predates this "
+              "kit; `upgrade_campaign.py --ledger-columns` adds it (the cell was NOT written)")
+        return ""
+    ci = cols.index(col)
+    cell = " ".join(str(text).replace("\t", " ").split())
+    for i in range(hi + 1, len(lines)):
+        L = lines[i]
+        if L.startswith("#") or not L.strip():
+            continue
+        cells = L.rstrip("\r\n").split("\t")
+        if cells[0].strip() != exp_id:
+            continue
+        nl = "\r\n" if L.endswith("\r\n") else ("\n" if L.endswith("\n") else "")
+        while len(cells) < len(cols):
+            cells.append("")
+        cells[ci] = cell
+        lines[i] = "\t".join(cells) + nl
+        with open(SCOREBOARD, "w", encoding="utf-8", newline="") as f:
+            f.write("".join(lines))
+        return col
+    print(f"ledger: no scoreboard row for exp_id {exp_id} - the run writes the row; record the experiment first")
+    return ""
+
+
+def _scoreboard_cell(exp_id: str, names: tuple) -> str | None:
+    """The current text of one narrative cell, or None when the column or the row is absent."""
+    try:
+        lines, hi, cols = _scoreboard_lines()
+    except (OSError, ValueError):
+        return None
+    col = _column(cols, names)
+    if col is None:
+        return None
+    ci = cols.index(col)
+    for L in lines[hi + 1:]:
+        if L.startswith("#") or not L.strip():
+            continue
+        cells = L.rstrip("\r\n").split("\t")
+        if cells[0].strip() == exp_id:
+            return cells[ci] if ci < len(cells) else ""
+    return None
+
+
+# The ledger's narrative columns, in the order the brief shows them; the second name is the older spelling.
+_PROJECTION_COLS = (("exp_id",), ("tier",), ("{{PRIMARY_METRIC}}", "{{PRIMARY_METRIC_COL}}"),
+                    ("what", "description"), ("expected_vs_found",), ("verified",), ("note", "notes"),
+                    ("finding",))
+
+
+def _ledger_projection(n_rows: int) -> tuple[str, int]:
+    """The ledger's last n rows as a Markdown table of its NARRATIVE columns - id, tier, the primary
+    metric, what, expected vs found, label, note, finding - every cell clipped at BRIEF_CELL_CAP. This is
+    the one-line-per-experiment timeline; the numeric columns stay on disk and a reader who needs them
+    opens the row by id. Returns (text, rows dropped)."""
+    try:
+        lines, hi, cols = _scoreboard_lines()
+    except (OSError, ValueError):
+        return "[MISSING: results/scoreboard.tsv has no header row]", 0
+    picks = [(names[0], _column(cols, names)) for names in _PROJECTION_COLS]
+    picks = [(t, c) for t, c in picks if c]
+    rows = [L.rstrip("\r\n").split("\t") for L in lines[hi + 1:] if L.strip() and not L.startswith("#")]
+    dropped = max(0, len(rows) - n_rows) if n_rows > 0 else 0
+    rows = rows[-n_rows:] if n_rows > 0 else rows
+
+    def cell(r: list, col: str) -> str:
+        ci = cols.index(col)
+        v = " ".join((r[ci] if ci < len(r) else "").split()).replace("|", "/")
+        return v if len(v) <= BRIEF_CELL_CAP else v[:BRIEF_CELL_CAP] + "..."
+    out = ["| " + " | ".join(t for t, _ in picks) + " |", "|" + "---|" * len(picks)]
+    out += ["| " + " | ".join(cell(r, c) for _, c in picks) + " |" for r in rows]
+    return "\n".join(out), dropped
+
+
+def _archive_journal(clear: bool = False) -> Path | None:
+    """Copy results/JOURNAL.md into results/journal_archive/ before a spawn: the reasoning history the
+    rolling document would otherwise overwrite (skipped when the newest copy already matches). With
+    `clear`, the working file is then REMOVED: the brief (built first) carries the previous JOURNAL, and
+    the worker writes the new one as a fresh file - one Write, no read-before-write, no splice."""
+    if not JOURNAL.is_file():
+        return None
+    try:
+        text = JOURNAL.read_bytes()
+        JOURNAL_ARCHIVE.mkdir(parents=True, exist_ok=True)
+        prev = sorted(JOURNAL_ARCHIVE.glob("journal_*.md"))
+        dst = prev[-1] if prev and prev[-1].read_bytes() == text else JOURNAL_ARCHIVE / f"journal_{_utc_stamp()}.md"
+        if dst not in prev:
+            dst.write_bytes(text)
+        if clear:
+            JOURNAL.unlink()
+        return dst
+    except OSError:
+        return None
+
+
+def _newest_journal_archive() -> Path | None:
+    prev = sorted(JOURNAL_ARCHIVE.glob("journal_*.md")) if JOURNAL_ARCHIVE.is_dir() else []
+    return prev[-1] if prev else None
+
+
+def _restore_journal() -> bool:
+    """No new JOURNAL after a spawn: put the archived one back so the campaign keeps its working memory
+    (the unit is still incomplete - the gate named the missing file)."""
+    if JOURNAL.is_file():
+        return False
+    src = _newest_journal_archive()
+    if src is None:
+        return False
+    try:
+        JOURNAL.write_bytes(src.read_bytes())
+        return True
+    except OSError:
+        return False
+
+
+def _journal_updated_since(ts: float) -> bool:
+    """Whether results/JOURNAL.md was written after `ts` (the spawn's start) and carries its NEXT line -
+    the record is owed like the save-set: a unit that left no new working memory did not report."""
+    try:
+        if JOURNAL.stat().st_mtime < ts - 1.0:
+            return False
+        return "**NEXT:**" in JOURNAL.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError:
+        return False
 
 
 # ---- mechanical checks (results/checks_<NN>.json) -----------------------------------------------------
@@ -932,12 +1150,42 @@ def check_guardrail(diags: dict) -> dict:
     records the values for the reviewer instead of pretending to a judgement it cannot make."""
     if not diags:
         return _check("unavailable", "guardrail() returned nothing for this experiment",
-                      needs="an implemented guardrail() in scripts/run_campaign.py")
+                      needs="an implemented guardrail() in scripts/experiment.py")
     return _check("unavailable",
                   "guardrail values recorded; no numeric 'materially worse' threshold is defined for "
                   "this campaign, so this check reports rather than judges",
                   needs="a numeric guardrail threshold in campaign.md's promotion rule",
                   values=diags)
+
+
+def check_levers(declared, changes: dict) -> dict:
+    """HARD GATE 2 as data: does the config's `_levers` list name every config key this experiment moved
+    (the change manifest's `config_keys`, against the unit it is compared to)? A moved-but-undeclared
+    key is the silent multi-lever move nothing downstream can attribute; a declared-but-unmoved lever
+    is only noted. A name matches a key when either contains the other (a lever may span keys)."""
+    if not isinstance(declared, list) or not declared:
+        return _check("unavailable", "the config declares no _levers list",
+                      needs="a `_levers` list in the config naming the levers this experiment moves "
+                            "(CLAUDE.md HARD GATE 2)")
+    names = [str(d) for d in declared]
+    moved = [str(c.get("key")) for c in (changes.get("config_keys") or [])]
+
+    def _covered(key: str) -> bool:
+        return any(n == key or n in key or key in n for n in names)
+
+    undeclared = [k for k in moved if not _covered(k)]
+    unmoved = [n for n in names if not any(n == k or n in k or k in n for k in moved)]
+    if undeclared:
+        return _check("fail", "moved but not declared in _levers: " + ", ".join(undeclared)
+                      + f" (declared: {', '.join(names)})", declared=names, moved=moved,
+                      undeclared=undeclared)
+    if changes.get("since") is None:
+        return _check("pass", f"declared: {', '.join(names)}; no prior unit to diff against "
+                              f"({changes.get('since_reason') or 'first result'})",
+                      declared=names, moved=moved)
+    return _check("pass", f"declared: {', '.join(names)}; every moved key is declared"
+                          + (f"; declared but unmoved: {', '.join(unmoved)}" if unmoved else ""),
+                  declared=names, moved=moved)
 
 
 def check_hard_bounds(score: float) -> dict:
@@ -1130,8 +1378,17 @@ def write_checks(exp_id: str, label: str, score: float, diags: dict, apriori: di
     comparability = check_comparability(props, inc, priors)
     loop_cfg = _read_json(LOOPCFG, {}) or {}
     vrows = _verify_rows(loop_cfg)
+    # What this experiment changed since the last verified unit - where verification starts, and the
+    # record the levers check reads. Computed first; it must never cost the experiment.
+    try:
+        changes = _change_manifest(exp_id, label, props)
+    except Exception as exc:
+        changes = {"since": None, "since_reason": f"manifest failed: {type(exc).__name__}: {exc}",
+                   "files": [], "config_keys": [], "versions": {}}
+    declared = ((_read_json(RESULTS / f"result_{exp_id}.json", {}) or {}).get("config") or {}).get("_levers")
     checks = {
         "prediction": check_prediction_outcome(score, apriori or {}, props, priors),
+        "levers": check_levers(declared, changes),
         "noise_floor": check_noise_floor(score, props, inc,
                                          comparable=comparability["status"] != "fail",
                                          excluded=int(comparability.get("excluded") or 0)),
@@ -1142,6 +1399,12 @@ def write_checks(exp_id: str, label: str, score: float, diags: dict, apriori: di
         "epoch": check_epoch(props),
         "save_set": None,   # filled below
     }
+    # The campaign's own checks (experiment.py campaign_checks - a seam): merged under their own names,
+    # never over a kit check, and only in the three-valued shape every reader of this artifact expects.
+    cfg_now = (_read_json(RESULTS / f"result_{exp_id}.json", {}) or {}).get("config") or {}
+    for name, c in (_seam("campaign_checks", lambda *a: {})(exp_id, label, score, diags, cfg_now) or {}).items():
+        if name not in checks and isinstance(c, dict) and c.get("status") in ("pass", "fail", "unavailable"):
+            checks[name] = c
     # Re-verified HERE, at record time, over all four artifacts - including the figure, which
     # assert_save_set checked before the row was written and which nothing has re-checked since. The
     # three that gate preceded this are re-read rather than assumed: a check that cannot fail is not a
@@ -1198,12 +1461,7 @@ def write_checks(exp_id: str, label: str, score: float, diags: dict, apriori: di
         "self_check": {"status": "off" if vrows["rows"].get("self_check") == "off" else "absent"},
         "label": "unverified",
     }
-    # What this experiment changed since the last verified unit - where verification starts.
-    try:
-        payload["changes"] = _change_manifest(exp_id, label, props)
-    except Exception as exc:                         # the manifest must never cost the experiment
-        payload["changes"] = {"since": None, "since_reason": f"manifest failed: {type(exc).__name__}: {exc}",
-                              "files": [], "config_keys": [], "versions": {}}
+    payload["changes"] = changes
     (CHECKS / f"checks_{exp_id}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     n_pass = len(checks) - len(payload["flags"]) - len(payload["unavailable"])
     if payload["flags"]:
@@ -1234,11 +1492,11 @@ def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = No
     timing = dict(timing or {})
     score = metric.compute_metric(prediction, target)
     assert np.isfinite(score), "primary metric is non-finite - refuse to record a noise result"
-    diags = guardrail(prediction, cfg)
+    diags = _exp().guardrail(prediction, cfg)
 
     label = cfg["exp_name"]
-    residual = None  # TODO(campaign): prediction - target, if meaningful
-    fig = save_figure(label, prediction, target, residual)
+    residual = _seam("residual", lambda p, t: None)(prediction, target)
+    fig = _exp().save_figure(label, prediction, target, residual)
 
     props = props or {}
     result = {
@@ -1290,6 +1548,7 @@ def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = No
 
     assert_save_set(exp_id, label, fig)   # RECORD GATE: no row until the save-set exists on disk
 
+    evf = _expected_vs_found(score, apriori, props, exp_id)
     append_scoreboard_row({
         "exp_id": exp_id,
         "timestamp": result["utc"],
@@ -1300,13 +1559,19 @@ def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = No
         "metric_version": result["metric_version"],
         "data_version": result["data_version"],
         "tier": cfg.get("_tier", "Baseline" if exp_id == "000" else ""),
-        "description": cfg.get("_comment", ""),
+        # The narrative cells - the ledger IS the one-line timeline (the JOURNAL keeps no copy of it):
+        # `what` (the config's one-line comment), `expected_vs_found` (the same judgement the logbook
+        # line carries), an optional `note` (--record --ledger-note, capped) and `finding` (--record
+        # --finding, one line citing its verdict). `description` / `notes` are the older spellings.
+        "what": cfg.get("_comment", ""), "description": cfg.get("_comment", ""),
+        "expected_vs_found": evf,
         "{{PRIMARY_METRIC}}": f"{score:.4f}",
-        # TODO(campaign): fill the lever / guardrail / diagnostic + run-numeric columns from cfg + diags
-        # (run numerics = e.g. epochs, best_epoch, iterations, wall_clock, n_free_params, seed, n_reps)
-        "notes": "",
+        # The campaign's own columns (levers, guardrail values, run numerics) come from experiment.py's
+        # campaign_scoreboard_fields(cfg, diags, score) - a seam, so the kit-owned row stays kit-owned.
+        **_seam("campaign_scoreboard_fields", lambda cfg, diags, score: {})(cfg, diags, score),
+        "note": "", "notes": "", "finding": "",
     })
-    append_logbook(cfg, exp_id, label, score, diags, apriori)
+    append_logbook(cfg, exp_id, label, score, diags, apriori, expected_vs_found=evf)
     timing["record_s"] = round(time.monotonic() - t_record, 3)
     # Last, so save_set can report the complete contract (the logbook entry lands one line above).
     try:
@@ -1359,9 +1624,14 @@ def unimplemented_hooks() -> list[str]:
     import textwrap
 
     out = []
+    try:
+        mod = _exp()
+    except Exception as exc:                        # a syntax/import error is a setup failure, named
+        return [f"scripts/experiment.py does not import ({type(exc).__name__}: {exc})"]
     for name in ("validate_method", "run_experiment", "load_target"):
-        fn = globals().get(name)
+        fn = getattr(mod, name, None)
         if not callable(fn):
+            out.append(name + " MISSING")            # worse than a stub: nothing to call at all
             continue
         try:
             body = ast.parse(textwrap.dedent(inspect.getsource(fn))).body[0].body
@@ -1871,6 +2141,158 @@ INBOX_ARCHIVE = INBOX / "archive"
 DROP = RESULTS / "queue_drop"                # agent proposals/declinations -> merged into queue.json, then archived
 DROP_ARCHIVE = DROP / "archive"
 DRIVER_ALIVE = RESULTS / ".driver_alive"     # fresh mtime = a driver owns the loop (Stop hook stands down)
+# THE BRIEF - what the driver compiles INTO every worker/planner prompt so the agent orients from the
+# prompt, never from the tree. Motivation (photophysics10, three launches, 2026-08): per spawn, workers
+# re-read campaign.md 3-9 times in chunks, roles/worker.md up to 5 times, a 2 000-line JOURNAL up to
+# 7 times, and the runner's own source up to 15 times, at 30-300 turns per unit - most of a unit's
+# tokens went to re-orientation the driver could have delivered once. A pointed-at file is read only
+# when the agent chooses (and re-read when it forgets); a delivered one is read exactly once and its
+# hash is stamped into the snapshot. Sizes are REPORTED at preflight and every spawn, never silently
+# capped: a truncated section is a loud marker in the prompt, and the fix is the journal consolidation.
+BRIEF_SECTION_CAP = 24_000      # chars per delivered section before the truncation marker
+BRIEF_JOURNAL_CAP = 16_000      # chars: the JOURNAL is working memory, bounded by construction (~120 dense lines)
+BRIEF_CELL_CAP = 240            # chars per cell of the ledger projection (a cell is a line, not an essay)
+BRIEF_WARN_CHARS = 200_000      # preflight WARNs above this total (~50k tokens per spawn)
+BRIEF_RECENT_ROWS = {"worker": 15, "planner": 40}   # ledger rows delivered (the projection)
+BRIEF_OMIT_SECTIONS = ("Decision record",)          # campaign.md sections that are a record, not the contract
+_LAST_BRIEF: dict = {}          # role -> [(section, chars, truncated)] from the last _brief() - the feed line
+
+
+def _md_split(text: str) -> list[tuple[str, str]]:
+    """A Markdown file as [(heading, body)] on `## ` boundaries; the preamble has heading ''."""
+    out, head, buf = [], "", []
+    for line in text.splitlines():
+        if line.startswith("## "):
+            out.append((head, "\n".join(buf).strip()))
+            head, buf = line[3:].strip(), []
+        else:
+            buf.append(line)
+    out.append((head, "\n".join(buf).strip()))
+    return out
+
+
+def _clip(text: str, cap: int, where: str) -> tuple[str, bool]:
+    if len(text) <= cap:
+        return text, False
+    return (text[:cap] + f"\n[driver: truncated at {cap} chars - the rest is on disk in {where}. "
+            "Bring it under the cap: a delivered document is read every spawn.]"), True
+
+
+def _tail_rows(body: str, n: int) -> tuple[str, int]:
+    """Keep every non-row line (rules, the header, the separator) and only the LAST n table rows of a
+    Markdown or TSV table body. Returns the text and the number of rows dropped."""
+    lines = body.splitlines()
+    is_row = [bool(L.strip()) and not L.startswith("#")
+              and ((L.startswith("|") and not set(L.strip()) <= set("|-: ")) or ("\t" in L)) for L in lines]
+    rows = [i for i, r in enumerate(is_row) if r]
+    header = rows[:1] if rows and not lines[rows[0]].startswith("|") else []   # a TSV header row stays
+    keep_rows = set(header) | set(rows[-n:]) if len(rows) - len(header) > n else set(rows)
+    kept = [L for i, L in enumerate(lines) if not is_row[i] or i in keep_rows]
+    return "\n".join(kept), len(rows) - len(keep_rows)
+
+
+def _brief(role: str, config: str = "<config path>") -> str:
+    """Compile the brief for one spawn: the documents the role must have read, delivered by value."""
+    parts, stats = [], []
+    n_rows = BRIEF_RECENT_ROWS.get(role, 15)
+
+    def add(title: str, where: str, text: str | None, truncated: bool = False):
+        if text is None:
+            text = f"[MISSING: {where} not found - report this in the journal; do not guess its content.]"
+        parts.append(f"\n\n== {title} ({where}) ==\n{text}")
+        stats.append((title, len(text), truncated))
+
+    def read(rel: str) -> str | None:
+        try:
+            return (ROOT / rel).read_text(encoding="utf-8-sig")
+        except OSError:
+            return None
+
+    # 1. the campaign definition, minus its append-only record sections (a record, not the contract)
+    camp = read("campaign.md")
+    if camp is not None:
+        kept, omitted = [], []
+        for head, body in _md_split(camp):
+            if any(head.lower().startswith(o.lower()) for o in BRIEF_OMIT_SECTIONS):
+                omitted.append(head)
+                continue
+            kept.append(body if not head else f"## {head}\n{body}")
+        camp = "\n\n".join(k for k in kept if k)
+        if omitted:
+            camp += ("\n\n[driver: omitted from this brief, on disk in campaign.md: "
+                     + " · ".join(f"§{o}" for o in omitted) + " - a record, not the contract]")
+    add("CAMPAIGN DEFINITION", "campaign.md", camp)
+
+    # 2. the role file
+    add(f"{role.upper()} ROLE", f"roles/{role}.md", read(f"roles/{role}.md"))
+
+    # 3. the JOURNAL, whole: the campaign's working memory (where we stand, live hypotheses, what to try
+    #    next and why, traps, open questions), bounded by construction - the worker brings it up to
+    #    date each unit; the ledger and the logbook hold the record it used to copy.
+    journal, jwhere = read("results/JOURNAL.md"), "results/JOURNAL.md"
+    if journal is None:                      # mid-unit: the driver archived and removed it; deliver the archive
+        arch = _newest_journal_archive()
+        if arch is not None:
+            journal, jwhere = read(str(arch.relative_to(ROOT))), str(arch.relative_to(ROOT)).replace("\\", "/")
+    if journal is not None:
+        journal, t = _clip(journal, BRIEF_JOURNAL_CAP, jwhere)
+        add("JOURNAL (the previous unit's - write results/JOURNAL.md anew)", jwhere, journal, t)
+    else:
+        add("JOURNAL (the previous unit's - write results/JOURNAL.md anew)", "results/JOURNAL.md", None)
+
+    # 4. the worker's unit: its queue entry (rationale, block, hypothesis, failures) + the config itself
+    if role == "worker":
+        if config and config != "<config path>":
+            q = _read_json(QUEUE, {}) or {}
+            entry = next((u for u in (q.get("next") or []) if str(u.get("config")) == str(config)), None)
+            cfg_text = read(config)
+            t = False
+            if cfg_text is not None:
+                cfg_text, t = _clip(cfg_text, 8_000, config)
+            unit = ("queue entry:\n" + (json.dumps(entry, indent=1) if entry else "[driver: not in queue 'next']")
+                    + f"\n\nconfig {config}:\n" + (cfg_text if cfg_text is not None else "[MISSING: config file not found]"))
+            add("YOUR UNIT", config, unit, t)
+        else:
+            add("YOUR UNIT", "<config path>", "[preview: the unit's queue entry and config are delivered at spawn]")
+        code = read("scripts/experiment.py")
+        t = False
+        if code is not None:
+            code, t = _clip(code, BRIEF_SECTION_CAP, "scripts/experiment.py")
+        add("YOUR CODE", "scripts/experiment.py", code, t)
+
+    # 5. the ledger projection: the last rows' narrative columns (what, expected vs found, label, note,
+    #    finding) - the one-line timeline; the numeric columns stay on disk, opened by id when needed
+    if (ROOT / "results" / "scoreboard.tsv").is_file():
+        board, dropped = _ledger_projection(n_rows)
+        if dropped:
+            board += (f"\n[driver: {dropped} older row(s) not delivered - the full ledger is "
+                      "results/scoreboard.tsv; open a row by id]")
+        add("LEDGER (last rows)", "results/scoreboard.tsv", board)
+    else:
+        add("LEDGER (last rows)", "results/scoreboard.tsv", None)
+
+    # 6. planner-only: the queue it reorders, and the literature roadmap where the campaign keeps one
+    if role == "planner":
+        qtext = read("results/queue.json")
+        t = False
+        if qtext is not None:
+            qtext, t = _clip(qtext, BRIEF_SECTION_CAP, "results/queue.json")
+        add("QUEUE", "results/queue.json", qtext, t)
+        lit = read("LITERATURE.md")
+        if lit is not None:
+            lit, t = _clip(lit, BRIEF_SECTION_CAP, "LITERATURE.md")
+            add("LITERATURE", "LITERATURE.md", lit, t)
+
+    _LAST_BRIEF[role] = stats
+    return "".join(parts)
+
+
+def _brief_line(role: str) -> str:
+    """One feed line: the brief's total and per-section sizes, naming any truncation."""
+    stats = _LAST_BRIEF.get(role) or []
+    total = sum(n for _, n, _ in stats)
+    bits = " · ".join(f"{t.lower()} {n / 1024:.1f}" + (" (TRUNCATED)" if tr else "") for t, n, tr in stats)
+    return f"brief[{role}]: {total / 1024:.1f} KB ({bits})"
 # Override with e.g. AUTORESEARCH_AGENT_CMD="claude -p" if the CLI lives elsewhere on this machine.
 # Quote-aware split, not str.split: a Windows interpreter path like "C:\Program Files\...\python.exe"
 # must stay one token when quoted, or a naive split breaks every such setup at spawn time.
@@ -1893,27 +2315,72 @@ def _permission_flags(mode: str) -> list[str]:
         return []
     return ["--permission-mode", mode]
 
+
+SPAWN_LISTING_SETTINGS = '{"skillListingBudgetFraction":0.0001}'
+
+
+def _listing_flags(mode: str) -> list[str]:
+    """`--settings` that lists every skill by NAME ONLY inside a spawn (driver.skill_listing, default
+    'names'; 'full' keeps the harness's own listing; env override AUTORESEARCH_SKILL_LISTING). The
+    campaign's files name the skill to use, and the descriptions cost about 7k tokens of every turn on
+    a 1M-context model (the harness lists skills under a budget of 1 % of the context window; this
+    drives it to ~0). It hides EVERY installed plugin's descriptions inside the spawn, not only
+    physkit's - a campaign that wants a third-party skill names it, or sets 'full'. Passed ONLY to the
+    default claude CLI, like the permission flag. `--settings` merges on top of the campaign's own
+    .claude/settings.json, so the hooks (the promotion guard, the heartbeat) still run; an interactive
+    session opened in the campaign directory is untouched."""
+    if (mode or "names").strip().lower() == "full" or "AUTORESEARCH_AGENT_CMD" in os.environ:
+        return []
+    return ["--settings", SPAWN_LISTING_SETTINGS]
+
 WORKER_PROMPT = """You are the iteration worker for the autoresearch campaign in this directory.
-Your assignment is ONE unit: {config}. CLAUDE.md auto-loads; these two do NOT, so re-read them now:
-campaign.md (the campaign definition - mission, the FROZEN metric, the levers, the caps, promotion) and
-roles/worker.md ('The Experiment Loop' - you execute the loop steps for this single unit; and 'The
-iteration contract' - what you must persist before you finish, the ledger is the loop's only memory;
-work you do not record did not happen).
-Runner CLI you use: `python scripts/run_campaign.py --config {config}` (the unit; it enforces the gates)
-and `--diff <exp>` (what an experiment changed). `--preflight` and `--supervise` are the driver's: do not
-run them, and do not read scripts/run_campaign.py's source to learn its flags - this line is the list.
+Your assignment is ONE unit: {config}. CLAUDE.md auto-loads on top of this prompt. Everything else you
+need to orient is compiled INTO this prompt by the driver, below: campaign.md (the campaign definition -
+mission, the FROZEN metric, the levers, the caps, promotion), roles/worker.md ('The Experiment Loop' -
+you execute the loop steps for this single unit; and 'The iteration contract' - what you must persist
+before you finish, the ledger is the loop's only memory; work you do not record did not happen), the
+project's standing constraints, the JOURNAL (the campaign's working memory), your unit's queue entry and
+config, the ledger's last rows, and your code - scripts/experiment.py, the five hooks and the seams, the one script
+you edit (scripts/run_campaign.py is the kit's machinery: not yours to read or edit). Orient from the
+brief, never from the tree: do not re-read those files, and do not read ../../PROJECT.md below its
+constraints, the logbook, another campaign, or any script's source to learn what this prompt already
+says. The reads a unit makes outside the brief, and the only ones: (a) the result CARD the runner
+prints at the end of your run (`--card <exp>` prints it again) - never rebuild it from the artifacts
+with one-liners; (b) results/checks_<NN>.json for YOUR unit, only when a card line is not enough;
+(c) ../../PROJECT.md below §Standing constraints only when a result needs physics the brief does not
+carry; (d) `python scripts/run_campaign.py --help` for a flag; (e) `--show <exp>` for one old logbook
+entry. Never open the logbook or the scoreboard to read or to write: the runner writes both, and the
+record you owe goes through `--record`.
+THE RECORD YOU OWE per unit, and its size: a one-sentence prediction rationale (the number and its one
+basis); the config's `_levers` list plus a one-line `_comment` and `_hypothesis`; after the run, the
+the WHOLE record as ONE file and ONE command: write results/record_<NN>.json with the Write tool -
+{{"self_check": {{"ran": ["name=pass|fail|skip:detail", ...], "changes": ["what=>expected=>observed", ...],
+"estimate": X, "note": "..."}}, "analysis": "<one paragraph: every failed check answered by name, then what
+you judge worth recording>", "next": "<one line>", "ledger_note": "<at most 200 chars the numbers do not
+show>", "finding": "<one line citing results/verdicts/<id>.json, only when a verdict settled something>",
+"propose": {{"config": "configs/exp<NN>_<slug>.json", "rationale": "...", "hypothesis": "..."}}}} - every key
+optional - then `python scripts/run_campaign.py --record <exp> --from-file results/record_<NN>.json`: the
+runner records the self-check, places the logbook slots and the ledger cells, drops the proposal -
+validated, idempotent (re-run replaces). Then write the new results/JOURNAL.md (below). Do not open the
+logbook or the scoreboard, and do not re-read anything to check your write: the command's output is the
+confirmation. Short is the format; the content obligations stand, and a unit whose Analysis is blank, or
+that leaves no new JOURNAL, is not saved.
+Runner CLI you use: `python scripts/run_campaign.py --config {config}` (the unit; it enforces the gates
+and ends with the card), `--record <exp> --from-file results/record_<NN>.json` (the whole record: the
+self-check, the logbook slots, the ledger cells, the JOURNAL sections, a decline or proposal; the same
+things are also flags - `--help` lists them), `--card <exp>`, `--show <exp>`, `--diff <exp> [--since
+<exp>]` and `--help`. `--preflight` and `--supervise` are the driver's: do not run them, and do
+not read scripts/run_campaign.py's source for its flags - `--help` is the list.
 EXECUTE-OR-DECLINE: run the assigned unit through the full loop (a-priori prediction in
 predictions/<exp_name>.json FIRST, then the runner - it enforces the gates), OR, if the unit is moot or
 superseded by the latest results, DECLINE it and say why in the journal. Never silently substitute a
 different experiment. You do NOT edit results/queue.json - the driver is its sole writer. To decline or
-to propose, drop a small JSON file into results/queue_drop/ (create it if absent); the driver merges it
-at the top of the next iteration:
-  - DECLINE this unit: results/queue_drop/<exp_name>.decline.json =
-    {{"kind": "decline", "config": "{config}", "reason": "<why it is moot/superseded>"}}
-  - PROPOSE a unit: results/queue_drop/<slug>.propose.json =
-    {{"kind": "propose", "unit": {{"config": "configs/exp<NN>_<slug>.json", "rationale": "<why>",
-    "block": "<block-id or omit>", "hypothesis": "<what it tests>"}}}}  (one file per proposal, or a JSON
-    list of such records). Mid-unit anomalies:
+to propose, use the runner (it drops the JSON into results/queue_drop/; the driver merges it at the top
+of the next iteration):
+  - DECLINE this unit: `python scripts/run_campaign.py --record {config} --decline "<why it is moot/superseded>"`
+  - PROPOSE a unit: `--record <exp> --propose <file.json>` where the file is
+    {{"config": "configs/exp<NN>_<slug>.json", "rationale": "<why, one line>", "block": "<block-id or omit>",
+    "hypothesis": "<what it tests>"}} (or a JSON list of such records). Mid-unit anomalies:
 document + propose a probe unit - do not chase them ad hoc (roles/worker.md: probe through the pattern).
 Long solver runs execute under YOUR session, never inside a background subagent, and you STAY ALIVE
 until the save-set lands - the runner maintains results/.run_heartbeat, which is how the driver tells a
@@ -1923,35 +2390,48 @@ only the user can weigh, write results/ESCALATE.md (what, why, the options) and 
 possible. A fault in the FROZEN metric itself is a metric epoch, never an in-place edit - roles/worker.md
 'Metric epochs' (cautious: a METRIC-REVISION PROPOSAL in results/ESCALATE.md; autonomous: enact it as a
 pending epoch in configs/loop.json campaign.metric_epochs, then re-baseline). If a USER NOTES section follows this prompt, treat it as input from the user: acknowledge each
-note in results/JOURNAL.md and record what it changed (or why nothing). Before you exit: complete the
-logbook narrative slots for your unit and leave the JOURNAL working window + NEXT consistent with the
-proposals you dropped (the driver, not you, writes results/queue.json)."""
+note in results/JOURNAL.md where it belongs and record what it changed (or why nothing). Before you
+exit: results/JOURNAL.md is the working memory the next worker reads first. The previous one is in your
+brief above and archived; the working file is ABSENT while you work - write the new one whole with the
+Write tool, ONE turn, no read: the NEXT line, *Where we stand* (a settled fact cites
+its ledger id), *Live hypotheses*, *What to try next and why* (consistent with the proposals you dropped),
+*Traps and tooling*, *Open questions*, *Anything else*. Carry forward what your unit did not change,
+keep it under ~120 lines; the driver archives every version. The driver, not you, writes results/queue.json."""
 
 PLANNER_PROMPT = """You are the strategy planner for the autoresearch campaign in this directory,
-spawned because: {reasons}. CLAUDE.md auto-loads; these two do NOT, so read them first: campaign.md (the
-campaign definition - mission, the FROZEN metric, the levers, the caps, promotion) and roles/planner.md
-(your role - reopening shelved directions, getting unstuck, and the literature rule where this campaign
-enabled one). The queue rules are in this prompt, below. Then results/JOURNAL.md (its Findings
-section is the settled record), results/scoreboard.tsv (aggregates), results/queue.json, and
-LITERATURE.md where the campaign keeps one (its idea roadmap feeds the queue). Your mandate is
+spawned because: {reasons}. CLAUDE.md auto-loads on top of this prompt. Everything else you need is
+compiled INTO this prompt by the driver, below: campaign.md (the campaign definition - mission, the
+FROZEN metric, the levers, the caps, promotion), roles/planner.md (your role - reopening shelved
+directions, getting unstuck, and the literature rule where this campaign enabled one), the project's
+standing constraints, the JOURNAL (the campaign's working memory: where we stand, live hypotheses, what
+to try next), the ledger's last rows, results/queue.json, and LITERATURE.md where the campaign keeps one (its idea roadmap
+feeds the queue). The queue rules are in this prompt, below. Orient from the brief, never from the tree:
+do not re-read those files, and do not read the logbook, ../../PROJECT.md below its constraints, another
+campaign, or any script's source. Outside the brief you read only results/checks_<NN>.json or
+results/verdicts/<id>.json for a specific experiment you are weighing, and a grep of results/logbook.md
+for one named old detail. Your mandate is
 READ-MOSTLY and strategy-only: rewrite results/queue.json "next" (ordered units with rationales -
 check lever/topology coverage against campaign.md's lever list; after a promotion, re-open shelved
-directions). Group RELATED units into a block - give each a shared "block": "<short-id>" and a
+directions). Every entry in "next" has this shape, and the driver refuses a queue whose entries lack
+"config": {{"config": "configs/exp<NN>_<slug>.json", "rationale": "<why, one line>", "proposed_by":
+"planner", "declined": [], "block": "<short-id or omit>", "hypothesis": "<what the block tests, or omit>"}}. Group RELATED units into a block - give each a shared "block": "<short-id>" and a
 "hypothesis" stating what the batch tests together - and the driver verifies the block ONCE when its
 last unit lands, so cheap experiments batch their verification cost while an expensive one stands
 alone. Review "shelved" (revive what a promotion or frame change has re-opened; consolidate
-accumulated EVIDENCE AGAINST kills into a prune recommendation, recorded), and append a strategy note
-to results/JOURNAL.md. A reprioritization that rests on a claimed invalidation requires its verdict
+accumulated EVIDENCE AGAINST kills into a prune recommendation, recorded), and write your steer into
+results/JOURNAL.md *What to try next and why* in one bounded edit (never a new section, never an
+append-only log). A reprioritization that rests on a claimed invalidation requires its verdict
 artifact in results/verdicts/ - do not steer on an unverified major-problem claim. You never launch
-solves, never edit the scoreboard, results, the journal's Findings, or anything FROZEN. A metric epoch (a
+solves, never edit the scoreboard, results, or anything FROZEN. A metric epoch (a
 bumped metric_version, roles/worker.md 'Metric epochs') owes a re-baseline: queue one config-backed unit
 per retained contender, sharing a block, before any cross-epoch ranking. If the campaign faces a
 genuine fork only the user can weigh, write results/ESCALATE.md. Review any shelved units with
-"kind": "operational" (shelved by the driver after repeated worker failures, reasons in "failures") -
+"kind": "operational" (shelved by the driver after repeated worker failures, reasons in "failures") or
+"kind": "capped" (agent proposals beyond queue.max_outstanding_units, held for your review) -
 revive, reorder, or prune them with a recorded rationale. You run no runner command except
-`python scripts/run_campaign.py --diff <exp>` when you need to see what an experiment changed;
-`--preflight` and `--supervise` are the driver's, and the runner's source is not yours to read for its
-flags. If a USER NOTES section follows this prompt,
+`python scripts/run_campaign.py --diff <exp>` when you need to see what an experiment changed, and
+`--help` for a flag; `--preflight` and `--supervise` are the driver's, and the runner's source is not
+yours to read. If a USER NOTES section follows this prompt,
 weigh it as user input when reordering the queue and acknowledge it in your strategy note."""
 
 
@@ -1977,8 +2457,9 @@ results/queue_drop/<slug>.propose.json = {{"kind": "propose", "unit": {{"config"
 "configs/exp<NN>_<slug>.json", "rationale": "<control/fix, citing results/verdicts/<id>.json>"}}}} - one
 concrete runnable config each; the driver merges it into "next". A verified kill of the METRIC itself is
 the evidence a metric epoch cites (roles/worker.md 'Metric epochs'): grade its kill_tier, and an easier
-ruler needs REFUTED; if only the user can weigh the revision, write results/ESCALATE.md. Add one line per
-verdict to results/JOURNAL.md. Run the refuter in the FOREGROUND and wait for it - never as a background
+ruler needs REFUTED; if only the user can weigh the revision, write results/ESCALATE.md. The driver
+stamps each verdict into the ledger's label and the logbook; you write no JOURNAL line. Run the refuter
+in the FOREGROUND and wait for it - never as a background
 sub-agent you then exit on: a verifier that ends its turn with refuters still running leaves no
 artifact, and the driver counts that as a failed verification. Your turn ends when every verdict
 artifact above exists on disk.{retry}"""
@@ -1988,10 +2469,11 @@ CAPSTONE_PROMPT = """You are the claim-audit agent for the autoresearch campaign
 spawned by the driver at the end of the loop ({reason}) because the campaign's verification preset asks
 for the claim audit at level {level}. CLAUDE.md auto-loads; read campaign.md (its Mission and The ONE
 metric) and then run /physkit:claim-audit at level {level}: enumerate the claims this campaign exports
-(the current-best, the promoted rows, the journal's Findings, the assumptions every unit inherited),
+(the current-best, the promoted rows, the ledger's finding cells, the assumptions every unit inherited),
 rank them by load-bearing weight and label weakness, spend the budget top-down on the seven
-campaign-scale checks, and write results/verdicts/audit_<NN>.json plus one line in results/JOURNAL.md
-Findings. You edit nothing else: never configs/RECOMMENDED.json, never the scoreboard, never a config or
+campaign-scale checks, and write results/verdicts/audit_<NN>.json plus, for each claim it settles,
+`python scripts/run_campaign.py --record <exp> --finding "<one line citing the verdict>"`. You edit
+nothing else: never configs/RECOMMENDED.json, never the scoreboard by hand, never a config or
 a result - a downgraded label lives in your artifact and the report prints it. Run every check in the
 FOREGROUND and wait for it; your turn ends when the audit artifact exists on disk."""
 
@@ -2024,7 +2506,7 @@ def _service_capstone(k: dict, model: str, effort: str, reason: str) -> None:
               f"new claim audit at {reason} utc={_utc_stamp()}")
         return
     print(f"[supervise] capstone: spawning the claim audit (level={level}) at {reason} utc={_utc_stamp()}")
-    st = _spawn_agent(build_prompt("capstone", reasons=reason, capstone_level=level), model, "capstone", k,
+    st = _spawn_with_backoff(build_prompt("capstone", reasons=reason, capstone_level=level), model, "capstone", k,
                       saved_probe=lambda: bool(list(VERDICTS.glob("audit_*.json"))
                                                and sorted(VERDICTS.glob("audit_*.json"))[-1].stat().st_mtime >= last_ts),
                       effort=effort)
@@ -2091,14 +2573,15 @@ def build_prompt(role: str, *, config: str = "<config path>", reasons: str = "<t
     The delivered context and the notes are appended by CONCATENATION after .format(), never through
     it, so braces in doc text or user-written note text cannot crash the driver (see _drain_inbox).
 
-    NOT included: the campaign `CLAUDE.md`, which the agent harness auto-loads on top of this, and
-    the files this prompt tells the agent to read (`campaign.md`, the role file). This returns the
-    literal spawn string, nothing more — see --show-prompt's own output for that distinction.
+    Included, by value (the brief - see _brief): campaign.md minus its record sections, the role
+    file, the JOURNAL (whole), the worker's unit, the ledger projection, the planner's queue and
+    literature. NOT included: the campaign `CLAUDE.md`, which the agent harness auto-loads on top of
+    this. This returns the literal spawn string, nothing more.
     """
     if role == "worker":
-        return WORKER_PROMPT.format(config=config) + _delivered_context() + notes
+        return WORKER_PROMPT.format(config=config) + _delivered_context() + _brief("worker", config) + notes
     if role == "planner":
-        return PLANNER_PROMPT.format(reasons=reasons) + _delivered_context() + notes
+        return PLANNER_PROMPT.format(reasons=reasons) + _delivered_context() + _brief("planner") + notes
     if role == "verifier":
         # The hypothesis rides in as a format VALUE (never through the template string), so braces in
         # planner-authored text cannot crash the driver - same contract as notes. No inbox notes: user
@@ -2446,6 +2929,17 @@ def _driver_knobs(loop_cfg: dict) -> dict:
         # dontAsk, manual, plan.
         "permission_mode": (os.environ.get("AUTORESEARCH_PERMISSION_MODE")
                             or str(d.get("permission_mode", "auto"))).strip() or "auto",
+        # names (default): spawns list every skill by name only; full: the harness's own listing.
+        "skill_listing": (os.environ.get("AUTORESEARCH_SKILL_LISTING")
+                          or str(d.get("skill_listing", "names"))).strip().lower() or "names",
+        # A spawn that dies in its first turn within seconds is the model's usage/rate limit, not the
+        # unit: the driver waits (doubling from limit_wait_first_s, up to limit_wait_max_min in total)
+        # and relaunches instead of spending a retry and halting SYSTEMIC. Evidence: three of three
+        # halts in one field campaign, one of four in another, were one-second deaths counted as
+        # failures. AUTORESEARCH_LIMIT_WAIT_FIRST_S shortens the first wait (tests).
+        "limit_wait_max_s": float(d.get("limit_wait_max_min", 90)) * 60,
+        "limit_wait_first_s": float(os.environ.get("AUTORESEARCH_LIMIT_WAIT_FIRST_S") or 300),
+        "limit_death_s": 15.0,
     }
 
 
@@ -2503,7 +2997,9 @@ def _render_stream_event(raw_line: str, label: str, max_chars: int) -> str | Non
         dur_s = f"{float(ev.get('duration_ms', 0)) / 1000:.0f}"
         # For the spawn ledger. Via globals() so the function also runs standalone (the fixture
         # contracts exec this renderer on its own, outside the module).
-        globals().setdefault("_LAST_RESULT", {})[label] = {"turns": ev.get("num_turns", "?"), "dur_s": dur_s}
+        globals().setdefault("_LAST_RESULT", {})[label] = {
+            "turns": ev.get("num_turns", "?"), "dur_s": dur_s, "error": bool(ev.get("is_error", False)),
+            "text": str(ev.get("result") or ev.get("error") or "")[:300]}
         return (f"[{label}] RESULT ok={not ev.get('is_error', False)} "
                 f"turns={ev.get('num_turns', '?')} dur={dur_s}s")[:max_chars]
     return None
@@ -2570,6 +3066,39 @@ def _append_spawn_row(start_utc: str, end_utc: str, label: str, status: str, ela
         pass
 
 
+_LIMIT_DEATH: dict = {}   # label -> the last spawn's limit-death record (set by _finish, read by the backoff)
+
+
+def _spawn_with_backoff(prompt: str, model: str, label: str, k: dict, saved_probe=None,
+                        effort: str = "") -> str:
+    """_spawn_agent, relaunched after a usage-limit death instead of failing the unit.
+
+    A spawn that the harness kills in its first turn within seconds (`ok=False turns=1 dur=1s`), or
+    whose result names a usage/rate limit, is the environment refusing to serve - not the unit and not
+    the campaign. Counting it as an operational or verification failure burned the retry on the next
+    one-second death and halted the loop SYSTEMIC (three of three halts in one field campaign). So:
+    wait, doubling from limit_wait_first_s, up to driver.limit_wait_max_min in total, relaunch the same
+    prompt, and say so in the log; past the budget the death is returned as the failure it then is."""
+    waited, wait_s = 0.0, max(0.0, k.get("limit_wait_first_s", 300.0))
+    cap = max(0.0, k.get("limit_wait_max_s", 0.0))
+    while True:
+        st = _spawn_agent(prompt, model, label, k, saved_probe=saved_probe, effort=effort)
+        death = _LIMIT_DEATH.pop(label, None)
+        if not death or waited >= cap:
+            return st
+        this_wait = min(wait_s, cap - waited)
+        print(f"[supervise] resource: {label} died in {death['elapsed']:.0f}s with {death['turns']} turn(s)"
+              + (f" ({death['text']})" if death.get("text") else "")
+              + f" - a usage/rate limit, not a unit failure; waiting {this_wait / 60:.1f} min before relaunching "
+              f"(waited {waited / 60:.0f} of {cap / 60:.0f} min) utc={_utc_stamp()}")
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < this_wait:
+            _touch_driver_alive()
+            time.sleep(min(30.0, max(0.05, this_wait - (time.monotonic() - t0))))
+        waited += this_wait
+        wait_s = min(wait_s * 2 or 1.0, cap)
+
+
 def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None,
                  effort: str = "") -> str:
     """Launch one fresh-context agent from the campaign root and WATCH it to completion.
@@ -2590,9 +3119,11 @@ def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None,
         _halt(f"supervise: HALT - {exc}")
     global _LAST_CODEX_OBSERVER
     stream = _stream_on(k)
-    cmd = (AGENT_CMD + _permission_flags(k["permission_mode"])
+    # The prompt travels over STDIN, never as an argv element: with the brief compiled in it runs to
+    # tens of KB, and Windows caps a command line at 32 767 chars (a Codex spawn already used stdin).
+    cmd = (AGENT_CMD + _permission_flags(k["permission_mode"]) + _listing_flags(k.get("skill_listing", "names"))
            + (["--model", model] if model else []) + (["--effort", effort] if effort else [])
-           + (STREAM_FLAGS if stream else []) + [prompt])
+           + (STREAM_FLAGS if stream else []))
     codex_spec, codex_observer = (_codex_backend.prepare_spawn(
         ROOT, _AGENT_BACKEND, model, prompt, label, k["feed_chars"], effort)
         if _codex_backend.is_codex(_AGENT_BACKEND) else (None, None))
@@ -2613,6 +3144,17 @@ def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None,
               + (f" grace={_g['grace_s']:.0f}s resolved={_g['resolved']}" if _g["grace_s"] else "")
               + f" utc={end_utc}")
         _append_spawn_row(start_utc, end_utc, label, final, elapsed, res, _g)
+        # A first-turn death within seconds, or the harness naming its limit, is a resource condition
+        # the caller may wait out (_spawn_with_backoff) - recorded here, decided there.
+        try:
+            turns = int(res.get("turns", 0) or 0)
+        except (TypeError, ValueError):
+            turns = 0
+        text = str(res.get("text") or "")
+        if final != "ok" or res.get("error"):
+            if (res.get("error") and turns <= 1 and elapsed <= k.get("limit_death_s", 15.0)) \
+                    or ("usage limit" in text.lower() or "rate limit" in text.lower()):
+                _LIMIT_DEATH[label] = {"elapsed": elapsed, "turns": turns, "text": text[:120]}
         return final
 
     print(f"[supervise] spawning {label} (model={model or 'default'}, effort={effort or 'default'}, "
@@ -2622,13 +3164,27 @@ def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None,
     HEARTBEAT.unlink(missing_ok=True)   # a stale heartbeat from an earlier run must not fake liveness
     env = _codex_backend.spawn_env(os.environ, bool(codex_spec))  # also tells Codex experiment children which prompt was delivered
     env["PHYSKIT_ROLE"] = _role_of(label)   # spawned, not attended: the config/epoch guards key on this
+    env["PHYSKIT_PROMPT_STDIN"] = "1"       # the prompt arrives on stdin (a custom AGENT_CMD reads it there)
+    delivered = codex_spec.prompt if codex_spec else prompt
+    env["PHYSKIT_SPAWN_PROMPT_SHA256"] = _hashlib.sha256(delivered.encode("utf-8")).hexdigest()
     try:
         if codex_spec:
             proc = _codex_backend.start(codex_spec, ROOT, env)
         else:
-            proc = subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=subprocess.PIPE,
+            proc = subprocess.Popen(cmd, cwd=ROOT, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT, text=True, encoding="utf-8",
                                     errors="replace", bufsize=1)
+
+            def _feed_stdin(p=proc, text=prompt):
+                # Off the watch thread: a prompt larger than the pipe buffer blocks until the agent
+                # reads it, and the agent may write stdout first - a same-thread write would deadlock.
+                try:
+                    if getattr(p, "stdin", None) is not None:
+                        p.stdin.write(text)
+                        p.stdin.close()
+                except (OSError, ValueError):
+                    pass
+            threading.Thread(target=_feed_stdin, daemon=True).start()
     except OSError as exc:
         print(f"[supervise] SPAWN ERROR for {label}: {exc}")
         return _finish("spawn_error")
@@ -2834,12 +3390,38 @@ def _drain_queue_drops(q: dict) -> bool:
                     if key in rec}
                 if unit.get("config"):
                     unit.setdefault("proposed_by", "agent")
+                    cap = _outstanding_cap()
+                    outstanding = sum(1 for u in q.get("next", []) if u.get("proposed_by") not in ("planner", "seed"))
+                    if cap is not None and outstanding >= cap:
+                        # Declared in loop.json since v0.10 and enforced nowhere: agent proposals beyond
+                        # the cap wait on the shelf for the planner (revivable), so one worker's
+                        # enthusiasm cannot turn the queue into a fishing trip before anyone reviews it.
+                        q.setdefault("shelved", []).append(dict(unit, kind="capped", utc=_utc_stamp(),
+                                                                 reasons=[f"queue.max_outstanding_units={cap}: "
+                                                                          f"{outstanding} agent proposal(s) already queued ahead of a planner review"]))
+                        changed = True
+                        print(f"[supervise] queue_drop: proposal {unit.get('config')} shelved 'capped' - "
+                              f"{outstanding} agent proposal(s) already queued (queue.max_outstanding_units={cap}); "
+                              "the planner reviews the shelf")
+                        continue
                     q.setdefault("next", []).append(unit)
                     changed = True
                     print(f"[supervise] queue_drop: proposal merged: {unit.get('config')}")
                 else:
                     print("[supervise] queue_drop: proposal without a config - ignored")
     return changed
+
+
+def _outstanding_cap() -> int | None:
+    """configs/loop.json queue.max_outstanding_units - the number of AGENT proposals (not the planner's,
+    not the seed's) that may sit in "next" ahead of a planner review. None = absent = uncapped (an
+    older loop.json keeps its behaviour); 0 = every agent proposal waits for the planner."""
+    q = (_read_json(LOOPCFG, {}) or {}).get("queue") or {}
+    v = q.get("max_outstanding_units")
+    try:
+        return None if v is None or v == "" else max(0, int(v))
+    except (TypeError, ValueError):
+        return None
 
 
 def _normalize_blocks(q: dict) -> bool:
@@ -3107,6 +3689,35 @@ def preflight(smoke: bool = False) -> list[str]:
     else:
         print("preflight note: results/queue.json absent - the planner will be spawned to seed it.")
 
+    # 3a. the outstanding-units cap (declared since v0.10; enforced at the drop merge since v0.11.1)
+    cap = _outstanding_cap()
+    if cap is None:
+        print("preflight note: configs/loop.json queue.max_outstanding_units absent - agent proposals are "
+              "uncapped ahead of a planner review (set it to cap them; 1 = one proposal at a time).")
+    else:
+        ok(f"queue.max_outstanding_units={cap}: agent proposals beyond it wait on the shelf ('capped') for the planner")
+
+    # 3b. the brief a worker would receive NOW: its size is paid on every spawn, so a bloated journal
+    #     window or a truncated section is named here, before the night is spent on it.
+    try:
+        qq = _read_json(QUEUE, {}) or {}
+        head = next((u.get("config") for u in (qq.get("next") or []) if isinstance(u, dict)), None)
+        build_prompt("worker", config=str(head or "<config path>"))
+        stats = _LAST_BRIEF.get("worker") or []
+        total = sum(n for _, n, _ in stats)
+        truncated = [t for t, _, tr in stats if tr]
+        line = _brief_line("worker")
+        if truncated or total > BRIEF_WARN_CHARS:
+            print(f"preflight WARN: {line} - "
+                  + (f"truncated: {', '.join(truncated)}; " if truncated else "")
+                  + (f"over {BRIEF_WARN_CHARS // 1000}k chars; " if total > BRIEF_WARN_CHARS else "")
+                  + "every spawn pays for this. Fix: bring results/JOURNAL.md under its cap (it is working "
+                  "memory, ~120 lines) and keep campaign.md's contract sections lean; the launch proceeds.")
+        else:
+            ok(line)
+    except Exception as exc:                                   # never block a launch on the report itself
+        print(f"preflight note: could not size the worker brief ({exc}); continuing.")
+
     # 4. the campaign tree this driver assumes
     # The three agent-facing documents are checked SEPARATELY, not as one "the contract" entry: a
     # preflight that passes while roles/worker.md is missing launches a worker with no procedure, and
@@ -3169,9 +3780,9 @@ def preflight(smoke: bool = False) -> list[str]:
     # SYSTEMIC, which blames the environment for code that was simply never written.
     stubs = unimplemented_hooks()
     if stubs:
-        bad("campaign hooks are still the generated stubs: "
-            + ", ".join(f"{n}()" for n in stubs)
-            + ". Fix: implement them in scripts/run_campaign.py - they are this campaign's physics "
+        bad("campaign hooks are still the generated stubs (or missing): "
+            + ", ".join(n if n.endswith(("MISSING", ")")) else f"{n}()" for n in stubs)
+            + ". Fix: implement them in scripts/experiment.py - they are this campaign's physics "
               "(the experiment dispatcher, the lever contract, the target loader) - then re-run. "
               "Until they are written every experiment fails identically.")
     else:
@@ -3204,8 +3815,13 @@ def preflight(smoke: bool = False) -> list[str]:
                 for line in rendered:
                     print(line)
             else:
+                try:   # the same knob the real spawns read; a broken loop.json was reported above
+                    listing_mode = _driver_knobs(json.loads(LOOPCFG.read_text(encoding="utf-8-sig")))["skill_listing"]
+                except Exception:
+                    listing_mode = "names"
                 cmd = (AGENT_CMD
                        + _permission_flags(os.environ.get("AUTORESEARCH_PERMISSION_MODE") or "auto")
+                       + _listing_flags(listing_mode)
                        + [smoke_prompt])
                 proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=300,
                                       env=dict(os.environ, AUTORESEARCH_SUPERVISED="1"))
@@ -3378,7 +3994,9 @@ def _supervise_unlocked(smoke: bool = False):
                 notes = _drain_inbox(k["inbox_max_chars"])
                 st = "unknown"
                 for attempt in range(1 + k["planner_retries"]):
-                    st = _spawn_agent(build_prompt("planner", reasons="; ".join(reasons), notes=notes),
+                    planner_prompt = build_prompt("planner", reasons="; ".join(reasons), notes=notes)
+                    print(f"[supervise] {_brief_line('planner')}")
+                    st = _spawn_with_backoff(planner_prompt,
                                       _codex_backend.model_for(p, _AGENT_BACKEND), "planner", k,
                                       effort=_codex_backend.effort_for(p, _AGENT_BACKEND))
                     if st == "ok":
@@ -3417,11 +4035,13 @@ def _supervise_unlocked(smoke: bool = False):
             cfg_path = Path(unit["config"])
             notes = _drain_inbox(k["inbox_max_chars"])   # drained ONCE per unit; reused on the retry
             prompt = build_prompt("worker", config=unit["config"], notes=notes)
+            print(f"[supervise] {_brief_line('worker')}")
+            t_spawn_wall = time.time()       # the JOURNAL must be written anew after this to count as saved
 
-            def _unit_resolved(u=unit, cp=cfg_path) -> bool:
+            def _unit_resolved(u=unit, cp=cfg_path, t0=t_spawn_wall) -> bool:
                 """Grace probe: the unit counts resolved once its save-set exists OR the worker declined it
                 (a drop file in results/queue_drop/, since the worker no longer edits queue.json)."""
-                return _unit_saved(cp) or _has_decline_drop(u["config"])
+                return _unit_saved(cp, since=t0) or _has_decline_drop(u["config"])
 
             declined = False
             st = "unknown"
@@ -3435,14 +4055,17 @@ def _supervise_unlocked(smoke: bool = False):
                 print(f"[supervise] unit {unit['config']} already has its save-set on disk - accepting "
                       f"from the record without a spawn utc={_utc_stamp()}")
             for attempt in range(0 if done else 1 + retries):
-                st = _spawn_agent(prompt, _codex_backend.model_for(w, _AGENT_BACKEND), f"worker[{unit['config']}]", k,
+                # The previous JOURNAL is archived and the working file removed: the brief carries it, and
+                # the worker writes the new one as a fresh file (one Write, no read, no splice).
+                _archive_journal(clear=True)
+                st = _spawn_with_backoff(prompt, _codex_backend.model_for(w, _AGENT_BACKEND), f"worker[{unit['config']}]", k,
                                   saved_probe=_unit_resolved,
                                   effort=_codex_backend.effort_for(w, _AGENT_BACKEND))
                 q = _read_queue()
                 _drain_queue_drops(q)          # merge this worker's declinations + proposals (single-writer)
                 head = q["next"][0] if q["next"] else None
                 declined = bool(head and head.get("config") == unit["config"] and head.get("declined"))
-                done = _unit_saved(cfg_path)
+                done = _unit_saved(cfg_path, since=t_spawn_wall)
                 if declined or done:
                     break                      # the accept/decline block below persists q (merged drops incl.)
                 _record_failure(q, unit["config"], attempt + 1, st,
@@ -3451,6 +4074,10 @@ def _supervise_unlocked(smoke: bool = False):
                 _write_queue(q)
                 print(f"[supervise] unit not validated (attempt {attempt + 1}): status={st}, "
                       f"saved={done} - " + ("retrying" if attempt < retries else "out of retries"))
+
+            if not JOURNAL.is_file() and _restore_journal():
+                print("[supervise] the worker left no new results/JOURNAL.md - the archived one is restored "
+                      "(the unit is incomplete: the working memory was not brought up to date)")
 
             # ---- accept / decline / shelve bookkeeping (liveness = accepted units per unit time) ----
             # DONE IS TESTED FIRST, and it must stay that way. The save-set on disk is the ground truth for
@@ -3594,10 +4221,11 @@ def _recommended_mtime() -> float | None:
         return None
 
 
-def _unit_saved_missing(config_path: Path) -> list[str]:
+def _unit_saved_missing(config_path: Path, since: float | None = None) -> list[str]:
     """Which parts of the save-set a worker must leave behind are ABSENT (the checkpoint contract's hard
-    core): the result JSON, the snapshot directory, the logbook entry. Named, so a failure record says
-    what was missing instead of a constant string nobody can act on."""
+    core): the result JSON, the snapshot directory, the logbook entry with its Analysis, and - when
+    `since` (the spawn's start) is given - a results/JOURNAL.md touched after it: the working memory is
+    owed like the artifacts. Named, so a failure record says what was missing."""
     stem = _exp_stem(config_path)
     exp_id = exp_id_for(stem) if stem else ""
     if not exp_id:
@@ -3607,14 +4235,23 @@ def _unit_saved_missing(config_path: Path) -> list[str]:
         missing.append(f"results/result_{exp_id}.json")
     if not (SNAPSHOTS / stem).is_dir():
         missing.append(f"results/snapshots/{stem}/")
-    if stem not in LOGBOOK.read_text(encoding="utf-8", errors="replace"):
+    text = LOGBOOK.read_text(encoding="utf-8", errors="replace")
+    if stem not in text:
         missing.append("the logbook entry")
+    elif _logbook_field(text, exp_id, "Analysis") == "":
+        # The one narrative slot the worker owes (NEXT is the other, and it is cheap to leave a line).
+        # Refusing absence, never length: an Analysis that names every failed check in three lines is
+        # complete; an empty one is a result nobody read.
+        missing.append("the logbook Analysis slot (blank)")
+    if since is not None and not _journal_updated_since(since):
+        missing.append("results/JOURNAL.md written anew (the previous one is archived and in the brief; "
+                       "write the whole file, with its **NEXT:** line)")
     return missing
 
 
-def _unit_saved(config_path: Path) -> bool:
+def _unit_saved(config_path: Path, since: float | None = None) -> bool:
     """Structural validation of what a worker must leave behind (the checkpoint contract's hard core)."""
-    return not _unit_saved_missing(config_path)
+    return not _unit_saved_missing(config_path, since)
 
 
 # ---- driver-scheduled verification (the preset says what each unit is owed; the driver spawns the
@@ -3725,7 +4362,7 @@ def _mode_line(group: list, extras: dict) -> str:
                   "self_check and changes blocks) and verify the delta; do not re-execute; write "
                   "\"mode\": \"review\" in each verdict.")
     if extras.get("blinded"):
-        line += (" Blinded: do not read results/JOURNAL.md or the logbook narrative - the record and the "
+        line += (" Blinded: do not read results/JOURNAL.md or the logbook narrative - the ledger and the "
                  "artifacts only.")
     if extras.get("different_model"):
         line += " Where the campaign's verify block names a different model family for the refuter, use it."
@@ -3759,6 +4396,12 @@ def _stamp_label(stem: str, entry: dict) -> None:
     tmp = art.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(ck, indent=2), encoding="utf-8")
     os.replace(tmp, art)
+    # The logbook's runner-owned lines follow the artifacts; a line a verifier or the agent wrote by
+    # hand (anything past `pending` / `self-checked`, a Status past `open`) is left as written.
+    _set_logbook_field(stem, "Verification", f"{ck['label']} ({vf.name})",
+                       only_if_prefix=("", "pending", "self-checked"))
+    _set_logbook_field(stem, "Status", "confirmed" if verdict == "CONFIRMED" else verdict,
+                       only_if_prefix=("open",))
 
 
 def _verification_backlog(q: dict) -> list[list[dict]]:
@@ -3840,7 +4483,7 @@ def _service_verification(k: dict, model: str, vfail: int, effort: str = "") -> 
             retries = int(k.get("verifier_retries", k.get("planner_retries", 1)))
             for attempt in range(1 + retries):
                 before = list(missing)
-                st = _spawn_agent(prompt, model, f"verifier[{label}]", k, saved_probe=_verdicts_probe,
+                st = _spawn_with_backoff(prompt, model, f"verifier[{label}]", k, saved_probe=_verdicts_probe,
                                   effort=effort)
                 missing = [s for s in exps if _find_verdict_file(s) is None]
                 if not missing:
@@ -3969,6 +4612,281 @@ def _set_metric_revision(mode: str) -> None:
         print("From here on a metric revision raises results/ESCALATE.md and the loop waits for you.")
 
 
+def _one_line(text: str) -> str:
+    """A logbook field or a ledger cell is ONE line: whitespace runs (newlines included) collapse."""
+    return " ".join(str(text or "").split())
+
+
+def _record_cli(exp: str, analysis: str, next_line: str, note: str, finding: str, replace: bool,
+                decline: str, propose: str) -> int:
+    """`--record EXP [--analysis TEXT|@FILE] [--next LINE] [--ledger-note TEXT] [--finding LINE] [--replace]
+    [--decline REASON] [--propose FILE|JSON]`: the worker's record, placed by the runner. The two logbook
+    slots it owes, the ledger's narrative cells, a decline or a proposal - one command, validated the
+    way the guard validates, idempotent (re-run replaces), touching nothing else. The worker never opens
+    the logbook or the ledger to write them, so neither is ever read to be written."""
+    cfg_path = exp if exp.endswith(".json") else ""
+    stem = Path(exp).stem if cfg_path else exp
+    eid = exp_id_for(stem)
+    if not eid:
+        print(f"--record: cannot derive an experiment id from {exp!r} (use the exp name, its id, or its config path)")
+        return 2
+    wrote, problems = [], []
+    if decline:
+        DROP.mkdir(parents=True, exist_ok=True)
+        cfg_rel = cfg_path or (f"configs/{stem}.json" if (ROOT / "configs" / f"{stem}.json").is_file() else stem)
+        (DROP / f"{stem}.decline.json").write_text(json.dumps(
+            {"kind": "decline", "config": cfg_rel, "reason": _one_line(decline)}, indent=1), encoding="utf-8")
+        wrote.append(f"decline -> results/queue_drop/{stem}.decline.json")
+    if propose:
+        src = ROOT / propose
+        try:
+            payload = json.loads(src.read_text(encoding="utf-8")) if src.is_file() else json.loads(propose)
+        except (OSError, ValueError) as exc:
+            print(f"--record: --propose must be a JSON file or a JSON literal ({exc})")
+            return 2
+        units = payload if isinstance(payload, list) else [payload]
+        recs = []
+        for u in units:
+            u = u.get("unit", u) if isinstance(u, dict) else u
+            if not isinstance(u, dict) or not str(u.get("config", "")).startswith("configs/"):
+                print("--record: each proposal needs \"config\": \"configs/exp<NN>_<slug>.json\" (plus rationale, hypothesis)")
+                return 2
+            recs.append({"kind": "propose", "unit": u})
+        DROP.mkdir(parents=True, exist_ok=True)
+        slug = Path(str(recs[0]["unit"]["config"])).stem
+        (DROP / f"{slug}.propose.json").write_text(json.dumps(recs if len(recs) > 1 else recs[0], indent=1),
+                                                    encoding="utf-8")
+        wrote.append(f"proposal -> results/queue_drop/{slug}.propose.json ({len(recs)} unit(s))")
+    if analysis or next_line or note or finding:
+        text = LOGBOOK.read_text(encoding="utf-8", errors="replace") if LOGBOOK.is_file() else ""
+        if _logbook_field(text, eid, "Analysis") is None:
+            print(f"--record: no logbook entry for {stem} ({eid}) - the runner writes it when the experiment "
+                  "runs; record after the run")
+            return 2
+    if analysis:
+        body = analysis
+        if body.startswith("@"):
+            try:
+                body = (ROOT / body[1:]).read_text(encoding="utf-8")
+            except OSError as exc:
+                print(f"--record: cannot read --analysis file {body[1:]!r} ({exc})")
+                return 2
+        body = _one_line(body)
+        if not body:
+            problems.append("Analysis is blank - a unit whose Analysis is blank is not saved")
+        else:
+            _set_logbook_field(stem, "Analysis", body, only_if_prefix=None)
+            wrote.append(f"logbook Analysis ({len(body)} chars)")
+    if next_line:
+        _set_logbook_field(stem, "NEXT", _one_line(next_line), only_if_prefix=None)
+        wrote.append("logbook NEXT")
+    if note:
+        cell = _one_line(note)
+        if len(cell) > NOTE_CAP:
+            problems.append(f"the ledger note holds at most {NOTE_CAP} characters ({len(cell)} given): the "
+                            "narrative belongs in the Analysis, and anything larger in results/JOURNAL.md")
+        elif _set_scoreboard_cell(eid, ("note", "notes"), cell):
+            wrote.append(f"ledger note ({len(cell)} chars)")
+    if finding:
+        cell = _one_line(finding)
+        if len(cell) > FINDING_CAP:
+            problems.append(f"a finding is one line of at most {FINDING_CAP} characters ({len(cell)} given)")
+        elif "verdicts/" not in cell and "unverified" not in cell.lower():
+            problems.append("a finding cites its verdict artifact by path (results/verdicts/<id>.json) or says "
+                            "`unverified` - a claim with neither is an open question for results/JOURNAL.md, "
+                            "not a finding")
+        else:
+            existing = _scoreboard_cell(eid, ("finding",))
+            if existing and not replace:
+                problems.append(f"{eid} already carries a finding ({existing[:80]!r}); pass --replace to "
+                                "overwrite it (the earlier text stays in results/journal_archive/ and the logbook)")
+            elif _set_scoreboard_cell(eid, ("finding",), cell):
+                wrote.append(f"ledger finding ({len(cell)} chars)")
+    for p in problems:
+        print(f"--record: REFUSED - {p}")
+    if wrote:
+        print(f"record -> {stem} ({eid}): " + "; ".join(wrote))
+    if not wrote and not problems:
+        print("--record: nothing to record - give --analysis, --next, --ledger-note, --finding, --decline or --propose")
+        return 2
+    return 1 if problems else 0
+
+
+def _record_from_file(exp: str, path: str, flags: dict) -> int:
+    """`--record EXP --from-file record.json`: the WHOLE record in one file - {"analysis", "next",
+    "ledger_note", "finding", "replace", "decline", "propose", "self_check": {"ran", "changes",
+    "estimate", "note"}} - every key optional, flags on the command line win. The JOURNAL is not in it:
+    the worker writes results/JOURNAL.md anew as a file. Three turns for the record: the record file,
+    the command, the new JOURNAL."""
+    try:
+        rec = json.loads((ROOT / path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        print(f"--record --from-file {path!r}: cannot read it as JSON ({exc})")
+        return 2
+    if not isinstance(rec, dict):
+        print("--record --from-file: the file must hold one JSON object")
+        return 2
+    rc = 0
+    sc = rec.get("self_check")
+    if isinstance(sc, dict):
+        r = _self_check_cli(exp, [str(x) for x in sc.get("ran") or []], [str(x) for x in sc.get("changes") or []],
+                            str(sc.get("estimate") or ""), str(sc.get("note") or ""))
+        rc = max(rc, r)
+    prop = rec.get("propose")
+    r = _record_cli(exp, flags.get("analysis") or str(rec.get("analysis") or ""),
+                    flags.get("next") or str(rec.get("next") or ""),
+                    flags.get("ledger_note") or str(rec.get("ledger_note") or ""),
+                    flags.get("finding") or str(rec.get("finding") or ""),
+                    bool(flags.get("replace") or rec.get("replace")),
+                    flags.get("decline") or str(rec.get("decline") or ""),
+                    flags.get("propose") or (json.dumps(prop) if prop else ""))
+    if r == 2 and not (rec.get("analysis") or rec.get("next") or rec.get("ledger_note") or rec.get("finding")
+                       or rec.get("decline") or prop or flags.get("analysis") or flags.get("next")):
+        r = 0                                            # nothing owed to the logbook in this file is not an error
+    rc = max(rc, r)
+    if rec.get("journal"):
+        print("--record: the JOURNAL is not part of the record file - write results/JOURNAL.md anew with the "
+              "Write tool (the previous one is in your brief and in results/journal_archive/)")
+        rc = max(rc, 1)
+    return rc
+
+
+def _show_cli(exp: str) -> int:
+    """`--show EXP`: one logbook entry, printed - the way to read an old detail without opening the file."""
+    eid = exp_id_for(exp)
+    text = LOGBOOK.read_text(encoding="utf-8", errors="replace") if LOGBOOK.is_file() else ""
+    head, out, on = f"## {eid} - ", [], False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            on = bool(eid) and line.startswith(head)
+        if on:
+            out.append(line)
+    if not out:
+        print(f"--show: no logbook entry for {exp!r}")
+        return 2
+    print("\n".join(out))
+    return 0
+
+
+_CARD_SKIP = {"utc", "solve_wall_clock_s", "outside_apriori_range", "runner_produced", "is_evaluation"}
+
+
+def _numeric_fields(d: dict, prefix: str = "") -> dict:
+    """Every numeric scalar in a result JSON (top level and one dict deep, e.g. the guardrail's values)."""
+    out = {}
+    for k, v in (d or {}).items():
+        if k.startswith("_") or k in _CARD_SKIP or k in ("config", "apriori", "theta"):
+            continue
+        if isinstance(v, bool):
+            continue
+        if isinstance(v, (int, float)) and np.isfinite(v):
+            out[prefix + k] = float(v)
+        elif isinstance(v, dict) and not prefix:
+            out.update(_numeric_fields(v, prefix=k + "."))
+    return out
+
+
+def _card_comparisons(res: dict, eid: str) -> list[str]:
+    """The comparisons the analyses make, computed once: every numeric field of this result against the
+    INCUMBENT (the best prior under this metric version) and against the PREVIOUS unit (the newest prior
+    result), as `this | incumbent (delta) | previous (delta)`. Per-condition splits, a chi-square, a
+    lifetime, a census count - whatever the campaign records numerically - so nobody re-derives them."""
+    try:
+        props = _campaign_props()
+        priors = _prior_results(eid)
+        inc = _incumbent(priors, props)
+        prev = max(priors, key=lambda r: str((_read_json(RESULTS / f"result_{r['id']}.json", {}) or {}).get("utc", ""))) if priors else None
+    except Exception as exc:
+        return [f"comparisons: not computed ({type(exc).__name__}: {exc})"]
+    if not inc and not prev:
+        return []
+    mine = _numeric_fields(res)
+    ref = {}
+    for tag, r in (("incumbent", inc), ("previous", prev)):
+        if r is not None:
+            rj = _read_json(RESULTS / f"result_{r['id']}.json", {}) or {}
+            ref[tag] = (r["exp_name"], _numeric_fields(rj))
+    if not ref:
+        return []
+    head = "comparisons: this" + "".join(f" | {tag} {name}" for tag, (name, _) in ref.items() if name)
+    out = [head]
+    for k, v in mine.items():
+        cells = [f"{k}: {v:.6g}"]
+        any_ref = False
+        for tag, (name, vals) in ref.items():
+            if k in vals:
+                any_ref = True
+                d = v - vals[k]
+                cells.append(f"{vals[k]:.6g} ({d:+.4g})")
+            else:
+                cells.append("-")
+        if any_ref:
+            out.append(" | ".join(cells))
+    return out[:28]
+
+
+def _card(exp: str) -> str:
+    """The result card: what the analysis of one experiment needs to know, in one bounded block - printed
+    at the end of every run and by `--card EXP`. Read once, never rebuilt from the artifacts with
+    one-liners. The campaign adds its own numbers through experiment.py campaign_card_fields(result, checks)."""
+    eid = exp_id_for(exp)
+    res = _read_json(RESULTS / f"result_{eid}.json", None) if eid else None
+    if not isinstance(res, dict):
+        return f"card: no results/result_{eid or '?'}.json for {exp!r} - run the experiment first"
+    ck = _read_json(CHECKS / f"checks_{eid}.json", None)
+    ck = ck if isinstance(ck, dict) else {}
+    checks = ck.get("checks") or {}
+    stem = str(res.get("exp_name") or exp)
+    lines = [f"=== CARD {eid} {stem} ==="]
+    score = res.get("{{PRIMARY_METRIC}}")
+    head = f"{{PRIMARY_METRIC}} = {score}"
+    try:
+        inc = _incumbent(_prior_results(eid), _campaign_props())
+        if inc is not None and score is not None:
+            delta = float(score) - float(inc["score"])
+            better = metric._better(float(score), float(inc["score"]))
+            head += (f"  |  incumbent {inc['exp_name']} = {inc['score']:.6g}  delta {delta:+.6g} "
+                     f"({'better' if better else 'not better'})")
+    except Exception as exc:                        # the card must never fail on the comparison
+        head += f"  |  (incumbent comparison not computed: {type(exc).__name__})"
+    lines.append(head)
+    if res.get("guardrail") is not None:
+        lines.append(f"guardrail: {res.get('guardrail')}")
+    pred = checks.get("prediction") or {}
+    if pred:
+        lines.append(f"expected vs found: {pred.get('status', '?')} - {pred.get('detail', '')}")
+    if res.get("solve_wall_clock_s") is not None:
+        lines.append(f"solve: {res.get('solve_wall_clock_s')} s")
+    fails = [n for n, c in checks.items() if isinstance(c, dict) and c.get("status") == "fail"]
+    unav = [n for n, c in checks.items() if isinstance(c, dict) and c.get("status") == "unavailable"]
+    lines.append(f"label: {ck.get('label', 'unverified')}  |  checks: {len(checks)} "
+                 f"({len(fails)} fail, {len(unav)} unavailable)")
+    for n in fails:
+        lines.append(f"  FAIL {n}: {checks[n].get('detail', '')}")
+    for n in unav:
+        c = checks[n]
+        lines.append(f"  unavailable {n}: {c.get('detail', '')}" + (f" (needs: {c['needs']})" if c.get("needs") else ""))
+    sc = ck.get("self_check")
+    if isinstance(sc, dict):
+        lines.append(f"self-check: {len(sc.get('ran') or [])} check(s); {len(sc.get('changes_considered') or [])} "
+                     f"change(s) considered, {len(sc.get('changes_unconsidered') or [])} not")
+    ch = ck.get("changes") or {}
+    if isinstance(ch, dict) and ch:
+        files = ", ".join(f["path"] for f in ch.get("files") or []) or "none"
+        keys = ", ".join(f"{c['key']} {c['old']} -> {c['new']}" for c in ch.get("config_keys") or []) or "none"
+        lines.append(f"changed since {ch.get('since') or '-'}: code {files}; config keys {keys}")
+    lines += _card_comparisons(res, eid)
+    try:
+        extra = _seam("campaign_card_fields", lambda result, checks: {})(res, ck) or {}
+    except Exception as exc:
+        extra = {"campaign_card_fields": f"raised {type(exc).__name__}: {exc}"}
+    for k, v in extra.items():
+        lines.append(f"{k}: {v}")
+    lines.append(f"record: write results/record_{eid}.json (analysis, next, ledger_note, finding, self_check, "
+                 f"journal) then python scripts/run_campaign.py --record {stem} --from-file results/record_{eid}.json")
+    return "\n".join(str(L)[:400] for L in lines[:80])
+
+
 def _self_check_cli(exp: str, ran: list, changes: list, estimate: str, note: str) -> int:
     """`--self-check EXP --ran name=pass|fail|skip[:detail] ... [--change "what=>expected=>observed"] ...
     [--estimate X] [--note "..."]`: the worker records the checks it ran on its own result, directed at
@@ -4024,6 +4942,10 @@ def _self_check_cli(exp: str, ran: list, changes: list, estimate: str, note: str
     tmp = art.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(ck, indent=2), encoding="utf-8")
     os.replace(tmp, art)
+    _set_logbook_field(exp, "Verification",
+                       f"{ck['label']} - {len(entries)} check(s), {len(considered)} of "
+                       f"{len(considered) + len(unconsidered)} recorded change(s) considered (results/{art.name})",
+                       only_if_prefix=("", "pending", "self-checked"))
     print(f"self-check recorded -> results/{art.name}: {len(entries)} check(s), {len(considered)} change(s) "
           "considered" + (f"; {len(unconsidered)} recorded change(s) NOT considered: {', '.join(unconsidered)}"
                           " - say what you expected each to do" if unconsidered else "")
@@ -4136,6 +5058,9 @@ def main():
     g.add_argument("--show-prompt", choices=("worker", "planner", "verifier", "capstone"), metavar="ROLE",
                    help="print the literal prompt this driver would spawn ROLE with, plus its size "
                         "and hash, then exit. Reads nothing, spends nothing, changes nothing")
+    ap.add_argument("--unit", metavar="CONFIG",
+                    help="with --show-prompt worker: build the prompt for this unit (the queue entry and "
+                         "config the brief delivers, the assignment line) exactly as the driver would spawn it")
     g.add_argument("--set-metric-revision", metavar="MODE",
                    help="set configs/loop.json campaign.metric_revision (cautious | autonomous) from an "
                         "ATTENDED session and exit. Refused inside a driver-spawned role: the dial is the "
@@ -4159,6 +5084,29 @@ def main():
     ap.add_argument("--change", action="append", metavar="WHAT=>EXPECTED=>OBSERVED", help="with --self-check")
     ap.add_argument("--estimate", metavar="X", help="with --self-check: your a-priori point estimate")
     ap.add_argument("--note", metavar="TEXT", help="with --self-check: one line reconciling prediction and result")
+    ap.add_argument("--from-file", metavar="JSON", help="with --self-check: a JSON file {\"ran\": [...], \"changes\": "
+                    "[...], \"estimate\": X, \"note\": \"...\"} instead of (or in addition to) the flags - a long "
+                    "self-check is one file, not a shell quoting exercise")
+    g.add_argument("--record", metavar="EXP",
+                   help="place the record you owe for EXP (the exp name, its id, or its config path) - the "
+                        "logbook Analysis and NEXT, the ledger's note and finding cells, a decline or a "
+                        "proposal - validated and idempotent; you never open the logbook or the ledger")
+    ap.add_argument("--analysis", metavar="TEXT|@FILE", help="with --record: the Analysis paragraph (or @path)")
+    ap.add_argument("--next", dest="next_line", metavar="LINE", help="with --record: the NEXT line")
+    ap.add_argument("--ledger-note", metavar="TEXT", help=f"with --record: the ledger's note cell (at most {NOTE_CAP} chars)")
+    ap.add_argument("--finding", metavar="LINE", help="with --record: the ledger's finding cell (one line citing its verdict)")
+    ap.add_argument("--replace", action="store_true", help="with --record --finding: overwrite an existing finding")
+    ap.add_argument("--decline", metavar="REASON", help="with --record: decline this unit (a drop file the driver merges)")
+    ap.add_argument("--propose", metavar="FILE|JSON", help="with --record: propose unit(s) (a drop file the driver merges)")
+    ap.add_argument("--record-file", dest="record_file", metavar="JSON",
+                    help="with --record: the WHOLE record as one JSON file - analysis, next, ledger_note, finding, "
+                         "self_check {ran, changes, estimate, note}, decline, propose - every key optional; "
+                         "flags on the command line win. The JOURNAL is a file you write, not a key")
+
+    g.add_argument("--card", metavar="EXP",
+                   help="print the result card for EXP (the comparison the analysis needs, in one block; "
+                        "also printed at the end of every --config run)")
+    g.add_argument("--show", metavar="EXP", help="print one logbook entry (an old detail without opening the file)")
     g.add_argument("--suite-worker", action="store_true",
                    help="internal: run the correctness suite's CHECKS in-process for check_correctness_suite "
                         "(selection, report path and experiment come from PHYSKIT_SUITE_* env vars)")
@@ -4186,8 +5134,34 @@ def main():
         sys.exit(_run_suite_cli(args.run_suite, args.for_exp or ""))
 
     if args.self_check:
-        sys.exit(_self_check_cli(args.self_check, args.ran or [], args.change or [], args.estimate or "",
-                                 args.note or ""))
+        ran, changes, estimate, note = list(args.ran or []), list(args.change or []), args.estimate or "", args.note or ""
+        if args.from_file:                 # the flags' content as one JSON file (many --change items are awkward in a shell)
+            try:
+                sc = json.loads((ROOT / args.from_file).read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                sys.exit(f"--self-check --from-file {args.from_file!r}: cannot read it as JSON ({exc})")
+            ran += [str(x) for x in sc.get("ran") or []]
+            changes += [str(x) for x in sc.get("changes") or []]
+            estimate = estimate or str(sc.get("estimate") or "")
+            note = note or str(sc.get("note") or "")
+        sys.exit(_self_check_cli(args.self_check, ran, changes, estimate, note))
+
+    if args.record:
+        if args.record_file or args.from_file:
+            sys.exit(_record_from_file(args.record, args.record_file or args.from_file, {
+                "analysis": args.analysis or "", "next": args.next_line or "", "ledger_note": args.ledger_note or "",
+                "finding": args.finding or "", "replace": bool(args.replace), "decline": args.decline or "",
+                "propose": args.propose or ""}))
+        sys.exit(_record_cli(args.record, args.analysis or "", args.next_line or "", args.ledger_note or "",
+                             args.finding or "", bool(args.replace), args.decline or "", args.propose or ""))
+
+
+    if args.card:
+        print(_card(args.card))
+        return
+
+    if args.show:
+        sys.exit(_show_cli(args.show))
 
     if args.preflight or args.supervise or args.show_prompt:
         _AGENT_BACKEND = _codex_backend.configure_or_exit(LOOPCFG, args.backend)
@@ -4196,7 +5170,9 @@ def main():
         # The prompt to STDOUT and the metadata to STDERR, so the setup review gate can capture one
         # without the other. Size is REPORTED, never capped: the plan is explicit that capacity was
         # never the binding constraint here, so growth should be visible rather than enforced.
-        text = build_prompt(args.show_prompt)
+        # --unit <config>: the worker prompt for THAT unit (its queue entry and config in the brief, the
+        # assignment line filled) - what the driver would spawn, so a probe or a review sees the real thing.
+        text = build_prompt(args.show_prompt, config=str(args.unit) if args.unit else "<config path>")
         direct_preview = (args.show_prompt == "verifier" and _codex_backend.is_codex(_AGENT_BACKEND)
                           and _verification_strategy(_read_json(LOOPCFG, {}) or {}) == "driver-direct")
         if direct_preview: text = _verifier_policy().direct_prompt(text, "driver-nonce-preview")
@@ -4209,9 +5185,11 @@ def main():
         instruction_name = "AGENTS.md" if _codex_backend.is_codex(_AGENT_BACKEND) else "CLAUDE.md"
         prompt_kind = ("a direct-verifier shape preview; the live nonce differs" if direct_preview
                        else "the literal spawn string")
-        print(f"--- this is {prompt_kind}. {instruction_name} auto-loads on top of it, and the "
-              "files it names (campaign.md, the role file) are read by the agent, not included here."
-              " ---", file=sys.stderr)
+        print(f"--- this is {prompt_kind}. {instruction_name} auto-loads on top of it; the brief "
+              "(campaign.md, the role file, the JOURNAL, the unit, the ledger projection) is "
+              "compiled into it above. ---", file=sys.stderr)
+        if args.show_prompt in _LAST_BRIEF:
+            print(f"--- {_brief_line(args.show_prompt)} ---", file=sys.stderr)
         return
 
     if args.preflight:
@@ -4264,9 +5242,9 @@ def main():
     _beat("gates")                 # liveness trace begins (dead-worker detection; progress = the ledger)
 
     if args.baseline:
-        # TODO(campaign): the simplest defensible baseline (see campaign.md, 'Baseline gate'). It also
-        # validates the data/scoring chain end-to-end. Expected floor is in campaign.md.
-        cfg = {"exp_name": "exp000_baseline", "_comment": "baseline gate"}
+        # The simplest defensible baseline (campaign.md, 'Baseline gate'): experiment.py's
+        # baseline_config() where the campaign defines one; the bare stub otherwise.
+        cfg = _seam("baseline_config", lambda: {"exp_name": "exp000_baseline", "_comment": "baseline gate"})()
     else:
         cfg = load_config(args.config)
 
@@ -4285,14 +5263,14 @@ def main():
     snapshot_s = time.monotonic() - t_snap
     _beat("snapshot")
 
-    validate_method(cfg)   # hard-fail before spending an evaluation on an unwired/unrecognized lever
-    target = load_target(cfg)
+    _exp().validate_method(cfg)   # hard-fail before spending an evaluation on an unwired/unrecognized lever
+    target = _exp().load_target(cfg)
     _beat("solve_start")
     ticker = _HeartbeatTicker()   # beats every HB_TICK_S so a long solve doesn't look dead mid-run
     ticker.start()
     t_solve = time.monotonic()
     try:
-        prediction = run_experiment(cfg)
+        prediction = _exp().run_experiment(cfg)
     finally:
         ticker.stop()
     solve_s = time.monotonic() - t_solve   # the measured unit cost: what re-execution eligibility reads
@@ -4301,6 +5279,7 @@ def main():
         "start_iso": run_start_iso, "t_run": t_run, "gates_s": round(gates_s, 3),
         "suite_s": _SUITE_TIMING.get("wall_s"), "snapshot_s": round(snapshot_s, 3),
         "solve_s": round(solve_s, 6)})   # microseconds: an analytic toy solve must not round to zero
+    print(_card(stem))                     # the analysis reads THIS once; it never rebuilds it from the artifacts
 
 
 if __name__ == "__main__":

@@ -1,14 +1,8 @@
 ---
 name: new-campaign
 description: >-
-  Interview a researcher and scaffold a launch-ready autonomous-research campaign in the physical
-  sciences. Use when the user wants to start or set up an optimization, fitting/decoder,
-  forward-model-improvement, generative-design, ML-training, or hardware-in-the-loop campaign. Elicit
-  the goal, metric, physics, data, levers, constraints, compute, and time; co-design the FROZEN metric;
-  choose the applicable archetype; generate the complete project and campaign tree from PhysKit's
-  bundled templates; implement the scorer and experiment hooks; and hand off only after the template
-  validator and driver preflight pass. Not for running an existing loop, verifying one result, or
-  writing the end-of-campaign report.
+  Interview and scaffold a launch-ready autoresearch campaign: goal, frozen metric, archetype,
+  project and campaign tree. Use to start or set up a campaign; not for running one.
 ---
 
 # new-campaign — interview, then scaffold a campaign
@@ -34,7 +28,7 @@ experiment loop, levers, guardrails, logging, verification, and reporting.
 - An existing project needs the autoresearch structure (campaign.md + metric + scoreboard) added.
 
 Do not use this to run an already-scaffolded loop, to verify a finding (`verify`), or to write the final
-report (`final-report`). To **fork a campaign whose findings a bug or correction invalidated** — a clean
+report (`report`, campaign mode). To **fork a campaign whose findings a bug or correction invalidated** — a clean
 break with an archived source and a re-verified carry-forward — use **`fork-campaign`**, not this skill.
 
 - **If the idea itself is unvetted**, offer to run **`assess-idea`** first. It is advisory, covering
@@ -252,8 +246,8 @@ control, or training or fitting purely on real experimental data). If there is o
    The primary, guardrail, and diagnostics, plus the experiment-type **run numerics** (e.g. epochs and best
    epoch for ML; iterations, wall-clock, and n_free_params for fits), plus a `tier` column
    (Scout/Confirmation/Extended) and the always-present `metric_version` / `data_version` comparability
-   tags, become the columns of `results/scoreboard.tsv`, the campaign's quantitative ledger, which is
-   separate from the narrative journal.
+   tags, become the columns of `results/scoreboard.tsv`, the campaign's ledger, which is separate from
+   the JOURNAL, the campaign's working memory.
 4. **Physics / system knowledge.** Capture, from sources wherever possible, everything needed to model the
    system:
    - **Physical objects & geometry**: dimensions, arrangement or layout, material(s), and quantities.
@@ -346,7 +340,7 @@ control, or training or fitting purely on real experimental data). If there is o
    **From the same unit-cost assessment, derive the supervisor loop knobs** (`configs/loop.json`, which the
    driver reads; PLACEHOLDERS §Loop configuration): planner cadence *k*, plateau threshold *m*
    (dual-denominated: units and wall-clock, whichever trips first), the outstanding-units cap (default
-   *k*), and the iteration timeout (greater than the Extended cap). Also record `campaign.reproducible`
+   1: one agent proposal ahead of a planner review), and the iteration timeout (greater than the Extended cap). Also record `campaign.reproducible`
    (whether one unit can be independently re-executed from its config alone: seeded, not a one-shot
    measurement, not hardware-in-the-loop). There is no verification threshold to set: the runner decides
    re-execution per unit from its measured solve time against the iteration timeout and that flag, and
@@ -401,7 +395,8 @@ control, or training or fitting purely on real experimental data). If there is o
     (`docs/PRINCIPLES.md` §2).
 12. **User's own ideas (always ask).** Ask the user for (a) any ideas or directions they would like you to
     try, and (b) anything that should not be tried: out of scope, known dead ends, forbidden approaches.
-    Record the to-try ideas as the opening JOURNAL **NEXT** items, attributed to the user, and fold the
+    Record the to-try ideas in the opening JOURNAL — ranked under `## What to try next and why`,
+    attributed to the user, with the first as the **NEXT:** line — and fold the
     do-not-try items into `campaign.md` §FROZEN / out of scope. User ideas are inputs, not a ceiling; you
     remain encouraged to propose well-founded novel ideas of your own (`docs/PRINCIPLES.md` §2).
 13. **Multi-stage plan — propose it proactively.** Many complex tasks are best done as several sequential
@@ -460,8 +455,8 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   missing item with its fix — and Step 4 requires it green before handoff), and the downstream gates
   enforce the rest — never author a to-do table restating what the code computes live. Setup tasks that
   preflight cannot know about and this session cannot finish — a calibration to pin, a file only the
-  user can stage — go in as the opening `results/JOURNAL.md` **NEXT** items, before the user's ideas to
-  try, so the loop's working list starts with them.
+  user can stage — go in at the top of the opening `results/JOURNAL.md` `## What to try next and why`,
+  before the user's ideas to try, so the loop's working list starts with them.
 - **Resolve every `[PROPOSED]` tag:** present each speculative discipline to the user to keep or cut; drop
   the tag on kept ones, and delete cut ones.
 - **Strip the `.tmpl` suffix** on write (`campaign.md.tmpl` → `campaign.md`, and so on).
@@ -540,9 +535,11 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   gates at all, and a tree assembled by hand rather than by this skill is the case where that happens;
   `campaign-status` asserts all of it.
 - **Campaign code — filled here, implemented in Step 3.5.** Fill `scripts/metric.py` (the FROZEN scorer
-  and `--selftest`) and `scripts/run_campaign.py` (the runner) with the campaign's names, paths, and
-  metric wiring during the template fill; the real implementations — the scorer's math and the three
-  experiment hooks — are Step 3.5's job, in this session, never deferred to the loop. Leave **`scripts/frozen_core.py`**'s `CORE_FILES_DEFAULT` alone, since editing it per campaign forks the
+  and `--selftest`) and `scripts/experiment.py` (the campaign's code: the five hooks and the seams) with
+  the campaign's names, paths, and metric wiring during the template fill; the real implementations —
+  the scorer's math and the three experiment hooks — are Step 3.5's job, in this session, never deferred
+  to the loop. `scripts/run_campaign.py` is the kit's machinery (gates, checks, snapshot, driver): it is
+  rendered, never implemented per campaign, and replaced wholesale on upgrade. Leave **`scripts/frozen_core.py`**'s `CORE_FILES_DEFAULT` alone, since editing it per campaign forks the
   one authority; if this campaign's frozen physics spans more files, such as a shared simulator or a
   forward model from topic 6, declare them in `configs/frozen_core.json` instead.
   **`tests/correctness_checks.py`**, the **correctness suite**, ships as skip-stubs. From
@@ -611,9 +608,9 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   status in `../../PROJECT.md` (§Equations and methods; domain of validity is a standing
   constraint), and keep *calibration is not validation* by holding out independent
   validation data. Register it in the README.
-- **Seed the user's directions.** Put the user's ideas to try (topic 12) as the opening JOURNAL **NEXT**
-  items, attributed to the user, and fold the do-not-try items into `campaign.md`'s FROZEN and out-of-scope
-  list.
+- **Seed the user's directions.** Put the user's ideas to try (topic 12) in the opening JOURNAL — ranked
+  under `## What to try next and why`, attributed to the user, the first also the **NEXT:** line — and fold
+  the do-not-try items into `campaign.md`'s FROZEN and out-of-scope list.
 - **Sibling campaigns & multi-stage (project model, §5).** A second track, approach, or stage is always a
   **sibling campaign**: its own `campaigns/<NN>_<slug>/` with its own `campaign.md` and ledger, coupled via
   `campaign.md` §Relationship to sibling campaigns and the promoted project-level artifacts
@@ -627,8 +624,8 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   spend. `campaign.metric_revision` ships `cautious` (a metric revision the loop wants raises `ESCALATE.md`
   and waits); say so in one sentence at handoff — the user moves the dial, never the loop.
 - Seed `results/scoreboard.tsv` with its header. Leave `results/logbook.md` (append-only full record)
-  and `results/JOURNAL.md` (the working window + the empty §Findings record) with their intros and the
-  first **NEXT** pointer, queueing exp 000. The logbook, scoreboard, and `diagnostics/` logs are append-only and
+  and `results/JOURNAL.md` (the campaign's working memory — the **NEXT:** line and its sections) with
+  their intros and the first **NEXT** pointer, queueing exp 000. The logbook, scoreboard, and `diagnostics/` logs are append-only and
   never read in full, which is what keeps the record complete without bloating the loop's context. If the
   user wants hard separation, the logbook and diagnostics can be redirected to a path outside the campaign
   tree; the default is in-tree for reproducibility.
@@ -643,10 +640,13 @@ fresh session a red preflight. Sub-agents may draft; this session verifies.
    exists to catch sign and convention bugs before they can corrupt the campaign; an unimplemented
    scorer defers exactly those bugs. The scorer is FROZEN from here on: locked against quiet change — a
    later revision is a declared metric epoch, never an in-place edit.
-2. **Implement the three campaign hooks** in `scripts/run_campaign.py` — `validate_method` (the lever
+2. **Implement the three campaign hooks** in `scripts/experiment.py` — `validate_method` (the lever
    contract), `run_experiment` (the experiment dispatcher), `load_target` (the target/data loader) —
    wiring the topic-5 data paths and the topic-10 existing code. Implement `save_figure()` so it
-   actually writes the file.
+   actually writes the file, and fill the seams the campaign needs (`campaign_scoreboard_fields` for its
+   scoreboard columns, `baseline_config` for exp 000, `campaign_checks` for checks only it can make).
+   Helpers and models go in `experiment.py` or sibling modules under `scripts/`; the runner is never
+   edited.
 3. **Write `predictions/exp000_baseline.json`** from the topic-3 a-priori range and prediction mode. The
    spend gate requires it before exp 000 can run, and the prediction is interview output — record what
    was co-designed, invent nothing.
@@ -690,9 +690,9 @@ contract checks the suite template ships as real checks, and run the suite until
 - **`synthetic_recovery`** — for a fitter, decoder, or model-improvement campaign: data generated from
   known parameters under the campaign's noise model fits back within tolerance; any other archetype
   returns `skip: not a fitter`.
-Leave one line in `results/JOURNAL.md` §Findings: `Setup audit: baseline 000 = … ± … (N seeds); floor …;
-metric discriminates; recovery ± …; contract checks green`. The validator (Step 4) refuses a suite that
-lacks the four names unless `tests/CORRECTNESS_NA.md` records why; preflight prints their status with
+Leave one line under `## Where we stand` in `results/JOURNAL.md`: `Setup audit: baseline 000 = … ± …
+(N seeds); floor …; metric discriminates; recovery ± …; contract checks green`. The validator (Step 4)
+refuses a suite that lacks the four names unless `tests/CORRECTNESS_NA.md` records why; preflight prints their status with
 the rest of the suite.
 
 ## Step 4 — validate (two deterministic gates)
@@ -763,8 +763,9 @@ In that fresh session, the sequence is:
 
 The driver runs its preflight (agent CLI, loop and queue config, metric self-test; each failure names its
 fix, and `--preflight` runs it standalone), pops units from the seeded `results/queue.json`, spawns a fresh
-worker agent per unit (the frozen spine and `campaign.md` auto-load in each), and enforces the artifact
-gates. Failures split by kind. An **operational** failure — a worker that dies, hangs, or leaves its unit
+worker agent per unit (the frozen spine auto-loads; the driver compiles `campaign.md`, the role file,
+the standing constraints, the JOURNAL and the unit into the prompt — the brief, sized at
+preflight and at every spawn), and enforces the artifact gates. Failures split by kind. An **operational** failure — a worker that dies, hangs, or leaves its unit
 unvalidated — is retried, then shelved with the failure recorded, and the loop continues. The driver
 hard-halts only on **integrity** conditions (`results/ESCALATE.md`, a corrupt or post-planner-empty queue)
 or **systemic** failure (several units failing in a row). Loop knobs live in `configs/loop.json`, which is

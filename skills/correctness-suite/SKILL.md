@@ -1,16 +1,7 @@
 ---
 name: correctness-suite
 description: >-
-  Build and run a standing suite of correctness checks for a simulation, solver, forward model, or
-  numerical pipeline — and keep it green. Use when you have a V&V plan to execute (from simulation-design or
-  frame-problem), when about to edit FROZEN/core physics or scoring code and need a safety net, after fixing
-  a numerical bug (add the check that would have caught it), or phrasings like "set up tests for the
-  solver", "add validation checks", "make sure my changes didn't break the physics". It encodes the plan as
-  executable checks — analytic limits, Method of Manufactured Solutions, order-of-accuracy, conservation/
-  symmetry invariants, independent-method parity, convergence, and the application-specific checks — plus a
-  fast frozen self-test, and promotes each check to a standing regression gate that re-runs after
-  any core change. The suite must be GREEN before a result built on the code is trusted. Distinct from
-  verify (adversarial check of one claim) and cite-check (citations).
+  Standing correctness and regression checks for simulation code.
 ---
 
 # correctness-suite — the standing safety net for numerical code

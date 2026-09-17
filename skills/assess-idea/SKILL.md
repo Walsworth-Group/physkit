@@ -1,17 +1,8 @@
 ---
 name: assess-idea
 description: >-
-  Honestly pressure-test a research idea or direction BEFORE committing to it — is it plausibly solvable, and
-  is it worth the cost, risk, and time? The anti-hype counterpart to verify: it may (and should) conclude
-  "no", "not yet", or "not worth it". Use when someone floats an idea and wants a candid take, or before
-  scaffolding a campaign around an unvetted idea — phrasings like "what do you think of this idea?", "is this
-  worth pursuing?", "is this feasible?", "should I work on X?", "pressure-test this proposal", "is this a good
-  research direction?". It bounds the idea a priori (is the hoped-for effect even physically available?),
-  locates the crux (the hardest/most-uncertain part and the cheapest check that would de-risk it), weighs
-  prior art and cheaper alternatives, and returns a graded go / no-go / de-risk-first verdict with its
-  reasoning, confidence, and load-bearing assumptions. In a campaign it is ADVISORY — it records a judgment,
-  never blocks. Distinct from frame-problem (which plans HOW to do a problem you have already decided to do)
-  and verify (which checks a result you already have).
+  Pressure-test a research idea before committing: a-priori bound, the crux, the cheapest de-risking
+  check; go / no-go / de-risk-first.
 ---
 
 # assess-idea — pressure-test the idea before you commit

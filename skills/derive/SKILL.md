@@ -1,16 +1,8 @@
 ---
 name: derive
 description: >-
-  Do analytical and symbolic derivation work rigorously — and verify it before relying on it. Use when the
-  task is pen-and-paper / computer-algebra theory rather than a numerical optimization: deriving a
-  closed-form result, a perturbation or asymptotic expansion, an effective theory, a proof or proof sketch,
-  a conservation law, or simplifying/transforming an expression. Phrasings like "derive...", "show that...",
-  "work out the expression for...", "prove...", "find a closed form for...", "expand to leading order in...".
-  It works the derivation out BEFORE any code (Zimmer's derivations-before-code), with precise notation and
-  units, tracks every assumption and its domain, then verifies the result independently — dimensional and
-  limiting-case checks, a computer-algebra cross-check, an independent re-derivation, and a numerical
-  spot-check against the original problem — and grades the claim verified / partially-verified / conjectured.
-  Composes dimensional-analysis, verify, and frame-problem.
+  Analytical or symbolic derivation, verified before use: derivation before code, then dimensional,
+  limiting-case, computer-algebra, and numerical checks.
 ---
 
 # derive — work the analytics out, then prove you didn't fool yourself

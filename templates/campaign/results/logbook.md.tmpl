@@ -5,35 +5,42 @@ provenance: every kit release is tagged, so the exact skills, docs, and template
 run are recoverable from it. Never update this line to a newer version.
 
 The complete, permanent history of the campaign: one entry per experiment, in order, verbatim and never
-trimmed. The runner (`scripts/run_campaign.py`) auto-appends the facts of each entry. The agent completes
-that entry's narrative slots right after: Analysis, Expected-vs-found, Verification, Excluded-data, NEXT.
-This archive lets `results/JOURNAL.md` stay a short steering view.
+trimmed. The runner (`scripts/run_campaign.py`) writes the facts of each entry - and the judgements it
+can make from the artifacts: Expected vs found, the Levers line, and a Verification line the self-check
+and the verdict stamp raise on their own. The agent completes two slots right after, through ONE command
+(`python scripts/run_campaign.py --record <exp> --analysis "..." --next "..."`), never by opening this
+file. This archive is what lets `results/JOURNAL.md` stay a bounded working memory.
 
-Rules — read these once, then do not read the rest of this file:
+Rules — nobody reads this file; the runner writes it and `--show <exp>` prints one entry:
 - Append only. Never edit a past entry. New entries are appended at the bottom by the runner. Complete the
   narrative of the current entry. Once you move to the next experiment, no earlier entry is edited,
   compressed, reordered, or deleted, including disputes, negative results, and refuted findings.
-- Never read this file in full. It grows without bound, and loading it whole bloats the working context,
-  defeating its purpose. Consult it only by targeted search (grep for an exp id or a term), or by reading
-  a specific slice when an old detail is needed.
+- Never read this file. It grows without bound, and loading any of it bloats the working context,
+  defeating its purpose. An old detail is `python scripts/run_campaign.py --show <exp>` (one entry); the
+  current experiment's numbers are the result card the run prints (`--card <exp>` reprints it).
 - Entry format: a `## <exp_id> - <label> - <UTC>` header, then one bold-labelled field per line as a
-  bullet. The runner auto-fills `- **Hypothesis**: …`, `- **Predicted**: …`, `- **Change**: …`,
-  `- **Result**: …`; the agent completes `- **Analysis**: …`, `- **Expected vs found**: …`,
-  `- **Verification**: …`, `- **Excluded data**: …`, `- **Disputes & responses**: …`, `- **Status**: …`,
-  `- **Artifacts**: …`, `- **NEXT**: …`. Keep each field on its own bullet line; never collapse them into
-  one paragraph. A single newline renders as a space in Markdown, so separate bullets make the entry
-  readable.
-- The numbers live in `scoreboard.tsv`, settled findings in `JOURNAL.md` §Findings, the navigation map in
-  This file is the full narrative.
+  bullet. The runner fills `- **Hypothesis**`, `- **Predicted**`, `- **Levers**`, `- **Change**`,
+  `- **Result**`, `- **Expected vs found**`, `- **Artifacts**`, and `- **Verification**` (`pending`, then
+  `self-checked …` after `--self-check`, then `<VERDICT>/<mode> (<verdict file>)` when a verdict lands -
+  a line a verifier or you wrote by hand is never overwritten). The agent completes `- **Analysis**` and
+  `- **NEXT**` through `--record` (which also takes `--ledger-note` and `--finding` for the ledger's
+  cells); `- **Excluded data**`, `- **Disputes & responses**`, `- **Status**` are edited by a verifier
+  or the user only when there is something to say. Each field is one bullet line; `--record` collapses
+  newlines, because a single newline renders as a space in Markdown and separate bullets keep the entry readable.
+- The numbers and the one-line timeline live in `scoreboard.tsv` (a settled fact is its row's `finding`
+  cell); the campaign's working memory is `JOURNAL.md`. This file is the full narrative.
 
-Completing the current entry — fill the slots the runner left blank, before moving on:
-- **Analysis**: inside the predicted range? guardrail hold? ceiling-move vs gap-to-ceiling? statistical vs
-  systematic? real win or overfit?
-- **Expected vs found**: the one-line gap between prediction and result, matched / above / below, and by
-  how much. The gap is the insight. When they diverge, the divergence is the finding; name it rather than
-  smoothing it over.
-- **Verification**: the `{{VERIFY_SKILL}}` verdict, CONFIRMED / PROVISIONAL / QUESTIONABLE ASSUMPTION /
-  REFUTED / INCONCLUSIVE, with key evidence.
+Completing the current entry — the two slots you owe, before moving on, in ONE command:
+`python scripts/run_campaign.py --record <exp> --analysis "<paragraph>" --next "<line>"`. Short is the
+format: the runner already wrote the facts and the expected-vs-found line, so write only what no code
+knows. A unit whose Analysis is blank is not saved; a three-line Analysis that names every failed check is complete.
+- **Analysis**: one paragraph. First, every `fail` in `results/checks_<NN>.json` answered by name (a
+  flag you did not answer is not a passed check; the self-check you recorded may be cited instead of
+  restated). Then whatever you judge worth recording: a divergence from the prediction and what it
+  means, ceiling-move vs gap-to-ceiling, statistical vs systematic, overfit. Your judgement, not a form.
+- **NEXT**: one line - the lever to try next, or `see proposal <slug>`.
+- **Verification**: the runner's line. In an attended session (no driver) put the `{{VERIFY_SKILL}}`
+  verdict here yourself, with the verdict file's name; the driver stamps it in a supervised run.
 - **Excluded data**: any run or data point dropped from this experiment's analysis, each with a legitimate
   cause, such as "solver hit its iteration cap", never "looked wrong". Exclusions are append-only and never
   silent: a silent drop is indistinguishable from cherry-picking. Never manipulate the evaluation.

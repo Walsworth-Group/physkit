@@ -54,7 +54,7 @@ before you score. The step count does not transfer.
    abort sentinel on a deterministic fatal verdict below the completion
    ceiling.
 5. **INGEST** through the quarantine gate (§6), score with the frozen metric,
-   append the scoreboard row (§8).
+   let the runner record the ledger row (§8).
 6. **ANALYZE** expected-vs-found. A result outside the step-1 envelope is a bug
    or a discovery, and evidence settles which one. Log it, update the journal,
    repeat.

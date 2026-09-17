@@ -1,26 +1,17 @@
 ---
 name: report
 description: >-
-  Produce a rigorous, evidence-backed scientific report or technical document from work that is already
-  done — for any task, not only research campaigns. Use whenever the user wants to write up results,
-  document a method, or turn analysis into a shareable artifact: phrasings like "write a report",
-  "write this up", "document these results", "make a writeup of the fit/derivation/analysis", "turn this
-  into a paper/memo", "explain the parameters and why we chose them", or "create something a colleague
-  could read and reproduce". Handles audience (internal vs shareable), stage (draft / progress / capstone),
-  and format (LaTeX by default for scientific reports; Markdown or Word where lighter is better). Every
-  number is labeled by provenance, every load-bearing claim is re-checked from source before finalizing,
-  every citation is verified, and a master parameter table records each parameter with its provenance,
-  justification, and uncertainty. For an end-of-CAMPAIGN capstone use final-report (it composes this
-  skill); for mid-campaign result checking use verify.
+  Write up finished work as a rigorous report or document: every number provenance-labeled, claims
+  re-checked, citations verified. In a campaign, the end-of-campaign capstone.
 ---
 
 # report — the general scientific-document engine
 
 A report is the artifact that outlives the work. It is what a collaborator, or the author a year later,
 reads to learn what was found, why, and on what evidence, and to reproduce it where that matters. This
-skill produces that artifact for any task, from a one-off fit writeup to a methods paper. It is the
-general engine: the campaign capstone (`final-report`) and periodic campaign progress notes are this same
-engine in different modes, not separate tools.
+skill produces that artifact for any task, from a one-off fit writeup to a methods paper to a campaign's
+capstone. One engine, three modes; the campaign capstone is this skill plus the campaign-specific
+instructions in [`references/campaign-capstone.md`](references/campaign-capstone.md), not a separate tool.
 
 The work being reported is complete. Do not launch new experiments or change results to make the account
 cleaner. The only new artifacts produced here are explanatory figures and the document itself. If the
@@ -29,7 +20,7 @@ attention. Do not carry the wrong number forward.
 
 ## Set the mode first
 
-Three dials decide the shape of the document. Settle them before writing; ask if unclear.
+Four dials decide the shape of the document. Settle them before writing; ask if unclear.
 
 - **Audience.** *Internal* (rich: interpretation, open questions, dead ends, the verification ledger in
   full) or *shareable* (plain: data, method, comparison, results). Both carry the same facts and caveats.
@@ -42,6 +33,11 @@ Three dials decide the shape of the document. Settle them before writing; ask if
   *Assemble & compile*). Use Markdown for a quick internal draft or a doc that lives in the repo; use Word
   (the `docx` skill) when the recipient needs it. Do not re-implement rendering: compose the format skill
   that owns it (`docx`, `pdf`, `pptx`).
+- **Where.** *In a campaign* (the capstone, or a progress note on a campaign): read
+  [`references/campaign-capstone.md`](references/campaign-capstone.md) first. It says where each source
+  lives, that the selected configuration is the campaign's gated record and never re-derived, that the
+  claim audit runs before the evidence ledger, and which labels the report must print. *Outside a
+  campaign*: skip it.
 
 ## The five standards (the rubric you grade your own draft against)
 
@@ -70,36 +66,47 @@ Label, do not blend. Pick the scheme that fits the artifact and keep it consiste
   and validated) · *scaffold* (depends on an unpinned input; flag it).
 - **Prose findings:** *claim* (asserted, evidence given) · *assumption* (taken as given) · *open* (not yet
   resolved).
-- **Parameters (in the table):** *user-given · fitted · first-principles · simulation · assumed ·
-  literature*. A parameter with no supporting source is labeled "empirical / lab-internal"; that is a
-  valid provenance, stated rather than concealed.
+- **Parameters (in the table):** *user-given · fitted · swept · first-principles · simulation · locked ·
+  assumed · literature*. A parameter with no supporting source is labeled "empirical / lab-internal"; that
+  is a valid provenance, stated rather than concealed.
 
 ## Procedure
 
-0. **Set parameters and gather sources.** Fix the three mode dials. Collect the material: for a general
-   task, the analysis/computations/data the user points to; for a campaign (via `final-report`), harvest
-   the ledger / logbook / findings / configs + the project overview (`PROJECT.md`) + the `frame-problem` artifact. Build an
-   accurate map of what plays each role first; downstream quality depends on it.
+0. **Set the dials and gather sources.** Collect the material: for a general task, the analysis,
+   computations, and data the user points to; in a campaign, the sources the reference names (the
+   ledger, logbook, findings, configs, the project overview `PROJECT.md`, the `frame-problem` artifact).
+   Build an accurate map of what plays each role first; downstream quality depends on it.
 1. **Map material to roles:** the thesis/result · supporting evidence (numbers + their sources) ·
    parameters · the physics model + assumptions · methods/pipeline · figures · references.
-2. **Problem framing & scope** (from `frame-problem` if it ran). State the goal, what physics was
-   included versus excluded and why (the inventory), the decomposition and steps taken, and how it was
-   verified (the verification plan). This is the model-and-scope section: it states the domain of validity
-   up front.
+2. **Problem framing & scope** (from `frame-problem` if it ran). State the goal, the decomposition and
+   steps taken, and how it was verified (the verification plan). Then two tables that state the domain
+   of validity up front:
+   - **The physics inventory** — one row per physical effect that could matter: effect · *included /
+     excluded / parked* · why (the bound or estimate that justifies excluding it, or the reason it is in)
+     · where it enters (equation or pipeline stage) · evidence pointer. An excluded effect with no number
+     behind "negligible" is a guess; say so.
+   - **The assumptions register** — one row per assumption the result rests on: assumption · where it
+     enters · what rests on it (which claims or parameters) · status (*verified · provisional · open ·
+     superseded*) · the check or evidence that set the status. Every assumption that was never checked is
+     *open*, listed, not hidden. A superseded assumption stays in the register with its successor named
+     and nothing load-bearing on it.
 3. **Build the evidence ledger.** For each headline claim or feature: the value/delta, its source
    (experiment id or computation), and its verification status. Where a value came from a sweep, the
    evidence is the curve and its optimum; from a fit, the anchors and the fitted value with uncertainty;
    from a lock, the reason it is frozen.
 4. **Master parameter table.** One row for every parameter that entered the final product: symbol ·
-   meaning · value (+units) · provenance · justification appropriate to its type · uncertainty ·
-   evidence pointer. Then, for the handful that matter most, including any whose values were
-   contested, a paragraph each: the physics,
-   the governing equation, how the value was pinned (derivation / fit result / simulation), and the
-   evidence. The long tail of locked/standard parameters can live in the table alone. Do not omit a
-   parameter because it is obvious; unstated parameters are where reproducibility leaks.
+   meaning · value (+units) · role (which equation or pipeline stage it enters) · how set (fitted, to
+   which anchors, by what procedure · swept, range → optimum · locked, why · assumed, source · literature,
+   citation key) · uncertainty · evidence pointer (the in-campaign number or computation, with its id) ·
+   source (citation key, else "empirical / lab-internal"). Then, for the handful that matter most,
+   including any whose values were contested, a paragraph each: the physics, the governing equation, how
+   the value was pinned (derivation / fit result / simulation), and the evidence. The long tail of
+   locked/standard parameters can live in the table alone. Do not omit a parameter because it is obvious;
+   unstated parameters are where reproducibility leaks.
 5. **Methods, pipeline & derivations** — end-to-end so it can be re-run (raw input → each step → result).
    Derive what is specific to this work; cite standard textbook results rather than re-deriving them.
-   Define the metric / figure of merit precisely, including its known degeneracies or ceiling.
+   Define the metric / figure of merit precisely, including its known degeneracies or ceiling. Keep
+   symbols consistent with the parameter table.
 6. **Figures.** Curate the most informative existing figures (prefer final over early) and generate the
    explanatory ones: a geometry/schematic, a pipeline diagram, an evidence/ablation chart, and the
    headline-result figure. Every caption states the takeaway; axes are labeled with units; text is
@@ -109,9 +116,8 @@ Label, do not blend. Pick the scheme that fits the artifact and keep it consiste
    `final_report/`; for a project-level or cross-campaign writeup, the project's single `reports/` home;
    outside any project (a one-off memo), a fresh local dir. Keep LaTeX build artifacts
    (`.aux/.log/.out/.fls`) out of source control via `.gitignore`. The compiled PDF lives in-tree beside
-   its source; the outputs shelf is in the tree (see `final-report` and the project `reports/`). Apply
-   the right register and the provenance labels; compile and self-correct until clean, or emit the Overleaf
-   folder if there is no local compiler (see *Assemble & compile*).
+   its source. Apply the right register and the provenance labels; compile and self-correct until clean,
+   or emit the Overleaf folder if there is no local compiler (see *Assemble & compile*).
 9. **Grade against the five standards + the checklist** before declaring done.
 
 ## Verify before you finalize (Standard 3 — the mandatory step)
@@ -122,13 +128,13 @@ re-check what a reader will act on, not every digit.
 - **Identify the load-bearing claims/values:** the headline result, the key deltas, anything a decision
   rests on.
 - **Recompute/confirm each from source** rather than transcribing: re-run or re-read the producing
-  computation and confirm it matches the stated value. For a campaign, reconcile against the frozen
-  record (scoreboard/logbook) and require the verification status the campaign's preset owes the
-  headline — a CONFIRMED verdict, or the claim audit's label where the preset promotes stamped
-  `unverified` — and print the label. A higher raw score that failed an overfit/sanity guard is not the
-  headline.
+  computation and confirm it matches the stated value. A number the model produced by mental arithmetic
+  (a delta, a ratio, a "which is larger") is not a source; regenerate it from code and point at the code.
+  In a campaign, reconcile against the frozen record and require the verification status the campaign's
+  preset owes the headline (the reference says which), and print the label.
 - **Internal consistency:** totals/sums, units, cross-references, and figures all agree with the numbers
-  in the text, and the abstract matches the body.
+  in the text, and the abstract matches the body. A number restated in several places agrees at all of
+  them.
 - **Citations:** every reference resolves to the real source via `cite-check`: exact title, full author
   list, year, venue, identifier. Claim support is confirmed from the full text, not the abstract;
   abstract-only support is carried as PROVISIONAL and the claim is softened to match. A link that 404s,
@@ -137,10 +143,9 @@ re-check what a reader will act on, not every digit.
 - **Flag premises:** any claim resting on a QUESTIONABLE ASSUMPTION, or a PROVISIONAL/unverified
   result, is marked as such and never presented as settled.
 - **Emit a claim→evidence manifest** (the verification ledger): a table mapping each load-bearing claim to
-  the evidence that backs it (experiment id / `result_<NN>.json` / figure / scoreboard row), how
-  it was checked, the result, its verification label (in a campaign: the checks artifact's `label`, or
-  `label_after` from the claim audit where one ran, with "downgraded by audit" said where true), and
-  any planned-vs-executed delta (what was intended to run vs what ran). Every headline claim must trace to a real artifact; a claim with no entry does not go in
+  the evidence that backs it (experiment id / `result_<NN>.json` / figure / ledger row), how it was
+  checked, the result, its verification label, and any planned-vs-executed delta (what was intended to run
+  vs what ran). Every headline claim must trace to a real artifact; a claim with no entry does not go in
   the document. Keep it in full for an internal audience, or as an appendix for a shareable one, so the
   report's own trustworthiness is auditable.
 
@@ -155,24 +160,28 @@ silently rewrite.
 ## Section arc (physics-report default — adapt or omit per report type)
 
 A lit review has no parameter table; a short memo collapses several sections. This is the default for a
-results/methods report:
+results/methods report; the items marked *(campaign)* belong to the capstone:
 
 1. **Title / authors / date / abstract** — the headline result with its number + the one or two key
    evidence deltas; honest (lead with what is shown, state the band).
 2. **Introduction & objective** — the problem, the goal and the decision it drives, what is claimed,
-   position vs the literature (what gap it fills, what not to claim).
-3. **Problem framing & scope** (from `frame-problem`) — physics included vs excluded + why; assumptions;
-   domain of validity; the decomposition.
-4. **Physical & model parameters** — the master parameter table + prose for the key few.
-5. **Methods, pipeline & derivations** — end-to-end; the metric defined.
-6. **Verification & validation** — the verification plan executed + the verification ledger.
-7. **Results & evidence** — the evidence ledger; the headline figure; per-lever deltas; uncertainty bands
+   position vs the literature (what gap it fills, what not to claim); *(campaign)* what is frozen, and any
+   metric epochs.
+3. **Problem framing & scope** (from `frame-problem`) — the physics inventory and the assumptions register
+   (the two tables of step 2); the decomposition.
+4. *(campaign)* **The selected configuration, in depth** — what it is, every component, and why.
+5. **Physical & model parameters** — the master parameter table + prose for the key few.
+6. **Methods, pipeline & derivations** — end-to-end; the metric defined, with its degeneracies or ceiling.
+7. **Verification & validation** — the verification plan executed + the verification ledger.
+8. **Results & evidence** — the evidence ledger; the headline figure; per-lever deltas; uncertainty bands
    on every reported quantity.
-8. *(optional)* **Promising alternatives** — the road not taken, brief.
-9. **Reproducibility** — exact configs, commands, seeds, data provenance, environment, file pointers.
-10. **Limitations & open questions** — the known ceiling, unresolved disputes, every provisional and
+9. *(optional)* **Promising alternatives** — the road not taken, brief.
+10. **Reproducibility** — exact configs, commands, seeds, data provenance, environment, file pointers.
+11. *(optional)* **Broader implications** — over what range the result applies; what it newly enables or
+    predicts; which open problems it bears on. Stated honestly, with no overclaiming.
+12. **Limitations & open questions** — the known ceiling, unresolved disputes, every provisional and
     assumption-dependent claim marked as such.
-11. **References** — verified.
+13. **References** — verified.
 
 ## Assemble & compile
 
@@ -197,25 +206,29 @@ results/methods report:
 
 ## Before you call it done — checklist
 
-- [ ] Every parameter that entered the result is in the table, each with provenance + justification + uncertainty.
-- [ ] Every load-bearing claim/value was recomputed or reconfirmed from source, not transcribed.
+- [ ] Every parameter that entered the result is in the table, each with role, how set, uncertainty, evidence, and source.
+- [ ] The physics inventory lists every effect that could matter as included, excluded, or parked, with the number or reason behind each exclusion.
+- [ ] The assumptions register lists every assumption the result rests on with its status; none is silently open; nothing load-bearing rests on a superseded one.
+- [ ] Every load-bearing claim/value was recomputed or reconfirmed from source, not transcribed; no number is the model's arithmetic.
 - [ ] Every number is provenance-labeled; the honest band, not the optimistic edge, is reported.
 - [ ] Every citation was verified to a real source (`cite-check`); unconfirmable ones are flagged, not invented.
 - [ ] Provisional / assumption-dependent claims are marked as such.
-- [ ] Physics included/excluded + the steps + how it was verified are stated (from `frame-problem`).
-- [ ] Internal consistency holds: totals, units, cross-references, abstract ↔ body.
+- [ ] Internal consistency holds: totals, units, cross-references, restatements, abstract ↔ body.
 - [ ] Reproducibility pointers (configs/commands/seeds/data) are present for the headline result.
 - [ ] It compiles clean, or the Overleaf folder is emitted: no `??`, no missing figures, no TODOs.
 - [ ] Normalization pass done: notation/units/nomenclature consistent and in standard form; no result or meaning changed.
+- [ ] *(campaign)* The reference's own checklist passed.
 
 Then tell the user where the `.tex` / `.pdf` (or the doc) and the generated figures live, and give a 3–4
 line summary of the headline result and its strongest evidence.
 
 ## Composition & scaling
 
-- **`final-report`** (campaign capstone) composes this skill, then adds the campaign harvest (selected
-  config, full evidence ledger, discoveries, disputes) and the REVTeX capstone packaging.
-- **Periodic campaign progress** is this skill in *progress* mode; there is no separate skill.
+- **In a campaign** this skill is the capstone: the *Where* dial routes to
+  [`references/campaign-capstone.md`](references/campaign-capstone.md), which adds the campaign harvest
+  (the gated selected configuration, the claim audit, the evidence ledger's campaign forms, the labels)
+  to the procedure above. Periodic campaign progress is this skill in *progress* mode. There is no
+  separate campaign report skill.
 - For a large report (many results, long bibliography), fan the gathering out to subagents: harvest
   evidence for distinct groups, verify citations in parallel, generate figure sets. Then assemble and
   compile in one place so voice, symbols, and cross-references stay consistent. The harvest, citation
@@ -223,6 +236,7 @@ line summary of the headline result and its strongest evidence.
   labeling, and the load-bearing-claim re-checks on the strong model.
 
 ## Bundled assets
+- `references/campaign-capstone.md` — the campaign-specific instructions, read in campaign mode only.
 - `assets/report_skeleton.tex` — REVTeX capstone skeleton (the arc above, pre-stubbed).
 - `assets/report-macros.sty` — portable physics macros (no siunitx/physics/braket). Smoke-tested on base TeX Live.
 - `assets/refs.bib` — empty bibliography stub to fill from verified citations.

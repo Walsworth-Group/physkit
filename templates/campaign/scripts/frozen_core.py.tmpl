@@ -5,9 +5,10 @@ reject a STALE green — a correctness suite that was green against a DIFFERENT 
 being promoted). Dependency-free and side-effect-free so the hook can import it cheaply and safely.
 
 CORE = the code whose correctness the suite certifies: the FROZEN scorer plus the suite itself. If either
-changes, a green recorded before the change no longer vouches for the code now on disk. run_campaign.py is
-NOT core — it is MUTABLE plumbing (levers / forwards / decoders / preprocessing), and a green suite does not
-certify it. A campaign whose frozen physics spans more files (a shared simulator, a forward model) declares
+changes, a green recorded before the change no longer vouches for the code now on disk. Neither
+run_campaign.py (the kit's machinery) nor experiment.py (the campaign's MUTABLE levers / forwards / decoders /
+preprocessing) is core, and a green suite does not certify them. A campaign whose frozen physics spans more
+files (a shared simulator, a forward model) declares
 them in configs/frozen_core.json: {"core_files": ["shared/sim.py", "scripts/forward.py"]} — paths relative to
 the campaign root; they EXTEND the defaults, they do not replace them. Never edit CORE_FILES_DEFAULT per
 campaign — that forks the one authority; use the override file.

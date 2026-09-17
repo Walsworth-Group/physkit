@@ -1,16 +1,8 @@
 ---
 name: debug
 description: >-
-  Find and fix a bug in research or numerical code by ladder, not by guessing. Use on a crash, a stack
-  trace, a NaN/inf, a result that's wrong or out of its expected range, "this worked before my change",
-  "the simulation gives garbage", or any divergence between expected and actual behavior whose cause isn't
-  obvious. It climbs a structured ladder — reproduce, reduce to the smallest failing case, check
-  units/signs/conventions first, compare to a trusted reference, bisect one change at a time, inspect
-  intermediate state, and ask whether you're even computing the right quantity — backed by a catalog of the
-  silent bugs that bite physical-simulation code (sign/convention slips, unit mismatches, stale caches,
-  non-converged solves, seeds, FFT/indexing conventions). Holds the stance "a crash is a bug, not a bad
-  idea." Invokes dimensional-analysis for the units/sign check; hands off to pivoting only once a genuine
-  implementation barrier is diagnosed.
+  Find and fix a bug in research or numerical code by ladder: reproduce, reduce, units and
+  conventions first, reference, bisect. Use on a crash, NaN, or wrong result.
 ---
 
 # debug — climb the ladder, don't guess

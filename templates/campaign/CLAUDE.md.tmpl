@@ -4,8 +4,11 @@
 You are running an autonomous research campaign. This file holds the non-negotiables that must never fall
 out of context, and it is this campaign's map of itself: §Where things live below names the file and
 section for everything the loop needs. Consult it rather than guessing a path; it is the one place that
-always describes this tree. Re-read the campaign definition it points at (`campaign.md`) at the start of
-every experiment, and your role file (`roles/worker.md` or `roles/planner.md`) for the procedure.
+always describes this tree. In a supervised run the driver compiles the campaign definition
+(`campaign.md`), your role file, the project's standing constraints, the JOURNAL (the campaign's working
+memory) and the ledger's last rows into your spawn prompt: orient from that brief, never by reading the tree. In an attended session, read
+`campaign.md` and your role file (`roles/worker.md` or `roles/planner.md`) at the start of every
+experiment.
 
 > This campaign lives inside a project. Project-wide rules live in `../../CLAUDE.md`, auto-loaded as an
 > ancestor: shared data and promoted artifacts are referenced, never copied (`../../data`; the
@@ -82,10 +85,10 @@ scorer's code to its epoch; a change to it that no epoch declares refuses to run
    blocked until `results/verdicts/` holds the CONFIRMED verdict **for that experiment** wherever the
    preset requires one — in supervised runs the driver's verification service writes it; run
    `{{VERIFY_SKILL}}` yourself where it has not.
-   Settled findings are RECORDED in
-   `results/JOURNAL.md` §Findings, each citing its verdict artifact by name — a claim with no verdict
-   citation is an open thread, not a finding, and steers nothing (the one exception: a metric-epoch
-   line, whose evidence is its `campaign.metric_epochs` entry). A promotion under a *pending* metric
+   A settled finding is its ledger row's `finding` cell (`results/scoreboard.tsv`), written through
+   `python scripts/run_campaign.py --record <exp> --finding "..."` and citing its verdict artifact by
+   name — a claim with no verdict citation is an open question, not a finding, and steers nothing (the
+   one exception: a metric-epoch line, whose evidence is its `campaign.metric_epochs` entry). A promotion under a *pending* metric
    epoch is legitimate — the row carries its `metric_version` and the epoch's standing rides with it
    (promote-and-label) — but never under a rolled-back epoch, and never across an epoch boundary:
    re-score first.
@@ -93,7 +96,9 @@ scorer's code to its epoch; a change to it that no epoch declares refuses to run
    makes the cause plain. Moving several buys speed and turns the result into a claim about the
    combination: `{{VERIFY_SKILL}}` then grades why it won as QUESTIONABLE (the score still stands), and a
    multi-lever loss kills only the combination, clearing no member lever. Either is legitimate.
-   Leaving it unrecorded is not: nothing downstream can recover which knob did the work.
+   Leaving it unrecorded is not: nothing downstream can recover which knob did the work. The record is
+   the config's `_levers` list; the runner cross-checks it against the keys that changed and flags a
+   moved-but-undeclared key in `results/checks_<NN>.json`.
 3. **Clear this campaign's own resolution.** A win must exceed the noise, not sit within it. What "the
    noise" means is set once, in `configs/loop.json` `campaign.noise_model`: a `stochastic` campaign
    compares the delta against the replicate spread. Report `Δ ± spread`. A `deterministic` one compares
@@ -137,6 +142,7 @@ naming a file this campaign does not have is worse than no row, because an agent
 | Run caps (hard) | `campaign.md` §Caps |
 | A-priori prediction rule (bound it before running) | `campaign.md` §Bound expectations BEFORE you run |
 | Promotion / current-best | `campaign.md` §Decision / promotion |
+| Your code — the five experiment hooks and the seams; the one script a campaign edits (the runner is the kit's machinery) | `scripts/experiment.py` |
 | The per-experiment procedure | `roles/worker.md` §The Experiment Loop |
 | Checkpoint cadence N — the CHECKPOINT step | `roles/worker.md` §The Experiment Loop |
 | This campaign's own verification checks | `campaign.md` §Verification |
@@ -150,10 +156,10 @@ naming a file this campaign does not have is worse than no row, because an agent
 | Campaign properties — prediction mode, noise model, comparability tags | `configs/loop.json` |
 | Metric epochs — the current version, its standing, who may revise the metric | `configs/loop.json` |
 | The metric-epoch procedure — proposing, enacting, re-baselining a revision | `roles/worker.md` §Metric epochs |
-| The journal — latest results, NEXT pointer, open threads | `results/JOURNAL.md` |
-| Settled findings, positive and negative (verdict-cited) | `results/JOURNAL.md` §Findings |
-| The scoreboard — one row per experiment | `results/scoreboard.tsv` |
-| Per-experiment narrative detail | `results/logbook.md` |
+| The journal — the campaign's working memory: NEXT pointer, where we stand, live hypotheses, what to try next, traps, open questions | `results/JOURNAL.md` |
+| Settled findings, positive and negative (verdict-cited) | `results/scoreboard.tsv` `finding` cells (via `--record <exp> --finding`) |
+| The scoreboard — one row per experiment, every cell runner-written | `results/scoreboard.tsv` |
+| Per-experiment narrative detail (`--show <exp>`; Analysis and NEXT via `--record`) | `results/logbook.md` |
 | The current best configuration | `configs/RECOMMENDED.json` |
 | Verdict artifacts from independent verification (and `audit_<NN>.json`, the end-of-campaign claim audit's) | `results/verdicts/` |
 | A-priori predictions, written BEFORE each solve (the spend gate refuses without one) | `predictions/` |

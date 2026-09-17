@@ -1,15 +1,9 @@
 ---
 name: attribute-mechanism
 description: >-
-  Establish WHICH physical mechanism causes an observed signature before acting on the attribution. Reach
-  for it whenever a real feature has appeared in data (a modulation, a drift, an offset, an asymmetry, an
-  extra decay) and someone is about to say "that's probably X" — detuning, a pulse error, temperature, a
-  ground loop, relaxation, motion. The discipline: enumerate the candidate mechanisms, build a MINIMAL
-  simulation with one knob per mechanism, sweep each knob through plausible values, and keep only the
-  mechanisms that actually REPRODUCE the signature — then falsify the survivor with a limiting case it
-  must pass. Distinct from simulation-design (building production sims right), debug (broken code), and
-  verify (checking a result): this attributes an observed REAL effect to its cause. A wrong attribution
-  silently corrupts everything downstream — recalibrations, "corrections", discarded data, papers.
+  Establish which physical mechanism causes an observed signature before acting on it: one knob per
+  candidate, keep what reproduces it, falsify the survivor. Use before saying "that's probably X"
+  about a feature in data.
 ---
 
 # attribute-mechanism — simulate before you attribute

@@ -189,9 +189,11 @@ your-project/
     predictions/          one per experiment, written BEFORE the solve — the runner refuses to spend
                           an experiment without it
     results/
-      scoreboard.tsv      the numbers (one row per experiment)
-      JOURNAL.md          the working window + NEXT pointer + §Findings, the settled verdict-cited record
-      logbook.md          the full narrative record (append-only; never read whole)
+      scoreboard.tsv      the numbers and the one-line timeline (one row per experiment; a settled
+                          fact is its row's verdict-cited `finding` cell) — every cell runner-written
+      JOURNAL.md          the campaign's working memory: NEXT pointer, where we stand, live hypotheses,
+                          what to try next (bounded; brought up to date every unit)
+      logbook.md          the full narrative record (append-only; never opened — `--show <exp>`)
       result_<NN>.json    what one experiment produced   ·   checks_<NN>.json  its mechanical checks,
                           each pass / fail / unavailable, what an unavailable one would need, what the
                           experiment changed, the worker's self-check, and its verification label
@@ -316,9 +318,10 @@ halts as an explicit stopping decision. Every stop leaves a record in `results/l
 the driver log, so why a campaign ended is always answerable from the ledger.
 
 What to expect while it runs. Every experiment is logged to `results/scoreboard.tsv`, with a
-narrative in `results/JOURNAL.md`. A basic figure is saved for every experiment, and more for notable
-ones. Promising findings are independently verified before being promoted, and settled conclusions
-graduate to the journal's Findings section. The ledger and journal are the full record, readable at any time.
+narrative in `results/logbook.md` and the campaign's working memory kept current in `results/JOURNAL.md`.
+A basic figure is saved for every experiment, and more for notable ones. Promising findings are
+independently verified before being promoted, and a settled conclusion is written into its ledger row's
+verdict-cited `finding` cell. The ledger and logbook are the full record, readable at any time.
 `/physkit:campaign-status` answers where the campaign stands; the concierge answers what the loop is
 doing now.
 
@@ -357,4 +360,4 @@ doing now.
 `correctness-suite`, `debug`, `dimensional-analysis`, `derive`, `attribute-mechanism`, `record-decision`, `cite-check`, `report`. **Campaign layer**:
 `new-campaign` (scaffold + interview), `run-campaign` (launch/monitor/steer the supervised loop),
 `campaign-status` (periodic checkpoint), `handoff` (cold-resume),
-`discovery-loop`, `experiment-design`, `model-selection`, and `final-report` (end-of-campaign report).*
+`discovery-loop`, `experiment-design`, `model-selection`; the end-of-campaign capstone is `report` in its campaign mode.*

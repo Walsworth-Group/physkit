@@ -17,7 +17,9 @@ reproducibility. {{APPROACH_SUMMARY}}
   levels above. What is FROZEN stays frozen: do not edit this campaign to satisfy a
   newer kit or validator (see the kit's `docs/MIGRATING.md` instead).
 - **Results live in `results/`**: `scoreboard.tsv` is the numeric record (one row per experiment),
-  `JOURNAL.md` the working window and NEXT pointer, `logbook.md` the full narrative record. The
+  `JOURNAL.md` the campaign's working memory (NEXT pointer, where we stand, what to try next),
+  `logbook.md` the full narrative record — the runner writes both records; the agent's record goes
+  through `run_campaign.py --record`. The
   physkit version this campaign was scaffolded under is stamped at the top of the logbook and in
   `campaign.md`'s header — that pin recovers the exact kit it runs with.
 - **Ad-hoc exploration does not belong here.** Work with no frozen metric goes in a project session
@@ -52,8 +54,10 @@ The roles are:
   `results/queue.json` ordering, revives shelved directions a promotion has re-opened, prunes dead
   ones with a recorded rationale. It never runs experiments.
 
-Both roles re-read `campaign.md` every cycle, and every spawned prompt carries the project's
-§Standing constraints (`../../PROJECT.md`) by value. A human attending the loop acts as
+Every spawned prompt carries the role's brief by value — `campaign.md` (minus its append-only
+record), the role file, the project's §Standing constraints (`../../PROJECT.md`), the JOURNAL (whole),
+the worker's unit and the ledger's last rows — so a fresh agent orients from the prompt, never by
+reading the tree; the driver prints the brief's size at preflight and at every spawn. A human attending the loop acts as
 its **concierge** (the `run-campaign` skill): launch, watch, steer through notes in `results/inbox/`
 — never by-hand execution. The same gates apply either way.
 
@@ -61,15 +65,15 @@ its **concierge** (the `run-campaign` skill): launch, watch, steer through notes
 
 | File | Who reads it | When |
 |---|---|---|
-| `campaign.md` | both roles + the human | every cycle; at sign-off |
+| `campaign.md` | both roles + the human | every cycle (compiled into the spawn prompt); at sign-off |
 | `CLAUDE.md` · `AGENTS.md` | Claude Code · Codex, respectively | auto-loaded, every turn; must agree |
-| `roles/worker.md` · `roles/planner.md` | that role only | every spawn |
+| `roles/worker.md` · `roles/planner.md` | that role only | every spawn (compiled into the prompt) |
 | `../../PROJECT.md` | everyone; §Standing constraints is injected into every spawn | background depth, on demand |
-| `results/JOURNAL.md` | both roles | every cycle (working window) |
-| `results/scoreboard.tsv` · `results/logbook.md` | both roles; the permanent record | appended every experiment |
+| `results/JOURNAL.md` | both roles | every cycle (the working memory — NEXT, where we stand, hypotheses, what to try next, traps, open questions — is compiled whole into the prompt; the worker brings it up to date every unit) |
+| `results/scoreboard.tsv` · `results/logbook.md` | the runner writes both (the permanent record); the agent's slots and cells go through `--record`, and `--show <exp>` prints one entry | appended every experiment; the ledger's last rows are compiled into the prompt |
 | `predictions/<exp>.json` | the runner's spend gate; written by the worker BEFORE each solve | per experiment |
 | `results/queue.json` | the driver's unit ledger (driver is its sole writer); planner rewrites the order | per unit / per planner pass |
-| `results/queue_drop/` | worker/verifier drop proposals + declinations here; the driver merges them | per unit |
+| `results/queue_drop/` | proposals + declinations, dropped by the runner (`--record --propose` / `--decline`); the driver merges them | per unit |
 | `configs/loop.json` | the driver and its checks | at launch; hot-reloaded |
 | `LITERATURE.md` *(when present)* | planner (idea roadmap) · worker (cite sources) | per the literature rule |
 | `tests/correctness_checks.py` | the runner, every experiment | green-gates promotion |
@@ -92,7 +96,7 @@ first launch, the gates hold the rest: experiment 000 must measure the baseline 
 reference before any comparison means anything, and promotion stays blocked until the correctness
 suite is green and the noise model is confirmed empirically. Setup tasks preflight cannot know about
 (data only the user can stage, an instrument to connect) live as the opening `results/JOURNAL.md`
-**NEXT** items — the loop's working list — not in a separate ledger.
+**NEXT** line and `## What to try next and why` items — the loop's working list — not in a separate ledger.
 
 ## Environment & quick start
 

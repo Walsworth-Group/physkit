@@ -603,6 +603,12 @@ def validate_campaign(root: Path) -> list[str]:
     # New runners import this helper; legacy Claude runners predate it and remain valid.
     runner = root / "scripts" / "run_campaign.py"
     runner_text = _read_text(runner) or ""
+    # The campaign's code is scripts/experiment.py (kit >= v0.11.1); a pre-split runner that still
+    # defines the hooks itself is a legacy campaign, valid until it is upgraded.
+    if runner.is_file() and "def run_experiment(" not in runner_text \
+            and not (root / "scripts" / "experiment.py").is_file():
+        errors.append("missing campaign code: scripts/experiment.py (the runner calls its hooks; "
+                      "upgrade_campaign.py extracts them from a pre-split runner)")
     managed_instructions = DUAL_INSTRUCTION_MARKER in (
         (_read_text(root / "CLAUDE.md") or "") + (_read_text(root / "AGENTS.md") or ""))
     if (runner.is_file()

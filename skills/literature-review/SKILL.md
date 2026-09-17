@@ -1,17 +1,8 @@
 ---
 name: literature-review
 description: >-
-  Survey a research field honestly and efficiently — its key results, where it is heading, and the closest
-  prior art to your problem — with every citation verified against the real source. Use when someone wants to
-  understand a field or find what's been done, with phrasings like "review the literature on X", "what's the
-  state of the field", "where is X heading", "what's been done on Y", "find the closest prior work", "catch me
-  up on Z", "has anyone tried ...". Self-contained (does not require any other research skill): it scopes the
-  question with the user, searches broadly (arXiv-first, token-efficient), reads for the field's trajectory,
-  the closest prior art, and the methods that TRANSFER to your problem, organizes an established/contested/open
-  brief with a priority-ranked reading list, and — critically — verifies every reference with cite-check so no
-  fabricated or misattributed citation survives. In a campaign it writes/refreshes LITERATURE.md and seeds
-  the project overview (PROJECT.md). Distinct from cite-check (verifies references you already have), report (writes up finished
-  work), and assess-idea (judges whether an idea is worth doing — this gathers the field it reasons over).
+  Survey a field: key results, trajectory, closest prior art, a ranked reading list, every reference
+  verified.
 ---
 
 # literature-review — understand the field, honestly and efficiently

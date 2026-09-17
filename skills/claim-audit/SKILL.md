@@ -1,18 +1,7 @@
 ---
 name: claim-audit
 description: >-
-  Audit the claims a campaign is about to export — the headline, the promoted configs, the kills, the
-  negatives, the discoveries, the assumptions everything inherited — at campaign scale, with the seven
-  checks no per-unit verifier can run: inherited assumptions, selection bias, ledger reconciliation,
-  narrative against evidence, search adequacy, physical plausibility against the literature, and a
-  stranger's reproduction of the headline. Use it at the end of a campaign (final-report composes it and
-  waits for it while any exported claim lacks an independent label), before a fork or a pivot, before a
-  number leaves the campaign, or whenever the user asks "is this campaign's result real?". Two levels:
-  `default` (a reconciliation script plus one fresh-context agent) and `panel` (four roles partitioned by
-  what each may see, plus a blinded adjudicator). Claim-directed, never unit-directed; it may downgrade
-  the headline's label and never edits the current-best. NOT for one result mid-campaign (verify), NOT
-  for the loop's health (campaign-status), NOT for harvesting kit lessons (that is the maintainers'
-  campaign-review).
+  Campaign-scale audit of exported claims, at campaign end.
 ---
 
 # claim-audit — the capstone: what no per-unit verifier can see
@@ -27,7 +16,8 @@ which asks for `panel`) and never a substitute for the setup audit that should h
 was frozen.
 
 You are reporting on completed work. Launch nothing new except the checks below; change no result, no
-config, no ledger row. The audit's only writes are its artifact and one JOURNAL line.
+config, no ledger row. The audit's only writes are its artifact and, per settled claim, one
+`--record <exp> --finding` line (the ledger's `finding` cell).
 
 ## Claim-directed, not unit-directed
 
@@ -35,8 +25,8 @@ Do not "run verify on everything". Enumerate the claims the campaign is about to
 and spend top-down within the budget:
 
 1. **Enumerate** from the record, never from memory: the current-best (`configs/RECOMMENDED.json`), every
-   scoreboard row marked `NEW BEST` or `CONFIRMED`, every `results/JOURNAL.md` §Findings entry (kills
-   with their tier, negatives, discoveries), the project overview's updates from this campaign, and the
+   scoreboard row marked `NEW BEST` or `CONFIRMED`, every ledger `finding` cell (kills with their tier,
+   negatives, discoveries), the project overview's updates from this campaign, and the
    assumptions every unit inherited (`campaign.md` §The ONE metric bounds, the baseline, the floor, the
    frozen lists). Read each claim's current label from its `results/checks_<NN>.json` (`label`,
    `verification`, `self_check`, `changes`).
@@ -103,7 +93,7 @@ context mostly agree with each other.
   Say the limit plainly: a panel can cost as much as a short campaign, and same-model members share
   blind spots; the partition and the cross-model Skeptic are the mitigations, more seats are not.
 
-## The artifact, the labels, and the one JOURNAL line
+## The artifact, the labels, and the finding cell
 
 Write `results/verdicts/audit_<NN>.json` (zero-padded sequence, append-only; the promotion guard's
 per-experiment lookup never matches it):
@@ -124,13 +114,15 @@ per-experiment lookup never matches it):
 A claim's label may go UP (an `unverified` headline the stranger reproduced and the Skeptic failed to
 break gets `CONFIRMED/audit`) or DOWN (a `CONFIRMED/review` headline that did not reproduce becomes
 `REFUTED/audit`). A label is never softened: a REFUTED stays REFUTED. The audit never edits
-`configs/RECOMMENDED.json` or a scoreboard row — the label lives in the artifact, and `final-report`
-prints it. Append one line to `results/JOURNAL.md` §Findings:
-`Claim audit (<level>): <n> claims, <k> downgraded, <m> unaudited — results/verdicts/audit_<NN>.json`.
+`configs/RECOMMENDED.json` or a scoreboard row — the label lives in the artifact, and `report` (campaign mode)
+prints it. Record each settled claim on its own ledger row:
+`python scripts/run_campaign.py --record <exp> --finding "Claim audit (<level>): <label_after> —
+results/verdicts/audit_<NN>.json"` (add `--replace` where the row already carries a finding; the
+earlier text stays in the logbook and `results/journal_archive/`).
 
 ## Composition
 
-- **`final-report`** runs this before it builds its evidence ledger, and refuses a shareable report
+- **`report`, in campaign mode,** runs this before it builds its evidence ledger, and refuses a shareable report
   while any exported claim's label is non-independent (`unverified`, `self-checked`) and no audit covers
   it; an internal draft may proceed with the labels printed. The report's verification ledger prints
   `label_after` per claim and says "downgraded by audit" where true.
@@ -145,5 +137,5 @@ prints it. Append one line to `results/JOURNAL.md` §Findings:
 - [ ] The seven checks each carry a status and evidence paths; the stranger test ran on the headline.
 - [ ] The budget and what it bought are stated; nothing ran beyond it without saying so.
 - [ ] Labels moved only on evidence, never softened; `RECOMMENDED.json` and the scoreboard untouched.
-- [ ] The artifact is `results/verdicts/audit_<NN>.json` and the JOURNAL carries its one line.
+- [ ] The artifact is `results/verdicts/audit_<NN>.json` and each settled claim carries a `finding` cell citing it.
 - [ ] Under `panel`, each member saw only its partition, and any disagreement went to the blinded adjudicator.

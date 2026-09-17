@@ -1,15 +1,8 @@
 ---
 name: cite-check
 description: >-
-  Verify that every citation is real and correctly used before it goes into a document — the anti-
-  hallucination gate for references. Use when finalizing a report/paper bibliography, when asked to "check
-  these references / citations", when you've drafted citations an LLM might have invented, or whenever a
-  claim leans on a source. For each reference it confirms, against the actual source, the exact title, the
-  full author list, year, venue, and identifier (DOI / arXiv id) — and that the paper actually supports the
-  claim it's cited for. A reference that 404s, redirects, or points to a different paper is not a citation;
-  one that can't be confirmed is flagged, never invented or approximated. Prefers the arXiv version and
-  reads token-efficiently; parallelizes across subagents for a large bibliography. Composed by report and
-  final-report; also runs standalone. Distinct from verify (checks results, not references).
+  Confirm every citation against the real source and that it supports the claim; unconfirmable ones
+  flagged, never invented.
 ---
 
 # cite-check — real papers only, used for what they actually say
@@ -65,7 +58,7 @@ Verification parallelizes. Fan the references out across subagents (Agent tool),
 assemble the verdicts centrally. The existence and metadata checks are mechanical: run the fan-out
 sub-agents on a lighter model, and reserve the stronger model for judging whether a source supports the
 claim it is cited for. Keep the final compiled bibliography and its `.bib` in one place so keys stay
-consistent. `final-report` uses this fan-out for a campaign capstone's reference list.
+consistent. `report` uses this fan-out for a campaign capstone's reference list.
 
 ## Output
 Return a short per-reference ledger: key · CONFIRMED / PROVISIONAL / MISMATCH / UNCONFIRMABLE · read-depth
@@ -75,7 +68,7 @@ only where the claim it backs is softened to match. Call out flagged references 
 unverified enters the document silently.
 
 ## Composition
-- `report` and `final-report` compose this as the citations half of their report-time verification
+- `report` composes this as the citations half of their report-time verification
   (Standard 3). It is the `{{cite-check}}` step before a document is declared done.
 - Runs standalone: "are these references real?" on any bibliography or reference list.
 - Pairs with `verify`, which checks results. Together they establish that the science is right and the
