@@ -9,6 +9,258 @@ Dates are UTC. Each entry cites the run/finding that motivated it (the kit's own
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-27
+
+Everything since 0.11.1, shipped together because it changes how a campaign runs: the planner and its queue
+retired (the worker chooses its unit from the JOURNAL); the contract moved into the role files; setup
+completes the machinery and the baseline, not the direction; the brief trimmed to facts, structure and the
+record; the seams of the first field split (zero-evaluation units, non-comparand rows); campaign spawns
+isolated from auto-memory and MCP servers; the JOURNAL uncapped; the runner writing what workers
+hand-built (artifact digests, the save-set line, side-document entries); and one check per result - five
+verification presets (`none` · `minimal`, the default · `light` · `heavy` · `intensive`), the survivor
+check, the worker told its level. Existing campaigns: `docs/MIGRATING.md`, the sections marked
+kit ≥ v0.12.0, newest first. The entries below are the detail.
+
+### Changed — one check per result: five verification presets, `heavy`, the survivor check, no re-execution axis (`docs/reference/verification-presets.md`, `templates/campaign/scripts/run_campaign.py.tmpl`, `guard_promotion.py.tmpl`, `roles/*.md.tmpl`, the campaign `CLAUDE.md`/`campaign.md`, `docs/CORE.md`, `docs/PRINCIPLES.md`, `skills/verify`, `claim-audit`, `campaign-status`, `report`, `run-campaign`, `correctness-suite`, `new-campaign`; ADR-0031)
+
+The user's re-decision of ADR-0021's preset table, from the two Peng-96 block-versus-chain head-to-heads
+(Opus 5.5 medium 2026-09-26, Fable 5.1 high 2026-09-27, preset `minimal`) and the Fable 5.1 turn audit
+(PT-2): the worker was never told its preset (one arm launched five refuter sub-agents itself, $32 of
+$112); two of four refuted bests had been beaten by the very next unit; re-executing deterministic code
+re-derived the same bytes; nothing stopped one result being checked three times.
+- **Five presets**: `none` · `minimal` (the default) · `light` · `heavy` (was `moderate`) · `intensive`.
+  **One check per result**, the strongest its preset owes it, decided at record time
+  (`verification.owed`): `minimal` self-verifies a result outside its predicted range; `light` the same
+  for non-bests, and a new best gets a **peer check** by the next worker once the next unit has not
+  beaten it; `heavy` self-verifies every non-best, and a surviving best gets a driver-spawned verifier;
+  `intensive` a blinded verifier on every result. A best beaten before its check gets none of its own.
+- **Review vs re-execution is gone**: no `review` / `re_execution` rows, no eligibility rule, no verdict
+  `mode`; verdicts carry `"kind": "peer" | "verifier"`. Every check starts from the delta since the last
+  check of its kind, delivered by value.
+- **Labels**: `unverified` · `self-checked` · `self-verified` · `self-refuted` · `<VERDICT>/peer` ·
+  `<VERDICT>/verifier` · `<VERDICT>/audit`; old `/review` and `/re-execution` read as `/verifier`.
+- **The pointer follows the true best at once**, carrying `verification_label`; the guard enforces the
+  label, a refuted result never promotes, and the driver rolls the pointer back on a refutation.
+- **The claim audit** runs under every preset but `none` and re-checks the final best (the one exception
+  to "never twice"); the `panel` level, the different-model refuter and per-block batching are dropped.
+- **Workers never spawn verification agents**; the worker role has one section per preset and the brief
+  delivers only the campaign's.
+- `campaign.verification` is retired and refused at preflight; a `loop.json` naming `moderate` is refused
+  with "renamed to heavy". No migration machinery (no campaign ran the old presets for its result);
+  `MIGRATING.md` has the one step.
+
+### Changed — the runner writes what workers hand-built: the artifacts' shape, the save-set confirmation, the side-document entries (`templates/campaign/scripts/run_campaign.py.tmpl`, `roles/worker.md.tmpl`, `templates/project/PROJECT.md.tmpl`; ADR-0030)
+
+Three audits of the Peng-96 chain arm's six worker transcripts (the turn audit's TA-1, TA-6, TA-7, TA-9):
+~5 calls a unit printed the keys of artifacts no brief described, three in four of them an earlier unit's;
+one unit spent seven calls finding where a landmine or a discovery goes, and every side-document edit was
+a Bash string replace no hook sees; every post-record `ls` confirmed what the runner had already written.
+- **The artifact digest.** The worker's brief carries the shape of every file the last two units wrote
+  (keys and lengths, array shapes, columns, a script's docstring, a verdict's values), capped at 4 KB; the
+  card lists the unit's own; `--digest <exp>` prints any unit's whole.
+- **The save-set line.** `--record` ends with what the save-set holds, so nothing is listed to check it.
+- **Side documents through the record file.** `landmine` → a sourced row of campaign.md §Known landmines;
+  `discovery` → PROJECT.md §Updates from discoveries, only through the guard's own verdict and suite
+  checks. A gotcha goes in the JOURNAL's *Traps and tooling*. The worker contract states what a promotion
+  write must carry, as the guard checks it.
+- **Environment gotchas** gains Git Bash's two process ids; the worker's IMPLEMENT step no longer
+  hard-codes `scripts/experiment.py`.
+
+### Changed — the JOURNAL has no cap and is never clipped; the worker keeps it brief (`templates/campaign/scripts/run_campaign.py.tmpl`, `roles/worker.md.tmpl`, `results/JOURNAL.md.tmpl`, `skills/campaign-status`; TA-4)
+
+The collective-pulse turn audit (2026-09-21, TA-4): the worker enforced the "~120 lines" rule by hand
+against a driver clip it could not see - one unit spent eleven calls writing, counting lines, cutting and
+re-counting. In the one field arm with a JOURNAL series (Peng chain, six units) the file grew 63 → 123
+lines, pressed against the line cap while far under the 16 000-char clip. Niko (2026-09-25): no hard cap
+and no trimming; ask workers to keep it brief.
+- **The driver delivers the JOURNAL whole, never clipped** (`BRIEF_JOURNAL_CAP` removed): it is the
+  loop's only memory, and a clip could cut a live hypothesis or the ranked next steps.
+- **Its size is reported to the user, not the worker**: the per-spawn `brief[…]` feed line marks the
+  JOURNAL `(LARGE)` past `BRIEF_JOURNAL_WARN_CHARS` (24 000 chars, about twice the field arm's), and
+  preflight WARNs; nothing is cut, and the launch proceeds.
+- **Worker step 10 and the JOURNAL template**: "keep it brief, with no cap to count toward"; the history
+  is in the ledger, the logbook and `results/journal_archive/`. `campaign-status` step 3 checks the
+  JOURNAL is brief (folding what is settled when the driver flags it) rather than under a line count.
+
+### Changed — campaign spawns run without auto-memory and without MCP servers by default (`templates/campaign/scripts/run_campaign.py.tmpl`, `configs/loop.json.tmpl`, `templates/project/PROJECT.md.tmpl`; ADR-0029)
+
+The overhead probe of 2026-09-25 (`case-studies/spawn_overhead_probe_2026-09-25.md`) and the Peng-96 turn
+audit (TA-9): the chain arm's workers passed two notes to each other through the harness's per-directory
+auto-memory folder, a channel no campaign record holds; and the claude.ai connectors attached to one probe
+spawn in three, moving its context ~8k tokens. Niko (2026-09-25): both off by default, with a way to change it.
+- **`driver.auto_memory`** (`off` default | `on`; env `AUTORESEARCH_AUTO_MEMORY`): the driver's one
+  `--settings` now also carries `"autoMemoryEnabled": false`, next to the name-only skill listing.
+- **`driver.mcp_servers`** (`none` default | `inherit` | a campaign-relative MCP config path; env
+  `AUTORESEARCH_MCP_SERVERS`): `none` passes `--strict-mcp-config`, so a spawn loads no MCP server; a path
+  loads exactly the servers in that file; preflight refuses a path that is not a file and an
+  `auto_memory` value other than `off` | `on`.
+- **`PROJECT.md` *Environment gotchas*** gains the one lesson that lived only in auto-memory: write a file
+  over ~100 lines, or with mixed quoting, with the file-writing tool, not a bash heredoc.
+Both apply only to the default claude CLI; interactive sessions in the campaign folder are untouched.
+`MIGRATING.md` has the procedure.
+
+### Changed — the brief trimmed to the problem, the structure and the record; steering carries its source (`templates/campaign/{campaign.md,CLAUDE.md,roles/worker.md}.tmpl`, `templates/PLACEHOLDERS.md`, `new-campaign`, `validate_campaign.py`; ADR-0026)
+
+Niko (2026-09-20), from the toy runs and photophysics10: a setup agent's guess written into the contract
+- a landmine nobody hit, a path "unlikely to work" - binds every worker after it, and has steered
+campaigns away from paths nobody had tested; and the volume of instruction distracts from the mission,
+when the agents' own strategies are reasonable. The scaffolding has three jobs - the problem and all its
+facts, how to work inside the campaign, a consistent record - and everything that was none of them went:
+- **`roles/worker.md`**: the strategy sections (Decision-making guidelines, Getting unstuck, Before
+  writing off or accepting, Rigor, After the run, When something looks unphysical) are gone; Metric
+  integrity is one paragraph (§The FROZEN metric); the loop keeps its twelve steps and every mechanical
+  rule (the reads, the iteration contract, the record command, long solves, the save-set). Template
+  22.2 → 11.9 KB; the rendered toy role 22.8 → 11.7 KB. The reasoning behind the cut sections stays
+  where it was mastered: `CORE.md`, `PRINCIPLES.md`, `docs/reference/pivoting.md`, `verify` §5c.
+- **`campaign.md`**: §Operating stance, the plateau / orthogonal-lever and tie-break advice, the
+  doctrine pointers and the epoch prose are gone; §Bound expectations folded into §The ONE metric (the
+  physical bounds are facts; the a-priori range carries its basis, and the worker's own prediction is
+  the control). The file now says what it is not: a strategy. **Every steering line carries its
+  source; the landmine table has a `source` column and `validate_campaign.py` refuses a row without
+  one**; what the setup can only infer goes to the opening JOURNAL marked `[setup inference]`, where the
+  worker who tests it can drop it (the JOURNAL template names the marker).
+- **`CLAUDE.md`**: the five gates are each the rule plus the mechanism that enforces it; the integrity
+  core and the reflexes are unchanged (frozen). 9.8 → 7.8 KB.
+- **`PLACEHOLDERS.md`**: twelve slots that asked the setup agent to predict how the campaign would fail
+  are gone (`STRUCTURAL_LEVERS`, `STUCK_N`, `REANCHOR_DOCS`, `OVERFIT_MODE`, `CHEAP_SUBGROUP`,
+  `DECISION_EXAMPLES`, `MODEL_NOUNS`, `TIEBREAK_COSTS`, `LEVER_CATEGORIES`, `UNITS_EXAMPLE_LINE`,
+  `SYSTEMATIC_AXIS_NOTE`, `UNIT`); the steering-provenance rule is in §Filling guidance.
+- **`new-campaign`**: the spec (Step 2) sources every steering statement it proposes; Step 3 fills the
+  source column and routes inferences to the JOURNAL; Step 3.7 gains the steering audit.
+The toy brief per spawn: 40.1 → 30.1 KB, plus the auto-loaded `CLAUDE.md` 9.9 → 7.9 KB. Tier 0 pins the
+cut sections out, the source column and the validator in.
+
+### Added — the seams the first field split lacked: the zero-evaluation unit, the payload at the seams, the non-comparand row (`templates/campaign/scripts/{run_campaign,experiment}.py.tmpl`; RS-5)
+
+A field worker on photophysics10 spent 72 turns and $10 finding that its `mode='ledger'` units - a
+decision-record entry as the deliverable, no score - could no longer be recorded: the campaign-side
+halves of the seam had migrated into `experiment.py` at the split, the kit-owned call sites had not
+(`case-studies/new_scaffold_measurement_2026-09/armB_ESCALATE.md`). The kit now has them, generally
+(ADR-0025):
+- **`ZERO_EVALUATION_MODES`** (an optional constant in `experiment.py`): a config `mode` in it records
+  NO score. The prediction gate asks for `{"predicted": {"deliverable": "..."}}` and refuses a numeric
+  range beside it; the primary metric is **null** in the result JSON and **blank** on the ledger, never
+  0; `hard_bounds` / `noise_floor` report `unavailable`; the `prediction` check judges the deliverable
+  the unit named; the logbook entry and the card say so; the row is never a comparand.
+  `run_experiment` still runs (its payload is the record; the campaign gives the mode its own record
+  gate there) and `save_figure` still owes a figure.
+- **The payload reaches the seams**: `campaign_scoreboard_fields(cfg, diags, score, prediction=None)`
+  and `campaign_checks(..., prediction=None)`, through a signature-aware call so a three-argument
+  definition keeps working. New **`campaign_result_fields(cfg, prediction, diags, score)`**: the
+  campaign's own keys of `results/result_<NN>.json`, the evidence behind the number (the pre-split
+  runner merged the payload itself; the card's comparisons read these).
+- **The non-comparand row**: a payload `comparand: false` (a measured noise floor, a calibration) is
+  written into the result JSON and `_prior_results` skips it, as it skips every zero-evaluation row;
+  **`campaign_comparand(result) -> bool`** is the campaign's rule for rows recorded before the flag.
+  Every result JSON now carries `is_evaluation`, `comparand`, `runner_produced`.
+- **The ledger cell is matched case-insensitively**: the runner keys the primary metric by the scorer's
+  spelling and photophysics10's header spells it `wssr_paper`; the exact match wrote the PRIMARY column
+  blank on every row (the campaign's own `ledger_writer` check caught it).
+Tier 1 drives all of it on the toy; the field arm's blocked unit (exp000i) records end to end.
+
+### Fixed — the measurement pass after the queue's retirement (`templates/campaign/scripts/run_campaign.py.tmpl`)
+
+Three findings from running the new loop for real (`case-studies/new_scaffold_measurement_2026-09/`):
+(1) the driver's state file `results/loop_state.json` collided with the Stop hook's file of the same
+name (the hook has used it since 0.10); the driver's counters now live in **`results/driver_state.json`**
+(seeded once from a retired `queue.json`, as before; a campaign that ran the queueless driver for a
+day should delete the driver's keys from the hook's file by hand - only `accepted_units`, `accepted`,
+`pending_verification`, `consecutive_operational_failures`, `last_accept_utc`). (2) A worker that met
+its exit contract without a unit - a new JOURNAL, or `ESCALATE.md` - is **not retried**; the ESCALATE
+halts at the loop top (the retry cost a second $10 spawn against the same wall). (3) A spawn whose
+tool calls the permission mode DENIED (the CLI's `result` event lists them; CLI 2.1.267 denies a
+headless `auto` spawn its Write and Bash) **halts the loop naming the fix** (`driver.permission_mode`
+= `bypassPermissions`, or `AUTORESEARCH_PERMISSION_MODE`) instead of counting operational failures.
+The default mode stays `auto` pending Niko's decision.
+
+### Added — the spawn ledger carries the CLI's own accounting (`templates/campaign/scripts/run_campaign.py.tmpl`)
+
+`results/diagnostics/spawns.tsv` gains `cost_usd`, `in_tokens`, `cache_read`, `cache_create`,
+`out_tokens` (from the `result` event the CLI streams) and `ctx0_tokens` (the first assistant message's
+usage: the context the spawn started with, which every later turn re-reads). The feed's RESULT line
+names the cost. An older ledger's header is brought up to date; its earlier rows keep their ten cells.
+The deferred "usage in spawns.tsv" item, needed so a campaign's dollars can be read from its own record
+(the measurement pass of 2026-09-18).
+
+### Changed — setup completes the machinery and the baseline, not the direction (ADR-0024 §3; ADR-0014 amended; the audit's decisions 3, 7) (`skills/new-campaign/SKILL.md` Step 3.5, `templates/campaign/campaign.md.tmpl`, `roles/worker.md.tmpl`)
+
+The setup session now **runs experiment 000 before handoff** (Step 3.5 item 6): the floor is on the
+ledger, recorded, and in `campaign.md` §Decision record ED-000 (methods, command, the criteria met, the
+floor) when the first worker is spawned, so no worker spends its unit on plumbing. §Baseline gate leaves
+the contract (its placeholders live in the ED-000 entry) and the worker's contract loses its
+"experiment 000 once, before the loop" block. **§Loosely-held expectations is removed from
+`campaign.md`**: on photophysics10 a setup-written "first-instinct answer" was cited as settled priority
+for ~20 units; the hypotheses a campaign tests live in the opening JOURNAL's §Live hypotheses and §What
+to try next and why, ranked and attributed to the user, phrased as questions and never as a candidate
+named as the expected answer; a later JOURNAL rewrite re-states them from evidence, never by quoting the
+opening sentence; an idea leaves the list when its unit is recorded. `campaign-status` re-checks the
+hypotheses in the JOURNAL, not a contract section, and flags one that still reads like the opening
+wording after many units. ADR-0014 is amended to say so; OX-17 (validate every seeded config) is
+subsumed - there are no seeded configs.
+
+### Changed — the contract lives in the role file (ADR-0024 §1, §5; the scaffolding audit's decisions 1, 2, 4, 6) (`templates/campaign/roles/worker.md.tmpl` rewritten, `roles/REFERENCE.md.tmpl` · `roles/verifier.md.tmpl` · `roles/capstone.md.tmpl` new, `campaign.md.tmpl`, `CLAUDE.md.tmpl`, `scripts/run_campaign.py.tmpl`)
+
+The runner's prompt strings are gone: every instruction a spawned agent acts on lives in
+`roles/<role>.md`, frozen and provenance-stamped with the campaign, readable and editable by the
+researcher. The runner keeps one opening line per role plus, for the verifier and the capstone, a
+`== VALUES (this spawn) ==` block (the experiments, hypothesis, verification mode, change manifest, a
+retry note; the reason and the level). The brief delivers the role file FIRST, then the standing
+constraints, then (worker only) `campaign.md`, the JOURNAL, the config template and the ledger
+projection. `scripts/experiment.py` is no longer delivered: most units are config-only, and the
+contract's read list says to open the code by line range or grep, never whole. Preflight WARNs when a
+role file passes 24 KB (a truncated contract would be worse than a long one, so it is never clipped);
+the truncation marker names what to do per document; `_tail_rows` and the per-section cap are gone.
+
+`roles/worker.md` is the contract, one copy of everything (47.7 → 22.5 KB in the template; on the toy
+the worker brief went 77 → 43 KB): orientation and the closed read list, the iteration contract as the
+four things the driver checks, the loop (step 1 CHOOSE & PREDICT; step 9 the record file's exact shape
+and the one command; step 10 the JOURNAL written anew; step 12 one line), the runner CLI, long solves and
+the exit (the stay-alive and PID rules once), user notes, and the judgement sections condensed to their
+load-bearing sentences. `roles/REFERENCE.md` (never delivered; opened by section when the contract names
+it) holds the full metric-epoch procedure, the verification presets/depth/model-capability/dispute rules,
+the reproducibility bundle, quicker-check artifacts and additional visualization; the retention plan's
+reasoning moves to `campaign.md` §Decision record (a template entry) with its number in `loop.json`.
+`campaign.md.tmpl` (25.7 → 18.2 KB): the doctrine restatements become pointers (operating stance, the
+decision/promotion paragraphs, the verification preamble, the epoch paragraph, the landmines preamble,
+the frozen prefaces), the scoreboard section is its column list, §Caps is §Targets ("max — a target,
+nothing checks it"; the disk floor is the enforced number, in `loop.json`), the levers table gains the
+columns workers grep the code for (config key, meaning, range, default, where in code), the
+simulation-gap section is optional. `CLAUDE.md.tmpl` (14.3 → 9.8 KB): the preamble is one line and
+§Where things live keeps the six rows that gate an outside-brief read; the integrity core, the reflexes
+and the HARD GATES are byte-identical. Existing campaigns: the upgrade creates the three new role files
+from the templates (placeholders it cannot recover are named in the log) and merges the rest
+(`docs/MIGRATING.md`).
+
+### Changed — the planner and its queue retired (ADR-0024): the worker chooses its own unit from the JOURNAL (`templates/campaign/roles/worker.md.tmpl`, `roles/planner.md.tmpl` removed, `templates/campaign/scripts/run_campaign.py.tmpl`, `configs/loop.json.tmpl`, `CLAUDE.md.tmpl`, `README.md.tmpl`, `campaign.md.tmpl`, `LITERATURE.md.tmpl`, `templates/project/PROJECT.md.tmpl`, `templates/PLACEHOLDERS.md`, `skills/new-campaign`, `skills/run-campaign`, `skills/campaign-status`, `skills/handoff`, `skills/verify`, `skills/frame-problem`, `skills/assumption-audit`, `scripts/audits/`, `GETTING_STARTED.md`, `docs/DOCTRINE_INDEX.md`, `docs/PRINCIPLES.md`, `docs/MIGRATING.md`)
+
+Niko's tests found the planner's queue actively negative: agents filled it with trivial variations of the
+last unit instead of asking what the problem needs now. The scaffolding audit
+(`synthesis/SCAFFOLDING_AUDIT_2026-09.md` §8, decisions 6–7) traced the same failure on photophysics10,
+where a setup-written "first instinct" sat at the head of the queue and four planner and worker passes
+cited it as settled priority for ~20 units while the campaign's actual question never ran. The driver now
+spawns a fresh worker per unit with **no unit assigned**: the worker chooses the ONE experiment the
+campaign needs now from the JOURNAL's `**NEXT:**` line and *What to try next and why*, the ledger's last
+rows and the previous card, names it `exp<NN>_<slug>`, writes its config from the delivered template,
+predicts, runs, records, writes the JOURNAL anew, and exits. One unit per spawn; step 12 of the loop is
+now one line. A worker that judges the campaign's question answered writes `**NEXT:** STOP - <why>`, and
+the driver runs the claim audit and halts — a stopping decision for the user, with its reason.
+
+Gone: `results/queue.json`, `results/queue_drop/`, `--record --propose` / `--decline`, `roles/planner.md`
+(archived), the planner cadence, the plateau knobs, `queue.max_outstanding_units`, and unit blocks. The
+driver's counters live in `results/loop_state.json` (driver-only). A follow-up idea is not a record field:
+it goes under the JOURNAL's *What to try next and why*, and leaves that list when its unit is recorded —
+the ledger row is its record. A REFUTED or INCONCLUSIVE verdict names its follow-up in the verdict
+artifact's `follow_up` field, which the driver relays to the next worker as `results/inbox/verifier_<exp>.md`.
+`loop.json` gains a `verifier` block (model/effort for the verifier and the claim-audit capstone;
+`{{VERIFIER_MODEL}}` · `{{VERIFIER_CLAUDE_EFFORT}}` · `{{VERIFIER_CODEX_MODEL}}` ·
+`{{VERIFIER_CODEX_REASONING_EFFORT}}`) replacing the `PLANNER_*` placeholders; an older file's `planner`
+block is still honoured. Setup no longer seeds a queue: the user's to-try ideas go into the opening
+JOURNAL's *What to try next and why*, ranked and attributed, as questions rather than a candidate named
+as the expected answer. The planner's *Getting unstuck*, its refuse-to-declare-done rule and its
+reopen-shelved-directions rule moved into `roles/worker.md`, which now holds the STOP judgement; its
+literature-search rule moved into `LITERATURE.md`, now a human and setup reference that no spawn reads.
+Existing campaigns: `upgrade_campaign.py --retire-queue` (`docs/MIGRATING.md`, top section).
+
 ## [0.11.1] - 2026-09-16
 
 ### Changed — `final-report` merged into `report`: one document engine, the campaign material as a reference it reads in campaign mode (`skills/report/SKILL.md`, `skills/report/references/campaign-capstone.md`; `skills/final-report/` removed)

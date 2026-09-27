@@ -3,7 +3,7 @@
 FROZEN: the scoring math here is the campaign's single source of truth. Do NOT edit it to change a
 number. You change what FEEDS the metric (registration, params, preprocessing, decoder, design, …),
 never how it is computed. A metric found WRONG is revised as a declared metric epoch (campaign.md
-§The ONE metric; roles/worker.md §Metric epochs): a new metric_version with its entry in
+§The ONE metric; roles/REFERENCE.md §Metric epochs): a new metric_version with its entry in
 configs/loop.json campaign.metric_epochs, verified evidence, and the retained contenders re-scored.
 The runner binds this file's code to its epoch on the first experiment and refuses to run when the
 code changes under a version no epoch declares (comments and formatting do not count).

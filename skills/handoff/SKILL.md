@@ -49,8 +49,8 @@ converges. The handoff distills durable artifacts; it is not where they first ap
 
 4. **Roadmap / NEXT — prioritized, goal-linked.** The next steps in priority order, each tied to how it
    serves the goal, with enough specificity to act on. "Improve the model" is not actionable; "test the
-   canting term on the coercive-band subset, experiment queue in JOURNAL NEXT" is. Keep it in sync with
-   `results/queue.json` and the JOURNAL NEXT pointer.
+   canting term on the coercive-band subset, next in the JOURNAL" is. Keep it in sync with the
+   JOURNAL's **NEXT:** line and §What to try next and why — in a campaign, the only forward-looking record.
 
 ## Resume from the lineage, check whole-tree portability
 The campaign sits in a project (`PROJECT.md` above it), so the handoff is project-aware. The lineage —
@@ -81,8 +81,8 @@ prevents re-litigating settled decisions. The newest handoff is the live one; th
 direction was abandoned. `record-decision` holds the durable why, the handoff holds the moment.
 
 ## Composition
-- `campaign.md` §Mission + `results/queue.json` — source of the vision/goal and the task roadmap. The
-  handoff references them rather than duplicating the full queue.
+- `campaign.md` §Mission + `results/JOURNAL.md` — source of the vision/goal and the task roadmap. The
+  handoff references them rather than duplicating what to try next.
 - `PROJECT.md` — the investigation-wide goal (§Mission) and the cross-campaign index a resumer reads
   first (§Lineage; old layout: a separate `LINEAGE.md`). The handoff points at the active campaign's
   row rather than duplicating the index.

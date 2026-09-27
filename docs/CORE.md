@@ -134,12 +134,14 @@ Register may tailor to the reader; facts and caveats never do. Before publishing
 values rather than transcribing them, confirm internal consistency, and confirm every citation resolves
 (`/physkit:cite-check`). A newly derived number is reported with its uncertainty. Until the systematics
 have been investigated, the value and its error bar are PROVISIONAL: say so. Every exported claim carries
-an honest verification label; `unverified` is a legitimate label, a softened one is not. The label is the
-verdict when one was sought — CONFIRMED / PROVISIONAL / QUESTIONABLE ASSUMPTION (shaky premise) / REFUTED /
-INCONCLUSIVE (gather more) — with the depth that produced it (review or re-execution), and `unverified`
-when the campaign's verification preset sought none. Promotion follows the label: where the preset checks
-promotions, only CONFIRMED graduates; where it does not, the row promotes as `unverified` and that word
-travels with the number into every report. A caveated or unverified result is a working result reported
+an honest verification label; `unverified` is a legitimate label, a softened one is not. The label says
+what actually ran: `unverified`, or the producing context's own `self-checked` / `self-verified` (never
+independent), or a verdict — CONFIRMED / PROVISIONAL / QUESTIONABLE ASSUMPTION (shaky premise) / REFUTED /
+INCONCLUSIVE (gather more) — with the independent check that gave it (`/peer`, `/verifier`, `/audit`).
+The campaign's verification preset decides which one check each result gets
+(`docs/reference/verification-presets.md`). Promotion follows the label: the best promotes at once
+carrying it, a check upgrades it, a refuted result never promotes, and the label travels with the number
+into every report. A caveated or unverified result is a working result reported
 with its label inline, never a clean "best," and a headline number is inseparable from the config that
 produced it. Label every number
 with its metric path; an unqualified metric cannot drive a promotion or a comparison. A quarantine is

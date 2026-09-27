@@ -36,7 +36,7 @@ from pathlib import Path
 # worst role to silently skip. This is the failure class the audits exist to catch, so the
 # audits do not get to commit it. `KNOWN_ROLES` is only a probe fallback; the source scan is
 # what generalizes to a role nobody here has heard of.
-KNOWN_ROLES = ("worker", "planner", "verifier", "critic", "refuter", "analyst")
+KNOWN_ROLES = ("worker", "verifier", "capstone", "critic", "refuter", "analyst")
 _SHOW_PROMPT_CHOICES = re.compile(r"--show-prompt.*?choices=\(([^)]*)\)", re.S)
 
 # Files the prompts name. Matched literally in the spawn text, so a renamed file drops out of

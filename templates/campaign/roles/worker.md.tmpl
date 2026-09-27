@@ -1,548 +1,213 @@
 # Worker role — {{CAMPAIGN_TITLE}}
 
-The per-experiment procedure for the agent that executes one unit and exits: the iteration contract, the
-loop steps, how to judge the result you got, and what must be on disk before you finish. The planner
-never reads this file.
+Your contract for ONE unit: what you may read, the loop you execute, and what must be on disk before
+you exit. `CLAUDE.md` auto-loads (the integrity core, the hard gates) and the driver compiles
+`campaign.md` into your brief; neither is restated here. How to attack the problem is yours: the
+campaign's facts are in the brief, the direction is in the JOURNAL, and nothing in this file tells you
+what to think of either.
 
-The shared contract is not repeated here. The campaign definition (metric, levers, caps, promotion
-rules) is `campaign.md`; the hard gates are `CLAUDE.md`. Both reach you every cycle: `CLAUDE.md`
-auto-loads, and the driver compiles `campaign.md` into your prompt.
+## Orientation — the brief first, and the only reads outside it
+Orient from the brief, never from the tree. It carries this file, `campaign.md`, the standing
+constraints, the whole JOURNAL, the config template, the ledger's last rows and the SHAPE of every file
+the last two units wrote (keys, lengths, array shapes, columns); re-reading any of them costs the turn.
+The reads a unit makes outside the brief, and the only ones:
+- The result **CARD** the runner prints at the end of your run (`--card <exp>` prints it again): the
+  comparison, the checks, what changed. Start your analysis there.
+- `results/checks_<NN>.json` for YOUR unit, when a card line is not enough: a `fail` is yours to
+  explain; an `unavailable` names in `needs` what would make that check real. Neither is a passed check.
+- A file the digest names, for the values you need — never to learn its shape (`--digest <exp>` gives
+  an older unit's).
+- Your unit's figures, each once, for the analysis.
+- `../../PROJECT.md` below §Standing constraints, when a result needs physics the brief lacks.
+- `--help` for a flag; `--show <exp>` for one old logbook entry.
+- **Your code** — `scripts/experiment.py` (the hooks and your helpers) and the engine it calls, opened
+  by line range or by grep, never whole. `scripts/run_campaign.py` is the kit's machinery, not yours to
+  read or edit; nor is the scorer's — `campaign.md` §The ONE metric is the metric's specification.
+- `roles/REFERENCE.md`, one section, when this contract names it.
 
-## The iteration contract — what this unit must persist for the next one
-Under `--supervise`, each iteration runs in a fresh agent context, and the ledger is the loop's only
-memory. Work you did but did not record does not exist for the next iteration. The driver enforces its
-hard core structurally: a unit that leaves it incomplete is retried, then shelved with its failure
-recorded as `kind: "operational"` in `queue.json`, while the loop continues. Only several such failures
-in a row, or an integrity condition, halts the loop. Before an iteration ends, it must have persisted:
+Never open `results/logbook.md` or `results/scoreboard.tsv`, to read or to write: the runner writes
+both, and the record you owe goes through `--record`.
 
-| What | Where | Checked by |
-|---|---|---|
-| The save-set: result JSON + figure + snapshot | `results/` (the runner's record gate) | driver + runner |
-| Every failed mechanical check explained, not dismissed. The runner writes them; you answer them | `results/checks_<NN>.json` → the logbook Analysis slot | runner (writes) + `campaign-status` (audits) |
-| A completed logbook entry — the two slots you owe, Analysis (one paragraph; every failed check answered by name) and NEXT (one line), placed through `--record`; the runner writes the rest, and a blank Analysis is not saved | `results/logbook.md` (via `--record`) | driver (structural: the entry and a non-blank Analysis) + `campaign-status` (content) |
-| The JOURNAL — the campaign's working memory — brought up to date, with any landmine, anomaly, or cross-experiment observation written down; the next iteration reads only what is on disk, and a unit that leaves the file untouched is not saved | `results/JOURNAL.md` | driver (touched) + `campaign-status` (content) |
-| Your unit's outcome recorded: if you DECLINE it, or PROPOSE follow-up units, `--record <exp> --decline "<why>"` / `--propose <file>` (the runner drops the JSON in `results/queue_drop/`; the driver merges it and removes/updates the queue — you never edit `queue.json`) | `results/queue_drop/` (via `--record`) | driver |
-| A declination or ESCALATE, if either happened, with reasons | `results/queue_drop/` (decline) / `results/ESCALATE.md` | driver |
-
-The narrative-quality half of the contract is `campaign-status`'s audit, not the driver's: whether each
-slot is filled well, and whether a landmine is actionable. The driver checks structure; humans and
-checkpoints check substance.
+## The iteration contract — what must be on disk before you exit
+Each unit runs in a fresh context and the record is the loop's only memory: work you do not record did
+not happen. Four things are checked structurally, and a unit missing one is retried, then counted an
+operational failure: `results/result_<NN>.json` with the run's figure · the snapshot
+`results/snapshots/<label>/` · the logbook entry with a non-blank Analysis, through `--record` ·
+`results/JOURNAL.md` written anew.
 
 ## The Experiment Loop
-```
-Experiment 000 (ONCE, before the loop): BASELINE GATE
-   {{BASELINE_COMMAND}}
-   -> establishes {{PRIMARY_METRIC}} ≈ {{BASELINE_VALUE}} (the floor) and validates the
-      {{VALIDATION_CHAIN}} chain end-to-end. The runner writes its ledger row; `--record` it and
-      bring the JOURNAL up to date like any unit.
-     (`campaign.md` §Baseline gate)
+1. **CHOOSE & PREDICT** — there is no queue: pick the ONE experiment the campaign needs now from the
+   JOURNAL's `**NEXT:**` line and *What to try next and why*, the ledger's last rows and the previous
+   unit's card — usually NEXT, or a better idea you can justify in one line. The judgement that the
+   campaign is done is yours too (step 10). Name it `exp<NN>_<slug>` with the next free id and pick the
+   change it makes (`campaign.md` §The levers). Before running, write `predictions/<exp_name>.json` in
+   the shape this campaign's `prediction_mode` requires, with a ONE-SENTENCE rationale: the number and
+   the one basis it rests on. The prediction written first is what makes the comparison a test.
+2. **IMPLEMENT** — {{IMPLEMENT_VERB}}, in the campaign's own code (never the runner); a new config
+   `configs/exp<NN>_<slug>.json` from the CONFIG TEMPLATE in your brief, with the levers it moves listed
+   in `_levers` — the runner cross-checks that list against the keys that changed (HARD GATE 2) — plus a
+   one-line `_comment` and `_hypothesis` (cite a borrowed idea's source there).
+3. **{{RUN_STEP_NAME}}** — {{RUN_COMMAND}} (the FROZEN metric; the targets in `campaign.md`).
+4. **EVALUATE** — {{PRIMARY_METRIC}} (PRIMARY) + {{SECONDARY_METRICS}} via {{EVAL_WRITER}}.
+5. **{{SANITY_STEP}}** — {{GUARDRAIL_CHECK}} (logged, not primary).
+6. **LOG** — the runner writes the ledger row and ends the run with the result card.
+7. **ANALYZE** — from the card, read once. The runner has already judged whether the change cleared this
+   campaign's resolution ({{SPREAD_NOUN}} spread, or the tolerance if deterministic) and whether the
+   result met the prediction; a result outside the range you predicted, or outside the metric's
+   plausible bounds, is settled before it is acted on. Every failed check is yours to explain, by name.
+   Then your own checks, directed at what this unit changed (the checks artifact's `changes` block names
+   every file and config key that moved): per change, expected and observed, and the checks you ran -
+   only checks the runner does not already run (answer its flags by name in the analysis). They are the
+   `self_check` key of the record file, written before any narrative; they raise the label to
+   `self-checked`. The card says which ONE check, if any, this result is owed (§Verification at your level).
+8. **ARTIFACTS** — save {{ARTIFACT_LIST}}, a cheap visualization, and the snapshot (§The save-set).
+9. **RECORD** — the runner already wrote this experiment's logbook entry and ledger row. Everything you
+   owe is ONE file and ONE command: write `results/record_<NN>.json` with the Write tool,
+   `{"self_check": {"ran": ["name=pass|fail|skip:detail", ...], "changes": ["what=>expected=>observed", ...], "estimate": X, "note": "..."}, "self_verify": {"ran": ["name=pass|fail|skip:detail", ...], "outcome": "holds|refuted|inconclusive", "note": "..."}, "analysis": "<one paragraph: every failed check answered by name, then what you judge worth recording>", "next": "<one line>", "ledger_note": "<at most 200 chars the numbers do not show>", "finding": "<one line citing results/verdicts/<id>.json, only when a verdict settled something>", "landmine": {"trigger": "...", "landmine": "...", "do_instead": "..."}, "discovery": {"title": "...", "text": "<the effect, its equations, references>", "verdict": "results/verdicts/<id>.json"}}`
+   — every key optional but `self_verify`, which is there exactly when the card says one is owed — then
+   `python scripts/run_campaign.py --record <exp> --from-file
+   results/record_<NN>.json` (the exact filename is on the card); validated and idempotent, a re-run
+   replaces; a refusal lists every problem at once, so fix them together and re-run once. Its output is the
+   confirmation and lists the save-set; do not re-read or list anything to check the write. Side
+   documents go through the same file, never by hand: a `landmine` becomes a row of `campaign.md` §Known
+   landmines, sourced to this unit; a `discovery` that changes the physics is appended to
+   `../../PROJECT.md` §Updates from discoveries, only with a CONFIRMED verdict to cite. A gotcha goes in
+   the JOURNAL's *Traps and tooling*; PROJECT.md's gotcha lists are the user's.
+10. **JOURNAL** — write the new `results/JOURNAL.md` whole, with the Write tool, in one turn. The
+    previous one is in your brief and the driver removed the working file, so the Write needs no read.
+    Carry forward what your unit did not change; update NEXT, *Where we stand* (a settled fact cites its
+    ledger id or verdict), *Live hypotheses*, *What to try next and why* (ranked, with the reasoning —
+    the next worker chooses its unit from it), *Traps and tooling* (every gotcha you hit), *Open
+    questions*, *Anything else*.
+    Keep it brief, with no cap to count toward: every spawn reads it whole, and the history is in the
+    ledger, the logbook and `results/journal_archive/`. If the campaign's question is answered, or no
+    unit is worth running, write `**NEXT:** STOP - <why, one line>`: the driver runs the claim audit and
+    stops. A stop is a claim like any other — say what you tried in order to refute it.
+11. **CHECKPOINT** — if `exp_id % {{CHECKPOINT_EVERY}} == 0`, run `/physkit:campaign-status`: is the
+    campaign still pointed at the goal?
+12. **END** — your turn ends when the contract validates; you never start a second unit.
 
-WHILE not interrupted:
-  1. HYPOTHESIZE & PREDICT — Pick the change (campaign.md §The levers). Before
-                    running, write predictions/<exp_name>.json in the shape this campaign's
-                    prediction_mode requires, with a ONE-SENTENCE rationale: the number and the one
-                    basis it rests on (a unit, a bound, a prior exp id, a literature key). The
-                    prediction written first is what makes the comparison a test; the sentence is the
-                    control, not an essay.
-  2. IMPLEMENT    — {{IMPLEMENT_VERB}}, in scripts/experiment.py (the hooks and your helpers; never
-                    the runner); new config configs/exp<NN>_<slug>.json (copy _template.json).
-                    List the levers this config moves in its `_levers`; the runner cross-checks the
-                    list against the keys that actually changed (`CLAUDE.md` HARD GATE 2). One-line
-                    `_comment` and `_hypothesis`; nothing else is free text. `{{VERIFY_SKILL}}` grades
-                    what moving several cost you.
-  3. {{RUN_STEP_NAME}}  — {{RUN_COMMAND}}   (the FROZEN metric; obey the caps in campaign.md).
-  4. EVALUATE     — {{PRIMARY_METRIC}} (PRIMARY) + {{SECONDARY_METRICS}} via {{EVAL_WRITER}}.
-  5. {{SANITY_STEP}}    — {{GUARDRAIL_CHECK}} (logged, not primary).
-  6. LOG          — the runner writes the ledger row (results/scoreboard.tsv; schema in campaign.md)
-                    and ends the run with the result CARD: the primary metric and its delta vs the
-                    incumbent, the guardrail, expected vs found, every failed or unavailable check with
-                    its `needs`, what changed. Read it once (`--card <exp>` prints it again); never
-                    rebuild the comparison from the artifacts with one-liners, and never open the
-                    scoreboard or the logbook.
-  7. ANALYZE      — Start from the card: the runner has already judged whether the
-                    change beat this campaign's own resolution ({{SPREAD_NOUN}} spread, or the
-                    numerical tolerance if this campaign is deterministic) and whether the result met
-                    the prediction in whatever shape this campaign's prediction_mode requires
-                    (results/checks_<NN>.json holds the detail when a card line is not enough). Every
-                    failed check is yours to explain before moving on; a flag you did not answer is
-                    not a passed check. Then the judgement no code makes: did the guardrail hold, and
-                    is the effect statistical or systematic? Then RECORD your own checks, directed at
-                    what this unit changed (the artifact's `changes` block names every file and config
-                    key that moved): for each change, what you expected it to do and what you observed;
-                    the checks you ran (a recompute, a limiting case, a sum rule). Write them FIRST,
-                    before any narrative, with
-                    `python scripts/run_campaign.py --self-check <exp> --ran name=pass|fail|skip[:detail]
-                    ... --change "what=>expected effect=>observed" ... --note "<one line>"` - an
-                    artifact, never prose. It raises the result's label to `self-checked` (and the
-                    logbook's Verification line with it); only an independent verdict raises it further.
-                    The Analysis you write next may cite it instead of restating it.
-  8. ARTIFACTS    — every experiment: save {{ARTIFACT_LIST}}, a cheap visualization, and the
-                    reproducibility bundle (config + code snapshot) under results/snapshots/exp<NN>_<slug>/.
-                    Noteworthy results get additional visualizations. (§The save-set, below)
-  9. RECORD       — the runner already wrote this experiment's entry in results/logbook.md (facts,
-                    Expected vs found, Levers, a pending Verification line) and its ledger row (`what`,
-                    `expected_vs_found`). Everything you owe is ONE file and ONE command: write
-                    results/record_<NN>.json with the Write tool — `self_check` {ran, changes, estimate,
-                    note}, `analysis` (one paragraph: every failed check answered by name, then your
-                    judgement), `next` (one line), `ledger_note` (≤200 chars the numbers do not show,
-                    optional), `finding` (one line citing results/verdicts/<id>.json, only when a
-                    verdict settled something), `propose` / `decline` — then `python
-                    scripts/run_campaign.py --record <exp> --from-file results/record_<NN>.json`. The
-                    runner records the self-check, places the slots and the cells, drops the proposal;
-                    validated and idempotent, a re-run replaces. (The same things exist as flags;
-                    `--help` lists them.) Update ../../../PROJECT.md if a finding changes the physics.
- 10. JOURNAL      — write the new results/JOURNAL.md whole, with the Write tool, in one turn. The
-                    previous one is in your brief and the driver archived it and removed the working
-                    file before you started, so the Write needs no read. Carry forward what your unit
-                    did not change; update the NEXT line, Where we stand, Live hypotheses, What to try
-                    next and why (consistent with what you proposed), Traps and tooling, Open questions,
-                    Anything else. Keep it under ~120 lines (the brief clips it). Never re-read it to
-                    check the write. A unit that leaves no new JOURNAL is not saved.
- 11. CHECKPOINT   — if exp_id % {{CHECKPOINT_EVERY}} == 0, run `/physkit:campaign-status`: stop
-                     feature-chasing and reorient. Is the campaign still healthy, and still pointed at
-                     the goal?
- 12. REPEAT      — the next experiment begins at step 1. Supervisor mode (the default): the driver
-                    repeats, and you, a fresh-context worker, execute steps 1–11 for your one unit and
-                    exit once the iteration contract validates. That end-of-turn is earned. Only in an
-                    attended by-hand session does REPEAT fall to you, and there a completed experiment
-                    is still not a stopping cue (CLAUDE.md HARD GATE 5).
-```
+## The runner CLI
+`{{PYTHON_CMD}} scripts/run_campaign.py --config configs/<exp_name>.json` runs the unit: it enforces the
+gates and ends with the card. Then `--record <exp> --from-file results/record_<NN>.json`, `--card <exp>`,
+`--show <exp>`, `--digest <exp>`, `--diff <exp> [--since <exp>]`, `--help`. `--preflight` and `--supervise` are the
+driver's: do not run them.
 
-## How the loop runs — supervisor mode
-The loop above is the per-unit procedure; who repeats it is the mode:
+## Long solves, escalation, and your exit
+**Keep the solve alive under your own session — never fire-and-forget it.** A single tool call is capped
+(~10 min), so a long fit cannot be one blocking call — but exiting while it is still solving is fatal:
+the driver reads your exit as the unit's completion, a solve you backgrounded and walked away from loses
+`results/.run_heartbeat` (the driver's dead-worker signal) and never lands its save-set, and you are not
+re-invoked when it finishes. Run it under your own session, never inside a background subagent, and stay
+alive until the save-set is on disk — block on it, or background it and poll within your
+`iteration_timeout_hours`. Kill a subprocess by the PID you captured at launch, never by grepping the
+process list.
 
-- Supervisor mode (`{{PYTHON_CMD}} scripts/run_campaign.py --supervise --backend <codex|claude>`) is the default for unattended
-  runs. A deterministic driver pops one unit at a time from `results/queue.json` and spawns a fresh
-  agent context per unit: you, the worker, execute steps 1–11 for one unit and exit. Nothing carries
-  over between units. The active instruction twin auto-loads, and the driver compiles your brief into
-  the prompt: this file, `campaign.md` (minus its append-only record), the project's standing
-  constraints, the JOURNAL (the campaign's working memory, whole), your unit's queue entry and config,
-  and the ledger's last rows. Orient from the brief, never from the tree; §Where to look names the few
-  reads outside it.
+A mid-unit anomaly is information: record the problem and your hypothesis in the JOURNAL and put the
+probe under *What to try next and why*; a claimed major problem stays an open question there until a
+check settles it, and the direction does not steer on it before then. Do not pause to request more data,
+a different metric, or a different objective: direction is yours, and what the campaign does next is what
+the JOURNAL you leave says.
 
-  **Keep the solve alive under your own session — never fire-and-forget it.** A single tool call is
-  capped (~10 min on every platform), so a long fit cannot be one blocking call — but the fatal error
-  is *exiting while it is still solving*: the driver reads your exit as the unit's completion, and a
-  solve you backgrounded (`nohup` / `&` / `Start-Process`) then walked away from loses
-  `results/.run_heartbeat` (the driver's dead-worker signal) and never lands its save-set, so the unit
-  fails `saved=False` — and you are **not** re-invoked when it finishes. On Windows a POSIX-backgrounded
-  solve (`nohup`/`&`) does not even survive your exit; it is reaped with your session. So run the solve
-  so it keeps the heartbeat live and **stay alive until the save-set is on disk** — block on it, or
-  background it and poll (a `Monitor` until-loop) within your `iteration_timeout_hours`; never exit while
-  it is still solving, and do not noop-poll with `echo .`.
+A genuine fork only the user can weigh: write `results/ESCALATE.md` (what, why, the options) and finish
+your unit if you can. A goal the preset cannot meet in-run (a "verified" result under a preset that buys
+no such check) is not a fork: finish with the label the preset buys. A fault in the FROZEN metric itself is a metric epoch, never an in-place edit; the
+dial is `configs/loop.json` `campaign.metric_revision`, the user's and never yours. Under `cautious` (the
+default) write a `## METRIC-REVISION PROPOSAL` block in `results/ESCALATE.md` and the driver halts for
+the user; under `autonomous` enact it as a pending epoch and re-baseline. Procedure:
+`roles/REFERENCE.md` §Metric epochs.
 
-  **Kill a subprocess by the PID you captured at launch — never by grepping the process list.** Under the
-  default `auto` permission mode, a `kill`/`taskkill` on a PID found via `tasklist`/`ps` is denied as
-  killing an unowned process (it is how a worker once killed the driver); killing the exact PID you
-  started is allowed. Same for a detached solve — keep its PID in view so the cleanup reads as yours.
+## User notes
+When a USER NOTES section is relayed with your brief, treat it as input from the user: acknowledge each
+note in `results/JOURNAL.md` where it belongs and record what it changed — or why nothing.
 
-  Two rules follow:
-  - Mid-unit anomalies: probe through the pattern, not around it. Document the problem + hypothesis
-    in the JOURNAL and propose a standard probe unit (`--record <exp> --propose <file>`); a claimed
-    major problem needs a verify verdict
-    before the plan may steer on it. Trivial sanity checks are free. Anything that could influence a
-    conclusion or consume real time is a unit.
-  - A planner agent (fresh context, read-mostly, strategy-only) refills/reorders the queue on
-    triggers: queue low, every k units, a declination, a plateau, a REFUTED verdict, after a promotion.
-    Direction judgment lives there and in your proposals, never in the driver.
+## The FROZEN metric
+You change what feeds the metric, never how it is scored. A change to what the metric or guardrail
+consumes ({{METRIC_INPUTS}}) is a change in the measurement, not the method: keep {{COMPARABILITY_AXES}}
+as exp 000 had them, or say in the record which part of the delta is measurement. A mutable guardrail
+that penalises a valid run for an assumption an allowed lever changed is fixed in place — more faithful,
+never merely more lenient — and flagged in the JOURNAL and the ledger's `note`; a fault in the FROZEN
+scorer is an epoch (`roles/REFERENCE.md` §Metric epochs). Rank only within one `metric_version`; the
+runner refuses the rest.
 
-Do not pause to request more data, a different metric, or a radically different objective. Work
-strictly within the levers in `campaign.md` §The levers.
+## Verification at your level
+Each result gets at most ONE check, the strongest this campaign's preset (`configs/loop.json`
+`verify.preset`, the user's; never lower it) owes it, decided by the runner when the result is recorded
+and printed on the card. A new best's check waits until the next unit has not beaten it; the claim audit
+at the end re-checks the final best. You never launch an agent to check anything: a self-verify runs in
+this session, and an independent check is the next worker's (a peer check) or a verifier the driver
+spawns. Every check starts from what changed since the last one (the card; `--diff <exp>`). The label
+follows what actually ran: `unverified` · `self-checked` · `self-verified` · `self-refuted` ·
+`<VERDICT>/peer` · `<VERDICT>/verifier` · `<VERDICT>/audit`.
 
-The stall release is a failure signature, not an exit. After roughly 25 continuations with no new
-scoreboard row, the Stop hook releases the session and stops blocking it. That is not a third way for
-the loop to end; the two ways are in `CLAUDE.md` HARD GATE 5. It is the hook reporting that a loop is
-alive and producing nothing, which is a dead run. Diagnose the stall when the warning first appears
-(`/physkit:debug`). Do not grind to the release. If this session is not the loop at all (you are
-answering a question, fixing setup, or reading the ledger), record `not-a-loop-session` rather than
-letting the counter run.
+**Self-verify**, when the card says one is owed: the `{{VERIFY_SKILL}}` protocol on your own result, in
+this session and without its fresh-agent step, starting from the delta. Predict what a wrong result would
+show, then try to refute it: beat it, enumerate its class, seek a counterexample, re-score the saved
+artifact in a fresh process. It goes in the record file as `self_verify` (what you tried, and `holds`,
+`refuted` or `inconclusive`); the runner refuses a record that omits an owed one or carries one not owed.
 
-## Metric integrity (the FROZEN metric) — don't move the goalposts, don't unfairly punish a valid model
-The metric is gameable. The characteristic failure is a change to what the metric sees rather than a
-change in system performance. Two opposite failures share one root cause: a mismatch between what is
-measured and true performance.
+The driver delivers only your preset's section below; the others stay on disk in this file.
 
-(1) The metric flatters a result unfairly (goalpost-moving). Before trusting any score, ask:
-- Did this experiment change anything the metric/guardrail consumes ({{METRIC_INPUTS}}) in a way that
-  flatters the number without improving true performance? A score is comparable to baseline only
-  if the metric saw the same kind of input.
-- Is it apples-to-apples with exp 000: same {{COMPARABILITY_AXES}}, same scoring path? If not, part of
-  the delta is the change in measurement, not the method.
+### `none`
+Nothing is owed. Investigate what you judge worth investigating, when you judge it, in this session and
+outside any formal procedure, and say what you checked in the analysis. Every result is `unverified`.
 
-(2) A guardrail punishes a valid run unfairly. A structurally incompatible check, one hard-wired to an
-assumption an allowed lever legitimately changed, measures the mismatch rather than a real failure.
-When you suspect this:
-- Flag it in the JOURNAL and the ledger's `note` cell (`--record <exp> --ledger-note`). Never accept the
-  penalty silently, and never work around it.
-- Build a fair evaluation that reflects the run's actual settings, and re-score. The fix must be more
-  faithful to what was tested, never merely more lenient. If you cannot tell which, treat it as gaming
-  and keep it flagged.
-- Mark resulting findings PROVISIONAL until the fairness is independently reviewed/verified; only then
-  may they be written as a ledger `finding` cell.
-- Hard boundary: you may adapt the mutable guardrails and diagnostics for fairness; you never edit the
-  FROZEN primary metric, the data, or known ground truth on your own. A metric you believe is WRONG is a
-  different case with its own procedure: §Metric epochs, next.
+### `minimal`
+Self-check every unit (step 7). Self-verify a result the card marks owed: one outside the range you
+predicted, better or worse. Nothing else is owed.
 
-## Metric epochs — when the FROZEN metric itself is wrong
-Frozen means locked against quiet change, not immutable. A campaign sometimes discovers its ruler is
-wrong: the scorer measures the wrong thing (noise-free data when the campaign targets low SNR; a proxy
-that overfits and needs a second gate), or it does not compute what `campaign.md` §The ONE metric
-specifies. Revising it openly is the highest-integrity move available; revising it quietly is the
-failure the freeze exists to prevent. The procedure:
+### `light`
+Self-check every unit. Self-verify a result the card marks owed: one outside the range you predicted that
+is not a new best. A new best is not self-verified: its check is a peer check by the next worker, once
+the next unit has not beaten it.
 
-1. **Is it really the metric?** A mutable guardrail or diagnostic that misjudges a run is fixed in place
-   (§Metric integrity (2), no epoch). An experiment that changed what the metric sees is §Metric
-   integrity (1). Only a fault in the FROZEN scorer or its specification opens an epoch.
-2. **Verify the claim before acting on it.** "The metric is flawed" is a kill-claim against the current
-   metric and gets `{{VERIFY_SKILL}}`'s kill-claim check like any other invalidation; the epoch cites
-   the verdict artifact. A `semantics` revision (what the metric measures changes, so §The ONE metric is
-   edited) needs a REFUTED or EVIDENCE_AGAINST kill of the old metric. A `mechanics` fix (the
-   specification stands; the scorer did not compute it) needs the correctness check that reproduces the
-   discrepancy, kept in `tests/correctness_checks.py` as a regression.
-3. **Name the direction.** `harder` (the current best would score worse under the new ruler), `neutral`,
-   or `easier` (it would score better). Easier is the goalpost-moving shape: it needs a REFUTED-tier
-   kill and gets maximum scrutiny at ratification.
-4. **Who enacts it is `configs/loop.json` `campaign.metric_revision` — the user's dial, never yours to
-   change:**
-   - `cautious` (the default): write `results/ESCALATE.md` with a `## METRIC-REVISION PROPOSAL` block —
-     the claim; the verdict artifact; the proposed change (the specification diff and the scorer diff);
-     `kind` and `expected_direction`; the re-baseline cost (which retained contenders must be re-scored).
-     Finish your unit if you can. The driver halts at the next loop top; the user opens the epoch or
-     declines it.
-   - `autonomous`: enact it yourself, in this order — bump `campaign.metric_version`; add the entry to
-     `campaign.metric_epochs` (`kind`, `status: "pending"`, `evidence`, `expected_direction`,
-     `opened_by: "worker@<exp_name>"`); edit the specification (`campaign.md` §The ONE metric, for a
-     semantics epoch) and the scorer; `python scripts/metric.py --selftest` green; then run the runner,
-     which re-runs the correctness suite and binds the new epoch's scorer hash; then queue the
-     re-baseline (step 5). The guard refuses an entry with no evidence, an easier revision without a
-     REFUTED kill, and any entry at all when the dial is `cautious` — propose instead.
-   - **The user already opened it** (a `cautious` proposal accepted: `campaign.metric_epochs` declares
-     the current `metric_version` but the scorer on disk is still the previous epoch's): enact it now,
-     in the `autonomous` order above, *before running any unit* — the runner binds an epoch's scorer
-     hash on the first experiment under it, so a unit run before the scorer edit would bind the new
-     epoch to the old scorer.
-5. **Re-baseline; never compare across the boundary.** The retained contenders are
-   `configs/RECOMMENDED.json` plus every ledger row carrying a `finding` cell or still cited as live in
-   `results/JOURNAL.md` §Where we stand or `results/queue.json`. Re-score them under the new ruler as
-   ordinary units — one config-backed unit per contender, sharing a `block` — and propose them through
-   `--record <exp> --propose <file>`. Until then the runner sets earlier rows aside and the checks
-   artifact names the boundary. Rows keep their `metric_version`; nothing is deleted or re-labelled.
-6. **One line in `results/JOURNAL.md` §Where we stand:** `metric epoch <version> opened (<kind>,
-   <direction>) · <verdict or check> · <what the new metric measures, one sentence>`. That line is the
-   narrative record; the evidence is the verdict, the change is the specification diff, the governance
-   is the entry.
+**When your VALUES say `peer check owed first`**, do it before your own unit. You are that result's
+independent checker: a fresh context that never saw the reasoning behind it. Start from the delta in your
+VALUES, treat its logbook entry as a claim to test, and run the self-verify protocol above on it. Write
+`results/verdicts/<exp_id>.json` - `{"claim": "...", "exp_id": "<NN>", "verdict": "CONFIRMED | PROVISIONAL
+| QUESTIONABLE ASSUMPTION | REFUTED | INCONCLUSIVE", "kind": "peer", "refuter": "peer", "kill_tier": null,
+"utc": "...", "summary": "...", "follow_up": "<one line, when REFUTED or INCONCLUSIVE>"}` - and the
+driver stamps the label; a REFUTED best is dropped from the RECOMMENDED pointer. Then run your own unit.
 
-The epoch stays `pending` until the user ratifies it — from an attended session, never a spawned role —
-and a ratified or rolled-back epoch is final. A pending epoch promotes normally, with its standing
-riding on the row's version (promote-and-label); a rolled-back one never promotes. When the ruler was
-wrong but the save-sets are valid and re-scorable, this procedure applies; when the artifacts
-themselves are tainted (a forward-model bug, corrupted data), that is `fork-campaign`, not an epoch.
+### `heavy`
+Self-check every unit, and self-verify every result that is not a new best (the card marks it owed). A
+new best is not self-verified: once the next unit has not beaten it, the driver spawns a verifier for it.
 
-## After the run — reconcile with the prediction, and check cheap before you spend
-You wrote a predicted range before running (`campaign.md` §Bound expectations BEFORE you run). Hold the
-result against it:
-- Update the bounds as understanding improves, but treat any result that lands outside the predicted
-  range as a red flag deserving extra scrutiny. Do not move on until you understand the source of the
-  surprise. A result that beats the predicted range is the most common signature of a leak or an
-  accounting error.
-- Settle statically-answerable questions with a cheap check before spending an expensive run. A
-  surprising or non-monotonic scan result is often an analysis or selection artifact: a noisy
-  single-epoch checkpoint pick, an off-by-one, a stale cache, visible in an existing run's logs at zero
-  extra compute. Inspect that first. Do not launch further multi-hour runs to explore a wiggle that a
-  one-line log check would have explained.
-
-## Decision-making guidelines
-- Primary up, guardrail holds → log, queue a confirmation / seed-repeat.
-- Only {{CHEAP_SUBGROUP}} improved → cheap or near-trivial; not a real win, keep exploring.
-- Primary up, guardrail degraded → suspect {{OVERFIT_MODE}}; second seed / control.
-- Flat or ambiguous → after 2–3 inconclusive scouts, move to an orthogonal lever.
-
-## Before writing off or accepting a result — every result is suspect until cross-checked
-Before writing off an idea (a flat or negative result): could it be implemented differently
-(parameterization, init, regularizer, optimizer, or the order of steps)? Is there a bug or confound (a
-sign/convention slip, a pose/parameter mismatch, a degenerate setting)? Did it interact badly with a
-fixed choice that should co-vary (test the pair, not the part)? Was the effect within replicate noise?
-A crash is a bug, not a verdict: fix it and re-run before judging the idea. Do not dismiss a weak
-signal as noise: real effects can be small and noisy, so gather more evidence before concluding noise.
-Was the test run in a regime where the competing hypotheses are distinguishable? A null measured where
-the effect vanishes under either hypothesis proves nothing. Example: testing a stiffness difference
-only in saturation, where both stiff and soft predict no canting. Rule the idea
-out only from a regime where it would have shown, had it been real.
-
-Before accepting a positive result, ask the same, plus: did the experiment move the goalposts
-(re-check §Metric integrity)? Did it land inside the range you predicted? Is it a ceiling move
-(physical) or a gap-to-ceiling move (suspect)? Does the guardrail pass? Does it generalize across the
-whole {{GENERALIZATION_AXIS}}, not a lucky subset? Confirm with ≥2–3 independent experiments and the
-independent verification the preset requires before calling a method the best or writing a DISCOVERY
-(under `minimal`, the claim audit at the end of the campaign is that verification).
-Counter confirmation bias explicitly, as a ritual: state the result you hoped for, make the strongest
-case that it is wrong, name the one observation that would refute it (and check you ran it), and give
-a fair hearing to the unwelcome alternative conclusion (it is noise; a rival explains it too; it is an
-artifact). Depth: `{{VERIFY_SKILL}}` §5c. Whatever you conclude, the self-check you record (loop step 7)
-is what a reviewer reads first: a claimed effect with no change behind it, or a change with no stated
-effect, is a red flag in its own right.
-
-## Rigor — replicate before concluding
-
-> First check which campaign this is. `configs/loop.json` `campaign.noise_model` says whether
-> repeated runs of this campaign differ at all. In a deterministic campaign they do not: seeds and
-> replicate spread are not the test, `campaign.tolerance` is, and multi-seed work here buys nothing
-> but spend. Everything below is written for the stochastic case; take the parts that apply.
-> Replicating a deterministic pipeline does not make it more certain, it makes it slower.
-
-- Replicate with perturbed parameters and, for any stochastic step, multiple seeds, to tell a real,
-  robust effect from run-to-run noise. A change smaller than the replicate spread is not a result.
-- Could the effect be a seed or init artifact? Confirm with multiple seeds and inits before any hard
-  conclusion, positive or negative.
-- Track error and separate its kinds. Report each metric with a spread. Statistical error shrinks with
-  more seeds or frames: run more. Systematic error is a convention, pose, or calibration bias: more
-  runs will not help, so find and fix the cause. {{SYSTEMATIC_AXIS_NOTE}}
-- Use a statistical test, not eyeballing, for close calls. Compare per-{{UNIT}} distributions
-  (paired) rather than two point means; a difference must clear the spread.
-- [PROPOSED] Define and report effect size. State the minimum meaningful Δ`{{PRIMARY_METRIC}}`
-  (≥ 2× the replicate std) up front, and report deltas as `Δ ± spread`.
-- This is required before (a) writing a finding into its ledger row's `finding` cell, or (b)
-  permanently writing off an approach. One run never justifies either.
-
-## Independent verification — assume the result is wrong and try to refute it
-Convergence is not correctness. Before any finding is written into its ledger row's `finding` cell or
-accepted as current-best, it must be independently re-derived. `campaign.md` §Verification lists this campaign's
-own checks, decided at setup (for sim-heavy work the V&V&UQ method is the physkit plugin's
-`docs/SIMULATION_VALIDATION.md`); `verify` reads them, `correctness-suite` encodes the
-checkable ones as standing regression gates.
-
-**In supervised mode, routine verification is the DRIVER's job, not yours — and how much of it runs is
-the campaign's verification preset** (`configs/loop.json` `verify.preset`;
-the physkit plugin's `docs/reference/verification-presets.md`). When the preset owes your accepted unit an independent check,
-the driver spawns a verification agent (re-executing the unit when it is cheap and reproducible,
-reviewing it from the frozen record otherwise), stamps the scoreboard's `verified` column from the
-verdict artifact, and writes the unit's label into its checks artifact — you never grade your own work,
-never lower the preset, and do not run verify at the end of a routine unit. A unit the preset owes
-nothing keeps the label your self-check gave it (`self-checked`, or `unverified`), and that label travels
-with the number; a promotion under `minimal` still says `unverified`, because a self-check is not
-independent. You DO still invoke `{{VERIFY_SKILL}}` yourself when something inside your unit demands
-it before you act: a result that beats its envelope, a suspicion the metric leaked, a mid-unit claim you
-are about to build on. In an attended session there is no driver, so the pre-promotion verification
-below is yours to run, at the depth the driver would have decided (re-execution when the unit's measured
-solve is within a quarter of `worker.iteration_timeout_hours` and `campaign.reproducible` is true; review
-from the frozen record otherwise — the checks artifact's `verification.re_execution` says which).
-- Validate every fit even when it converged cleanly: re-run from the config, recompute the metric from
-  scratch, confirm it reproduces within tolerance.
-- Falsify with code, not prose, and confirm the numbers are real. Write verification scripts and
-  controls (edge cases, randomized inputs, counterexamples) rather than arguing in text. Confirm every
-  reported number was produced by the evaluation: re-run it, for example re-running inference on the
-  test set. Never trust a number that was only stated.
-- Spawn an independent agent to refute it. Use the `{{VERIFY_SKILL}}` skill: it dispatches a fresh
-  agent instructed to assume the result is wrong, which re-runs the experiment, recomputes
-  `{{PRIMARY_METRIC}}` and the guardrail, replicates with perturbed params, checks for metric
-  contamination{{VERIFY_EXTRA_CHECKS}}, and returns CONFIRMED / PROVISIONAL / QUESTIONABLE ASSUMPTION /
-  REFUTED / INCONCLUSIVE
-  with evidence. Where the preset requires it, a promotion is not real until this returns CONFIRMED;
-  under `minimal` a promotion is real only stamped `unverified`. Run that verifier on a model at
-  least as capable as the loop; a different capable model is preferable, for mechanism diversity. Never
-  use a weaker model: a weak verifier yields false CONFIRMs. Mechanical sub-tasks the loop delegates
-  (search, citation checks, figure generation, validation) can run on a lighter model, since a
-  deterministic gate or your own read catches a slip.
-- Scale verification to the run cost. When an experiment is fast, reproduce it fully and add multiple
-  seeds + a statistical test. When it is long or expensive and a full re-run is not practical, the
-  verifier instead scrutinizes the code and the conclusions/logic and re-checks the saved artifacts (models,
-  data, logs) rather than re-running from scratch. That is why those artifacts must be saved
-  (§Where everything is saved). The verify skill adapts its depth to the runtime.
-- Verify the fairness of any adapted evaluation. If a result relied on an adapted guardrail (§Metric
-  integrity, case 2), the verifier must judge whether the adaptation was faithful or merely lenient.
-  Such findings stay PROVISIONAL until that judgment returns faithful.
-- Record disputes, append-only. Every issue the verifier or the user raises lands on the experiment's
-  logbook `Disputes & responses` line, each with a response (the verifier writes its concern and the
-  response there; a user's challenge you answer is acknowledged in the JOURNAL under `## Open
-  questions`). Never delete a raised issue; rebut it if you disagree. These records are part of the
-  project's scientific integrity.
-
-## When something looks unphysical — re-verify the FROZEN model first
-Frozen is not validated. A forward model, data generator, or scorer must pass its correctness gate
-before it is frozen and exp 000 runs: a sign/convention round-trip against a trusted analytic
-reference, plus known-symmetry self-tests. Build and run those with `correctness-suite`. Freezing an
-unvalidated model bakes its bugs into every downstream experiment.
-
-Treat any later unphysical symptom (a sign flip, a reversed or mirrored artifact, a structured residual
-that does not go away) as a trigger to re-verify the FROZEN model first, before building corrective
-physics (tilt terms, detrending, extra capacity) on top of it. A persistent model–data gap can be a bug
-in the frozen reference code, not only model-form error.
+### `intensive`
+Self-check every unit; nothing is self-verified: the driver spawns a blinded verifier for every result.
+Keep every unit reproducible from its config and its save-set.
 
 ## Recording a promotion
-Promotion is enforced, not only described. The verify skill writes a verdict artifact
-`results/verdicts/<id>.json` (verdict, kill tier, named refuter). In supervised runs the driver
-stamps the scoreboard `verified` column from that artifact after each block's verification; in an
-attended session, record it yourself the same turn you promote — a row acting as current-best, or
-carrying a `finding` cell, with a blank `verified` is a hygiene failure that `campaign-status` flags.
-The PreToolUse hook (`scripts/guard_promotion.py`) guards the mechanical promotion surfaces,
-**subject-matched**: a write to `configs/RECOMMENDED.json`, or a scoreboard edit that introduces a
-`CONFIRMED` or `NEW BEST` token, needs — wherever the preset requires one — a CONFIRMED verdict with a
-named refuter **for the experiment being promoted**, no other experiment's verdict counts; under a
-preset that requires none (`minimal`) the write must carry the word `unverified` instead; recording a
-system-level finding in the
-project overview (`../../../PROJECT.md` §Updates from discoveries) must cite the verdict artifact by
-path (a legacy project's `../../../DISCOVERIES.md` write stays hook-gated and fail-closed). The ledger's
-`finding` cells are runner-written, not hook-gated, and the JOURNAL is working memory — but the same
-rule binds both: every finding cites its verdict, an INCONCLUSIVE kill never lands, and
-`campaign-status` audits uncited cells. Run the verify; do not work around the hook.
+The pointer follows the true best at once: when the card says your result is a new best, write
+`configs/RECOMMENDED.json` from its config.
+What the write must carry, stated so nobody reads the guard's source: `"_promoted_from": "<its exp name>"`
+and `"verification_label"` set to the label on the card. The PreToolUse hook `scripts/guard_promotion.py`
+refuses, fail-closed: a label other than the one the checks artifact carries; a result a check refuted;
+and, above `minimal`, a promotion the correctness suite has not green-lit on the code on disk or whose
+promotion-time checks have not passed FOR that experiment (`--run-suite due --for <exp>` runs them). The
+driver carries a later label into the pointer, and rolls the pointer back when a check refutes the result. Every finding cites its verdict artifact by
+path; a `discovery` for PROJECT.md needs a CONFIRMED independent verdict. Nothing scored under a
+rolled-back or undeclared metric epoch promotes.
 
 ## The save-set — what every unit writes
+Everything is keyed by the config stem `exp<NN>_<slug>` (the label). Per experiment:
+`configs/<label>.json` · a scoreboard row · `results/result_<NN>.json` · `results/checks_<NN>.json` ·
+`results/images/<label>_*` · `results/snapshots/<label>/` · the logbook entry · the JOURNAL. Four are
+HARD GATE 4, enforced in code; the rest are audited. A run that died before writing them is not done:
+re-run it. Never delete data, figures, or snapshots without confirmation.
+- Tee every run's stdout: `... > results/diagnostics/<stem>_<UTCstamp>.log 2>&1`.
+- A diagnostic that yields an actionable number is persisted the same turn (a line appended to
+  `results/diagnostics/<name>.jsonl`); diagnostic scripts are versioned, never overwritten in place.
+- Outputs slow to recreate go under `results/data/` by label: `roles/REFERENCE.md` §Quicker-check
+  artifacts.
 
-### `results/JOURNAL.md` (the campaign's working memory)
-One bounded document, delivered whole into every brief and brought up to date at the end of every unit:
-the NEXT line, §Where we stand (established and ruled out, each with its confidence and the ledger id or
-verdict), §Live hypotheses, §What to try next and why, §Traps and tooling, §Open questions, §Anything
-else. Edit what changed, leave the rest, keep it under ~120 lines; the driver archives every version to
-`results/journal_archive/`. The settled record is not here: a settled fact is its ledger row's `finding`
-cell, written through `--record <exp> --finding "..."` only after multiple consistent experiments
-confirm the finding on `{{PRIMARY_METRIC}}` (guardrail noted) and `{{VERIFY_SKILL}}` returned
-CONFIRMED; the cell cites `results/verdicts/<id>.json` — hard gate #1 in `CLAUDE.md`. Under a preset that
-owes no independent check (`minimal`), findings wait for the claim audit and cite its artifact
-(`results/verdicts/audit_<NN>.json`) instead. Full narratives are not copied into the JOURNAL. When a
-finding changes the physical understanding, also update `../../../PROJECT.md` (the effect, its
-equations, references — §Updates from discoveries, citing the verdict; and the §Standing constraints
-inventory, per its guarded tier).
+**Basic visualization — every experiment.** {{FIGURE_SPEC}} Images land in `results/images/`, prefixed
+by the label; a noteworthy result also gets the explanatory figures (`roles/REFERENCE.md` §Additional
+visualization).
 
-### `results/logbook.md` (append-only — the full narrative record)
-Every experiment's full entry, verbatim, forever. The runner writes the facts of each entry and the
-judgements it can make from the artifacts (Expected vs found, Levers, a Verification line raised by the
-self-check and the verdict stamp); you complete Analysis and NEXT through `--record`. Append-only, and
-never opened: `--show <exp>` prints one entry when an old detail is needed.
+**Per-experiment data.** {{PER_EXP_ARTIFACTS}}
 
-### Where everything is saved (verify each is written every run)
-Per experiment, all of these must exist (the label is the config stem `exp<NN>_<slug>`, which prefixes
-every artifact): `configs/<label>.json` · a `scoreboard.tsv` row · `results/result_<NN>.json` ·
-`results/checks_<NN>.json` ·
-`results/images/<label>_*` (the basic figure) · `results/snapshots/<label>/` (config + code copy) · a
-`results/logbook.md` entry (its Analysis and NEXT through `--record`) · the JOURNAL brought up to date.
-Four of those are HARD GATE 4, enforced in code — the scoreboard row, `results/result_<NN>.json`, the
-figure and the snapshot; the runner refuses the row until the last three exist. The rest are the
-checkpoint contract, audited by `campaign-status` rather than blocked by the runner. Verify the whole
-set after each run; if a run died before writing them, treat it as not-done and re-run.
-- Tee every run's stdout to a file: `... > results/diagnostics/<stem>_<UTCstamp>.log 2>&1`. Never
-  rely on console scrollback surviving.
-- Any diagnostic that yields an actionable number must be persisted the same turn: append a line to
-  `results/diagnostics/<name>.jsonl` and record it + the producing script in JOURNAL.md. A console
-  print alone does not count as saved. Version diagnostic scripts; do not overwrite them in place.
-- Log the conditions you were not varying (the "thermostat in the box"): exact config, command line,
-  wall-clock, comparison baseline, and [PROPOSED] environment provenance (key library versions, host,
-  RNG seeds).
-- Reproducibility is the invariant — every experiment (baseline). For every experiment, the
-  documentation of what was done and the exact code + data to redo it are preserved and self-contained
-  in a per-experiment snapshot `results/snapshots/<label>/` (config + the mutable code that produced it +
-  a manifest: command line, key library versions, RNG seed / data hash).
-  Pin the code behind the number, not just the params; shared scripts get edited later. Git is optional
-  (recommended for shared/large projects); the per-experiment snapshot is the reproducibility baseline
-  either way (see the physkit plugin's `docs/reference/version-control.md`). Detail:
-§The reproducibility bundle, below.
-  {{CODE_SNAPSHOT_RULE}}
-- Name everything by its experiment. Every artifact (config, snapshot, result JSON, figure,
-  diagnostic log, saved model/data) is keyed by `<label>` (figures `results/images/<label>_*`), so every
-  file traces to one experiment and to its row in `results/scoreboard.tsv`. No orphan files.
-- Save quicker-check artifacts, not just the recipe, so a result, and a long run the verifier has
-  to check, can be re-checked without rebuilding the pipeline. Key them by `<label>` and note where
-  they went in the experiment's `results/logbook.md` entry. What counts: §Quicker-check artifacts.
-
-### The reproducibility bundle — every experiment (baseline, non-negotiable)
-Every experiment must stay reproducible even after the shared code/config are later edited. For each
-experiment, save under a per-experiment directory `results/snapshots/exp<NN>_<slug>/`:
-- a copy of the config that produced it, so the bundle is self-contained,
-- a copy of the mutable code that produced it: the `scripts/` that ran (metric.py, experiment.py, run_campaign.py,
-  and any campaign-specific module / forward model); a shared script edited later would otherwise make
-  this experiment irreproducible,
-- a short manifest: the exact command line, key library versions, and any RNG seed / data hash.
-One directory per experiment, named by its label; keep it organized. The snapshot must be self-contained
-and documented: a reader with only this directory can both understand and re-run the experiment. This is
-the reproducibility baseline; git is optional and complements it, never replaces it (see
-the physkit plugin's `docs/reference/version-control.md`). For external/large input data, pin it by
-source + checksum +
-generation command + seed rather than copying it in.
-
-### Basic visualization — every experiment (baseline, fast)
-Save at least one computationally cheap visualization every experiment so the user can follow
-progress, even on a flat or negative result: {{FIGURE_SPEC}}
-<!-- The quick figure saved every run, panel by panel (e.g. input vs reconstruction vs residual; fit
-     overlay + residual; the designed object + its figure-of-merit map). Cheap enough to run every time. -->
-Images land in `results/images/`, prefixed by the experiment label for easy side-by-side browsing.
-
-### Per-experiment data (light, always)
-{{PER_EXP_ARTIFACTS}}
-<!-- results/result_<NN>.json (full metric breakdown) + the key per-experiment data file(s), prefixed by
-     the experiment label. -->
-
-### Quicker-check artifacts — expensive-to-recreate outputs
-The reproducibility bundle lets someone re-run an experiment; also save the outputs that are slow to
-recreate so a reviewer, a fresh agent, or the verifier on a long run can re-check a result quickly
-without rebuilding the pipeline: trained model weights/checkpoints, generated datasets, computed
-operators/dictionaries, fitted-parameter files. Save under `results/data/` (or a campaign-appropriate
-directory), keyed by the experiment label, and record their location in the experiment's
-`results/logbook.md` entry.
-
-### Additional visualization — noteworthy experiments
-When an experiment is a new current-best or otherwise noteworthy, also produce the heavier / explanatory
-visualizations: {{PROMOTED_BEST_ARTIFACTS}}
-<!-- Extra figures, montages/animations, etc. Keep the artifacts of each successive best so the
-     progression is inspectable. -->
-
-### Retention plan — what is kept forever vs regenerated on demand
-Disk is a real constraint on a long loop, and a campaign that fills its volume overnight corrupts the
-save-set it was in the middle of writing. The driver enforces the floor: it refuses to launch, and
-halts at the loop top, below ~3 experiments of headroom. What to keep is a plan you make; the
-per-experiment cost and the floor it is measured against are in `campaign.md` §Caps.
-
-Never droppable — the permanent record. `CLAUDE.md` HARD GATE 4 covers the first four in code;
-deleting any of the rest costs the record without tripping a gate, so nothing will catch it: the
-scoreboard row · `results/result_<NN>.json` · `results/checks_<NN>.json`
-(deleting it makes the run indistinguishable from one that bypassed the runner) · the basic figure · the
-reproducibility bundle in `results/snapshots/exp<NN>_<slug>/` · the logbook/JOURNAL narrative ·
-verdicts. These are small by construction (text, one figure, a code copy), so a retention plan never
-needs to touch them.
-
-Negotiable — bulk artifacts (the quicker-check set above: model weights/checkpoints, generated
-datasets, computed operators, raw field/trace arrays). These may be dropped only when regeneration is
-deterministic and recorded: the snapshot pins the exact config + code, and the manifest pins the seed
-and command line, so re-running the snapshot reproduces the artifact bit-for-bit. Rules:
-- Record the decision before the loop runs, not after the disk fills: for each bulk artifact, either
-  keep or regenerate-on-demand, with the regeneration command in that experiment's `logbook.md`
-  entry.
-- Keep the current-best's bulk artifacts (and the runner-up's): they are re-checked most often, and a
-  verifier waiting on a re-solve is the cost this rule exists to avoid.
-- Never drop what cannot be regenerated deterministically. Anything touching hardware, external
-  services, wall-clock, or an unrecorded seed is a one-shot measurement, not a cache.
-- Dropping is deletion of data: it needs the user's confirmation, it is logged in the logbook, and it
-  never happens silently mid-run.
-{{RETENTION_PLAN}}
-<!-- The campaign-specific plan, if bulk artifacts are large enough to need one: which artifacts are
-     kept, which are regenerate-on-demand + their command, and any pruning cadence. If experiments are
-     small (< a few MB), state that no plan is needed and why. -->
-
-### How to run
+**How to run.**
 ```
 {{ARTIFACT_COMMAND}}
 ```
-Never delete data, figures, or snapshots without confirmation.
-
-## Where to look — the brief first; the tree only for these
-Your spawn prompt already carries the campaign definition, this file, the standing constraints, the
-whole JOURNAL, your unit, your code (`scripts/experiment.py`), and the ledger's last rows. Re-reading any
-of them from disk buys nothing and costs the turn; reading the tree to orient (the logbook, the
-scoreboard, another campaign, the runner's or the scorer's source) is the failure this brief exists to
-end. A unit reads outside the brief only for:
-- The result CARD the runner prints at the end of your run (`--card <exp>` prints it again): the
-  comparison, the checks, what changed — read once, never rebuilt from the artifacts.
-- `results/checks_<NN>.json` — what the runner mechanically checked for YOUR experiment, and what it
-  could not check, when a card line is not enough: a `fail` is a bug or a discovery and is yours to
-  explain, and an `unavailable` names in its `needs` field exactly what this campaign would have to
-  supply to make that check real. Neither is a passed check.
-- `python scripts/run_campaign.py --show <exp>` — one old logbook entry, for one named old detail.
-  Never open `results/logbook.md` or `results/scoreboard.tsv`, to read or to write: the runner writes
-  both, and the record you owe goes through `--record`.
-- `../../../PROJECT.md` below §Standing constraints — the equations and methods, the instrument
-  characterization, the predictive framework, the durable decisions, and §Lineage (what sibling
-  campaigns tried and found). Open it only when a result needs physics the brief does not carry.
-- `configs/loop.json` `campaign` — whether a prediction must carry a numeric range, and whether a win
-  is judged against a replicate spread or a numerical tolerance (a small read; the rest of the file is
-  the driver's).
-- `python scripts/run_campaign.py --help` — the flag list. Your code is `scripts/experiment.py`, delivered
-  in the brief and the one script you edit; the runner's source is the kit's machinery, not reading
-  material, and neither is the scorer's: `campaign.md` §The ONE metric is the metric's specification.

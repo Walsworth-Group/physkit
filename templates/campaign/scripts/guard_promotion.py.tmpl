@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""guard_promotion.py - PreToolUse hook: a PROMOTION write must be independently CONFIRMED.
+"""guard_promotion.py - PreToolUse hook: a PROMOTION write must carry its honest label.
 
-Enforces the campaign's #1 hard gate on every promotion surface. A finding - POSITIVE or NEGATIVE
-(steering-negatives promote too) - may not be promoted unless the verify skill's independent
-refuter recorded a promotable verdict artifact in results/verdicts/<id>.json:
+Enforces the campaign's #1 hard gate on every promotion surface. A current-best pointer carries the
+label its checks earned; a FINDING - POSITIVE or NEGATIVE (steering-negatives promote too) -
+promoted upward may not be unless an independent check recorded a promotable verdict artifact in
+results/verdicts/<id>.json:
     {"claim": "...", "exp_id": "...", "verdict": "CONFIRMED", "kill_tier": null,
      "refuter": "<agent/session id>", "utc": "...", "summary": "..."}
 For a NEGATIVE (kill-claim) finding, "kill_tier" is "REFUTED" or "EVIDENCE_AGAINST" (an "INCONCLUSIVE"
@@ -12,16 +13,15 @@ kill never graduates - it queues a fix-and-rerun unit instead).
 Two promotion surfaces, two strictness tiers. The citation rule and the surface/recency rule are
 independent and complementary - a write must satisfy both, not either:
   * RECOMMENDED*.json (current-best) writes and scoreboard writes that INTRODUCE a `CONFIRMED` /
-    `NEW BEST` token - SUBJECT-MATCHED + FAIL-OPEN-LOGGED: the verdict artifact FOR THE EXPERIMENT
-    BEING PROMOTED (matched by the exp id/name the written content carries) must be CONFIRMED with a
-    NAMED INDEPENDENT REFUTER and a graduating kill tier if any - hard gate #1's warrant is the
-    independent refuter, not merely that a CONFIRMED file exists (a self-authored / refuterless
-    verdict does not promote). Per-block verification means every experiment carries its own verdict,
-    so the gate no longer accepts "some verdict, recently" (the recency window this replaces could be
-    satisfied by any fresh verdict about anything - a residual its own docstring flagged). These
-    files are recoverable, so a guard *error* here allows BUT logs to results/gate_failures.log
-    (campaign-status hard-fails on a non-empty log); an unmatched or refuterless verdict is a clean,
-    recoverable DENY (run verify for that experiment, then retry), not a bypass.
+    `NEW BEST` token - SUBJECT-MATCHED + FAIL-OPEN-LOGGED: the pointer follows the true best at once
+   , so the write must carry the promoted experiment's HONEST LABEL - exactly the one its
+    checks artifact holds (results/checks_<NN>.json `label`: unverified, self-checked, self-verified,
+    <VERDICT>/peer, <VERDICT>/verifier), never a stronger one - and a result a check refuted never
+    promotes. An experiment whose checks artifact predates the one-check rule (no `verification.owed`)
+    keeps the established rule: the verdict artifact FOR THAT EXPERIMENT (matched by the exp id/name the written content carries) must
+    be CONFIRMED with a NAMED INDEPENDENT REFUTER and a graduating kill tier if any. These files are
+    recoverable, so a guard *error* here allows BUT logs to results/gate_failures.log (campaign-status
+    hard-fails on a non-empty log); a wrong label or an unmatched verdict is a clean, recoverable DENY.
   * the PROJECT ledger <project>/DISCOVERIES.md - SUBJECT-MATCHED + FAIL-CLOSED: promoting a
     system-level finding upward must cite the SOURCE campaign's verdict artifact by name
     (campaigns/<slug>/results/verdicts/<id>.json); the artifact must be CONFIRMED with a named refuter
@@ -683,72 +683,61 @@ def promotion_row_problem(root: Path | None, ti) -> str | None:
     return " | ".join(problems) if problems else None
 
 
-def verification_gate_problem(root: Path | None, ti) -> tuple:
-    """What the promoted experiment's verification PRESET requires of this write: (deny-reason or None,
-    needs_verdict).
+LABEL_RE = re.compile(r'"verification_label"\s*:\s*"([^"]*)"', re.IGNORECASE)
+RELAXED_PRESETS = ("none", "minimal")
 
-    Read from the experiment's checks artifact (results/checks_<NN>.json `verification`: the resolved
-    rows, the computed re-execution eligibility, and the agent block a verdict stamped) - never from a
-    preset table of the guard's own, which would be a twin. Three shapes:
-      * both agent rows off (the `minimal` preset): no verdict is required, and the write must carry the
-        word `unverified` (RECOMMENDED.json: "verification_label": "unverified"; a scoreboard token:
-        UNVERIFIED on the row) - a promotion with no independent check is legitimate only when it says so;
-      * re-execution off, review on (`light`): the established rule - a CONFIRMED verdict, named refuter;
-      * re-execution on (`moderate` / `intensive` / legacy per-block): the established rule AND, when the
-        artifact says the unit was eligible for re-execution, the verdict must record mode re-execution -
-        a review-mode CONFIRMED on a unit the preset said to re-run is not the check the preset bought.
-    An experiment without a `verification` block (predates the presets) gets the established rule."""
+
+def _refuted(label: str) -> bool:
+    return str(label).upper().startswith("REFUTED/") or str(label).strip().lower() == "self-refuted"
+
+
+def verification_gate_problem(root: Path | None, ti) -> tuple:
+    """What the promoted experiment's verification record requires of this write: (deny-reason or None,
+    needs_verdict, relaxed).
+
+    the pointer follows the true best at once, carrying the label its checks artifact holds
+    (results/checks_<NN>.json `label`, machine-derived - never the guard's own reading of a preset table,
+    which would be a twin). So the write must carry THAT label (RECOMMENDED.json: "verification_label";
+    a scoreboard token: the label on the row) - never a stronger one - and a result a check refuted
+    (`REFUTED/...`, `self-refuted`) never promotes. `relaxed` (the none / minimal presets): only a RED
+    suite blocks, since such a promotion never claimed a green. An experiment whose artifact predates
+    the one-check rule (no `verification.owed`) gets the established rule: its CONFIRMED verdict (needs_verdict)."""
     if root is None:
-        return None, True
+        return None, True, False
     text = _written_text(ti)
     ids = {_eid(t) for t in SUBJECT_RE.findall(text)}
     if not ids:
-        return None, True
-    problems, needs_verdict = [], False
-    any_seen = False
+        return None, True, False
+    problems, needs_verdict, relaxed = [], False, True
+    written = [m.strip() for m in LABEL_RE.findall(text)]
     for eid in sorted(ids):
         try:
             ck = json.loads((root / "results" / f"checks_{eid}.json").read_text(encoding="utf-8"))
         except Exception:
-            needs_verdict = True
+            needs_verdict, relaxed = True, False
             continue
         ver = ck.get("verification") if isinstance(ck, dict) else None
-        rows = (ver or {}).get("rows") if isinstance(ver, dict) else None
-        if not rows:
-            needs_verdict = True
+        if not isinstance(ver, dict) or "owed" not in ver:
+            needs_verdict, relaxed = True, False     # predates the established verdict rule
             continue
-        any_seen = True
-        rev, rex = str(rows.get("review") or "off"), str(rows.get("re_execution") or "off")
-        if rev == "off" and rex == "off":
-            up = text.upper()
-            if '"VERIFICATION_LABEL": "UNVERIFIED"' not in up and "UNVERIFIED" not in up:
-                problems.append(f"exp{eid} is promoted under a preset with no independent check "
-                                f"(preset {ver.get('preset')!r}); the write must say so - carry "
-                                '"verification_label": "unverified" in RECOMMENDED.json, or UNVERIFIED on '
-                                "the scoreboard row - so no reader mistakes it for a verified best")
+        if str(ver.get("preset") or "") not in RELAXED_PRESETS:
+            relaxed = False
+        label = str(ck.get("label") or "unverified")
+        if _refuted(label):
+            problems.append(f"exp{eid} carries the label {label!r} - a refuted result is no one's best and "
+                            "never promotes; promote the best result that was not refuted")
             continue
-        needs_verdict = True
-        elig = (ver.get("re_execution") or {}).get("eligible") is True
-        if rex != "off" and elig:
-            agent = ver.get("agent") or {}
-            recorded = str(agent.get("mode_recorded") or "").lower()
-            if recorded != "re-execution":
-                for p in sorted((root / "results" / "verdicts").glob("*.json")) if (root / "results" / "verdicts").is_dir() else []:
-                    try:
-                        v = json.loads(p.read_text(encoding="utf-8"))
-                    except Exception:
-                        continue
-                    if _eid(p.stem) == eid or _eid(str(v.get("exp_id", ""))) == eid:
-                        recorded = str(v.get("mode") or "").lower() or recorded
-                        break
-            if recorded != "re-execution":
-                problems.append(f"exp{eid} was eligible for re-execution ({(ver.get('re_execution') or {}).get('eligibility', '')}) "
-                                f"and its preset ({ver.get('preset') or ver.get('source')}) asks for it, but the "
-                                f"verdict records mode {recorded or 'unknown'!r} - a promotion needs the re-executed "
-                                "CONFIRMED; re-run the verifier in re-execution mode")
-    if not any_seen:
-        needs_verdict = True
-    return (" | ".join(problems) if problems else None), needs_verdict
+        if "RECOMMENDED" in str(ti.get("file_path", "")).upper():
+            if not written:
+                problems.append(f"exp{eid} is promoted without its label - carry \"verification_label\": "
+                                f"\"{label}\" in RECOMMENDED.json (the label on its card, from "
+                                f"results/checks_{eid}.json), so no reader mistakes what was checked")
+            elif any(w.lower() != label.lower() for w in written):
+                problems.append(f"exp{eid}'s label is {label!r} (results/checks_{eid}.json), but the write says "
+                                f"{', '.join(repr(w) for w in written)} - carry exactly the label on its card")
+        elif label.upper() not in text.upper():
+            problems.append(f"exp{eid} is promoted on the scoreboard without its label {label!r} on the row")
+    return (" | ".join(problems) if problems else None), needs_verdict, (relaxed and not needs_verdict)
 
 
 def scoreboard_promotion(ti) -> bool:
@@ -844,11 +833,11 @@ def main():
         if not is_promo:
             _allow()
             return
-        # The preset decides what this promotion needs (a verdict, and of what depth) - read from the
-        # promoted experiment's own checks artifact. A preset that promotes stamped 'unverified' relaxes
-        # the suite rule to not-RED and needs no verdict; every other preset keeps the established gate.
-        gate_reason, needs_verdict = verification_gate_problem(root, ti)
-        suite_reason = correctness_blocks_promotion(root, relaxed=not needs_verdict)
+        # The promoted experiment's own checks artifact decides what this promotion needs: its
+        # honest label, carried in the write; no refuted result; under none / minimal only a RED suite
+        # blocks. An artifact from before the one-check rule keeps the established rule (its CONFIRMED verdict).
+        gate_reason, needs_verdict, relaxed = verification_gate_problem(root, ti)
+        suite_reason = correctness_blocks_promotion(root, relaxed=relaxed)
         if suite_reason:
             _deny("promotion gate: " + suite_reason)
             return
@@ -869,7 +858,7 @@ def main():
             _deny("promotion gate: " + gate_reason)
             return
         if not needs_verdict:
-            _allow()          # promoted stamped 'unverified', as its preset allows and its label says
+            _allow()          # promoted at once with its honest label
             return
         subject_problem = promotion_subject_problem(root, ti)
         if subject_problem is None:

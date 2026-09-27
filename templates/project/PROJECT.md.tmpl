@@ -14,7 +14,7 @@ ledgers last. The directory map is the top-level `README.md`; the always-on rule
   GUARDED: §Mission · §Standing constraints · closed §Durable decisions entries. Append or
     supersede, never rewrite; every change carries a §Durable decisions entry (what changed, why,
     on what evidence); changes that alter what a RUNNING campaign is held to need the user.
-    §Standing constraints is delivered into every spawned worker/planner prompt of every campaign —
+    §Standing constraints is delivered into every spawned agent's prompt of every campaign —
     the highest-blast-radius text in this tree. -->
 
 > Notation: write all equations in math blocks (`$$ … $$` for display, `$…$` inline) with
@@ -37,7 +37,7 @@ ledgers last. The directory map is the top-level `README.md`; the always-on rule
 <!-- GUARDED tier — same rule as §Mission. -->
 
 **The operative section.** The campaign driver delivers everything under this heading into every
-spawned worker and planner prompt, every cycle — a constraint recorded here is guaranteed present,
+spawned agent's prompt, every cycle — a constraint recorded here is guaranteed present,
 never merely pointed at. Keep it lean: the hard constraints a run must obey and the mistakes it
 must not repeat; depth and derivations live in the sections below. When a bug keeps recurring, its
 one-line guard belongs here.
@@ -100,6 +100,11 @@ after each fix.
   as `C:\venvs\<name>`, and set `git config --global core.longpaths true`.
 - **Python launcher:** use `py -3.x` or the venv's `python`, not `python3`, which is a Windows
   Store stub on many machines.
+- **Long files through the shell:** write any file over ~100 lines, or with mixed quoting, with the
+  agent's file-writing tool, not a bash heredoc — a long heredoc can fail to parse and run nothing.
+- **Two ids per process (Windows, Git Bash):** `$!` is the MSYS pid, for `ps -p` and `kill`;
+  `taskkill //PID <pid> //T //F` needs the Windows pid — the runner writes its own to
+  `results/.run_heartbeat` (`"pid"`). Kill by the id you captured, never by searching the process list.
 - **Shared-drive filesystem (Google Drive / OneDrive File Stream):** may not support symlinks or
   junctions, reporting "Incorrect function". Use a copy or sync step instead of a symlink.
 

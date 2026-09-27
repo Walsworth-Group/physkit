@@ -28,7 +28,7 @@ import fnmatch
 import json
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -82,6 +82,16 @@ class Instrument:
         self.serializer = SERIALIZERS[self.serializer_name]
         d = spec["data"]
         self.data_root = self._resolve(d["root"])
+        # WHERE THE DRIVER READS vs WHERE THE INSTRUMENT WRITES. Normally the same path,
+        # so this is absent and nothing changes. But the driver need not run on the machine
+        # that owns the storage (a remote loop reaching it over a mount), and then the two
+        # sides name the same directory differently. `root` is always the DRIVER's view -
+        # every filesystem operation goes through it. `instrument_root`, when declared, is
+        # the INSTRUMENT's view, and is used for exactly one thing: the results directory
+        # written into the order. Kept as a RAW string, never resolved through Path: the
+        # other machine's convention must survive this one's (a foreign absolute path would
+        # otherwise be mangled into a relative component, or have its separators rewritten).
+        self.instrument_data_root = d.get("instrument_root") or None
         self.result_glob = d["result_glob"]
         self.engine_written = tuple(d.get("engine_written", ("manifest.json",)))
         self.types = spec["experiment_types"]
@@ -289,6 +299,27 @@ class Instrument:
         day = day or datetime.now().strftime("%Y_%m_%d")
         return self.orders_root / f"{self.orders_prefix}{campaign_tag}_{day}"
 
+    @staticmethod
+    def _foreign_sep(root: str) -> str:
+        """The separator the OTHER side uses, inferred from how it names its own root."""
+        if "\\" in root or (len(root) > 1 and root[1] == ":" and root[0].isalpha()):
+            return "\\"
+        return "/"
+
+    def _instrument_view(self, results_dir: Path) -> str:
+        """The results directory AS THE INSTRUMENT NAMES IT.
+
+        Returns the driver's own path unchanged unless `data.instrument_root` is declared.
+        Composed by string join rather than Path: pathlib normalises separators to whichever
+        OS is running, which would make the emitted order depend on where the loop happened
+        to run - the coupling this exists to remove.
+        """
+        root = self.instrument_data_root
+        if not root:
+            return str(results_dir)
+        sep = self._foreign_sep(root)
+        return root.rstrip("/\\") + sep + Path(results_dir).name
+
     def build_envelope(self, unit_id: str, experiment_type: str, settings: dict[str, Any],
                        *, campaign_tag: str, results_dir: Path,
                        expected_duration_s: float) -> dict[str, Any]:
@@ -303,7 +334,8 @@ class Instrument:
             "experiment_type": experiment_type,
             "settings": dict(settings),
             "expected_duration_s": float(expected_duration_s),
-            "results_dir": str(results_dir),
+            # The instrument's view (identical to ours unless instrument_root is declared).
+            "results_dir": self._instrument_view(results_dir),
         }
         if self.results_dir_key:
             env["_results_dir_key"] = self.results_dir_key
@@ -359,7 +391,15 @@ class Instrument:
             Path(orders_root_override).mkdir(parents=True, exist_ok=True)
             atomic_write(Path(orders_root_override) / (envelope["unit_id"] + ".manifest.json"),
                          json.dumps(envelope, indent=2))
-        return transport.submit(envelope, payload, campaign_tag=campaign_tag, day=day)
+        order = transport.submit(envelope, payload, campaign_tag=campaign_tag, day=day)
+        if self.instrument_data_root:
+            # The transport reconstructs the Order from the envelope, which now carries the
+            # INSTRUMENT's view of the results directory. The Order is OURS: ingest reads
+            # results through `order.results_dir`, so it must name the path THIS process can
+            # open. Restoring it here keeps the two views from leaking into one another -
+            # and the branch is skipped entirely when no translation is declared.
+            order = replace(order, results_dir=results_dir)
+        return order
 
     # ---------- waiting ----------
 

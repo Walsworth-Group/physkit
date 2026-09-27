@@ -1,0 +1,143 @@
+# Worker reference — {{CAMPAIGN_TITLE}}
+
+Depth for procedures a unit runs rarely. It is never delivered in a brief and it is frozen with the
+campaign: open **one section**, and only when `roles/worker.md` names it. Nothing here is a standing
+obligation; the contract is `roles/worker.md`.
+
+## Metric epochs — when the FROZEN metric itself is wrong
+Frozen means locked against quiet change, not immutable. A campaign sometimes discovers its ruler is
+wrong: the scorer measures the wrong thing (noise-free data when the campaign targets low SNR; a proxy
+that overfits and needs a second gate), or it does not compute what `campaign.md` §The ONE metric
+specifies. Revising it openly is the highest-integrity move available; revising it quietly is the
+failure the freeze exists to prevent. The procedure:
+
+1. **Is it really the metric?** A mutable guardrail or diagnostic that misjudges a run is fixed in place
+   (`roles/worker.md` §The FROZEN metric, no epoch). An experiment that changed what the metric sees is
+   a change in the measurement, the same section. Only a fault in the FROZEN scorer or its
+   specification opens an epoch.
+2. **Verify the claim before acting on it.** "The metric is flawed" is a kill-claim against the current
+   metric and gets `{{VERIFY_SKILL}}`'s kill-claim check like any other invalidation; the epoch cites
+   the verdict artifact. A `semantics` revision (what the metric measures changes, so §The ONE metric is
+   edited) needs a REFUTED or EVIDENCE_AGAINST kill of the old metric. A `mechanics` fix (the
+   specification stands; the scorer did not compute it) needs the correctness check that reproduces the
+   discrepancy, kept in `tests/correctness_checks.py` as a regression.
+3. **Name the direction.** `harder` (the current best would score worse under the new ruler), `neutral`,
+   or `easier` (it would score better). Easier is the goalpost-moving shape: it needs a REFUTED-tier
+   kill and gets maximum scrutiny at ratification.
+4. **Who enacts it is `configs/loop.json` `campaign.metric_revision` — the user's dial, never yours to
+   change:**
+   - `cautious` (the default): write `results/ESCALATE.md` with a `## METRIC-REVISION PROPOSAL` block —
+     the claim; the verdict artifact; the proposed change (the specification diff and the scorer diff);
+     `kind` and `expected_direction`; the re-baseline cost (which retained contenders must be re-scored).
+     Finish your unit if you can. The driver halts at the next loop top; the user opens the epoch or
+     declines it.
+   - `autonomous`: enact it yourself, in this order — bump `campaign.metric_version`; add the entry to
+     `campaign.metric_epochs` (`kind`, `status: "pending"`, `evidence`, `expected_direction`,
+     `opened_by: "worker@<exp_name>"`); edit the specification (`campaign.md` §The ONE metric, for a
+     semantics epoch) and the scorer; `python scripts/metric.py --selftest` green; then run the runner,
+     which re-runs the correctness suite and binds the new epoch's scorer hash; then the
+     re-baseline (step 5). The guard refuses an entry with no evidence, an easier revision without a
+     REFUTED kill, and any entry at all when the dial is `cautious` — propose instead.
+   - **The user already opened it** (a `cautious` proposal accepted: `campaign.metric_epochs` declares
+     the current `metric_version` but the scorer on disk is still the previous epoch's): enact it now,
+     in the `autonomous` order above, *before running any unit* — the runner binds an epoch's scorer
+     hash on the first experiment under it, so a unit run before the scorer edit would bind the new
+     epoch to the old scorer.
+5. **Re-baseline; never compare across the boundary.** The retained contenders are
+   `configs/RECOMMENDED.json` plus every ledger row carrying a `finding` cell or still cited as live in
+   `results/JOURNAL.md` §Where we stand. Re-score them under the new ruler as
+   ordinary units — one config-backed unit per contender — and list them, ranked, under the JOURNAL's
+   *What to try next and why*. Until then the runner sets earlier rows aside and the checks
+   artifact names the boundary. Rows keep their `metric_version`; nothing is deleted or re-labelled.
+6. **One line in `results/JOURNAL.md` §Where we stand:** `metric epoch <version> opened (<kind>,
+   <direction>) · <verdict or check> · <what the new metric measures, one sentence>`. That line is the
+   narrative record; the evidence is the verdict, the change is the specification diff, the governance
+   is the entry.
+
+The epoch stays `pending` until the user ratifies it — from an attended session, never a spawned role —
+and a ratified or rolled-back epoch is final. A pending epoch promotes normally, with its standing
+riding on the row's version (promote-and-label); a rolled-back one never promotes. When the ruler was
+wrong but the save-sets are valid and re-scorable, this procedure applies; when the artifacts
+themselves are tainted (a forward-model bug, corrupted data), that is `fork-campaign`, not an epoch.
+
+## Independent verification — presets, depth, the refuter, disputes
+How much routine verification runs is the campaign's verification preset (`configs/loop.json`
+`verify.preset`; the physkit plugin's `docs/reference/verification-presets.md`). Each result gets at
+most ONE check, the strongest its preset owes it: a self-verify by its own worker, a peer check by the
+next worker, or a verifier the driver spawns; a new best's check waits until the next unit has not
+beaten it, and the claim audit re-checks the final best. The driver stamps the scoreboard's `verified`
+column and the unit's label from the verdict artifact. In an attended session there is no driver: run
+the check the checks artifact's `verification.owed` names yourself - a self-verify in session, or, where
+an independent check is owed, the verify skill's fresh-agent refuter.
+
+- Validate every fit even when it converged cleanly: re-run from the config, recompute the metric from
+  scratch, confirm it reproduces within tolerance.
+- Falsify with code, not prose, and confirm the numbers are real. Write verification scripts and
+  controls (edge cases, randomized inputs, counterexamples) rather than arguing in text. Confirm every
+  reported number was produced by the evaluation: re-run it, for example re-running inference on the
+  test set. Never trust a number that was only stated.
+- An independent check (the driver's verifier; an attended session's refuter; never a worker) uses the
+  `{{VERIFY_SKILL}}` skill: it dispatches a fresh agent instructed to assume the result is wrong, which re-runs the experiment, recomputes
+  `{{PRIMARY_METRIC}}` and the guardrail, replicates with perturbed params, checks for metric
+  contamination{{VERIFY_EXTRA_CHECKS}}, and returns CONFIRMED / PROVISIONAL / QUESTIONABLE ASSUMPTION /
+  REFUTED / INCONCLUSIVE
+  with evidence. A promotion is real with its honest label; a finding recorded upward needs this
+  CONFIRMED. Run that verifier on a model at
+  least as capable as the loop; a different capable model is preferable, for mechanism diversity. Never
+  use a weaker model: a weak verifier yields false CONFIRMs. Mechanical sub-tasks the loop delegates
+  (search, citation checks, figure generation, validation) can run on a lighter model, since a
+  deterministic gate or your own read catches a slip.
+- Scale verification to the run cost. When an experiment is fast, reproduce it fully and add multiple
+  seeds + a statistical test. When it is long or expensive and a full re-run is not practical, the
+  verifier instead scrutinizes the code and the conclusions/logic and re-checks the saved artifacts (models,
+  data, logs) rather than re-running from scratch. That is why those artifacts must be saved
+  (§Quicker-check artifacts). The verify skill adapts its depth to the runtime.
+- Verify the fairness of any adapted evaluation. If a result relied on an adapted guardrail (§Metric
+  integrity, case 2), the verifier must judge whether the adaptation was faithful or merely lenient.
+  Such findings stay PROVISIONAL until that judgment returns faithful.
+- Record disputes, append-only. Every issue the verifier or the user raises lands on the experiment's
+  logbook `Disputes & responses` line, each with a response (the verifier writes its concern and the
+  response there; a user's challenge you answer is acknowledged in the JOURNAL under `## Open
+  questions`). Never delete a raised issue; rebut it if you disagree. These records are part of the
+  project's scientific integrity.
+
+## The reproducibility bundle — every experiment (baseline, non-negotiable)
+Every experiment must stay reproducible even after the shared code/config are later edited. For each
+experiment, save under a per-experiment directory `results/snapshots/exp<NN>_<slug>/`:
+- a copy of the config that produced it, so the bundle is self-contained,
+- a copy of the mutable code that produced it: the `scripts/` that ran (metric.py, experiment.py, run_campaign.py,
+  and any campaign-specific module / forward model); a shared script edited later would otherwise make
+  this experiment irreproducible,
+- a short manifest: the exact command line, key library versions, and any RNG seed / data hash.
+One directory per experiment, named by its label; keep it organized. The snapshot must be self-contained
+and documented: a reader with only this directory can both understand and re-run the experiment. This is
+the reproducibility baseline; git is optional and complements it, never replaces it (see
+the physkit plugin's `docs/reference/version-control.md`). For external/large input data, pin it by
+source + checksum + generation command + seed rather than copying it in. The runner writes the snapshot;
+pin the code behind the number, not just the params.
+{{CODE_SNAPSHOT_RULE}}
+
+## Quicker-check artifacts — expensive-to-recreate outputs
+The reproducibility bundle lets someone re-run an experiment; also save the outputs that are slow to
+recreate so a reviewer, a fresh agent, or the verifier on a long run can re-check a result quickly
+without rebuilding the pipeline: trained model weights/checkpoints, generated datasets, computed
+operators/dictionaries, fitted-parameter files. Save under `results/data/` (or a campaign-appropriate
+directory), keyed by the experiment label, and record their location in the experiment's
+`results/logbook.md` entry.
+
+## Additional visualization — noteworthy experiments
+When an experiment is a new current-best or otherwise noteworthy, also produce the heavier / explanatory
+visualizations: {{PROMOTED_BEST_ARTIFACTS}}
+<!-- Extra figures, montages/animations, etc. Keep the artifacts of each successive best so the
+     progression is inspectable. -->
+
+## Retention (recorded at setup)
+A setup-time decision, not a per-unit one: what is kept forever vs regenerated on demand. The reasoning
+is `campaign.md` §Decision record; the per-unit disk cost is `configs/loop.json`
+`unit_cost.typical_disk_mb`, and the driver refuses to launch or halts below ~3 units of headroom. The
+permanent record (save-set, snapshot, narrative, verdicts) is never in scope; only bulk artifacts whose
+regeneration is deterministic and recorded may be dropped, with the user's confirmation.
+{{RETENTION_PLAN}}
+<!-- The campaign-specific plan, if bulk artifacts are large enough to need one: which artifacts are
+     kept, which are regenerate-on-demand + their command, and any pruning cadence. If experiments are
+     small (< a few MB), state that no plan is needed and why. -->

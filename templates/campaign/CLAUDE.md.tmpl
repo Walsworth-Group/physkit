@@ -1,24 +1,8 @@
 <!-- physkit-dual-instructions:v1 -->
 # Campaign doctrine — {{CAMPAIGN_TITLE}} (always-on)
 
-You are running an autonomous research campaign. This file holds the non-negotiables that must never fall
-out of context, and it is this campaign's map of itself: §Where things live below names the file and
-section for everything the loop needs. Consult it rather than guessing a path; it is the one place that
-always describes this tree. In a supervised run the driver compiles the campaign definition
-(`campaign.md`), your role file, the project's standing constraints, the JOURNAL (the campaign's working
-memory) and the ledger's last rows into your spawn prompt: orient from that brief, never by reading the tree. In an attended session, read
-`campaign.md` and your role file (`roles/worker.md` or `roles/planner.md`) at the start of every
-experiment.
-
-> This campaign lives inside a project. Project-wide rules live in `../../CLAUDE.md`, auto-loaded as an
-> ancestor: shared data and promoted artifacts are referenced, never copied (`../../data`; the
-> promoted purpose dirs `../../scripts`, `../../models`, …); every campaign and session is indexed in
-> `../../PROJECT.md` §Lineage; ad-hoc work that has no frozen metric belongs in
-> `../../sessions/<date>_<slug>/`, not here. Invalidating updates **fork-and-archive** to a fresh ledger
-> rather than quietly carrying a tainted ledger forward. The project background — physics, conventions,
-> instrument, durable decisions — lives in the project overview, `../../PROJECT.md`; its §Standing
-> constraints is delivered into every spawned prompt, and the rest is depth to consult. Read and
-> update it per its edit tiers (project `CLAUDE.md` rule 7); do not make a local copy.
+This is your map. The driver compiles the brief; orient from it, never the tree; the project's
+`CLAUDE.md` auto-loads as an ancestor.
 
 ---
 
@@ -32,7 +16,7 @@ experiment.
   supports it.
 - Never manipulate the frozen evaluation. What is locked for this campaign is named below. Frozen means
   locked against quiet change, not immutable: a metric found wrong is revised as a declared, verified,
-  versioned metric epoch (`roles/worker.md` §Metric epochs), never edited in place.
+  versioned metric epoch (`roles/REFERENCE.md` §Metric epochs), never edited in place.
 - Weigh every claim by its evidence, never by its source: yours, the user's, or the literature's. A
   conflict with a few high-uncertainty papers may mean your data wins; a conflict with a well-established,
   tightly-measured value means assume the error is yours until proven otherwise. Quantify the magnitude
@@ -50,130 +34,75 @@ experiment.
   write a surprise off as noise without proof.
 - A crash is a bug, not a bad idea. Fix and re-run before judging the idea. Diagnose before pivoting.
 
-The reasoning behind all of the above: the physkit plugin's `docs/CORE.md` and `docs/PRINCIPLES.md`
-**at the kit version stamped in `campaign.md`'s header** (also atop `results/logbook.md`). The version
-pin is this campaign's doctrine record — every kit release is tagged, so the exact skills, docs, and
-templates it ran under are recoverable — and a later kit does not retroactively govern this run.
+The reasoning behind all of the above is the physkit plugin's `docs/CORE.md` and `docs/PRINCIPLES.md`
+at the kit version stamped in `campaign.md`'s header (also atop `results/logbook.md`); a later kit does
+not retroactively govern this run.
 
 ---
 
 ## This campaign's non-negotiables (on top of the integrity core above)
 
 **Frozen evaluation.** The locked tier here is `{{PRIMARY_METRIC}}` and its scorer, the data, and known
-ground truth. Unlocked hyperparameters are legitimate levers; "frozen" means the locked tier. The
-metric's epoch is `configs/loop.json` `campaign.metric_version`; who may open a new one is
-`campaign.metric_revision` — the user's dial (`cautious`: propose in `results/ESCALATE.md` and wait;
-`autonomous`: enact as a pending epoch in `campaign.metric_epochs`). The first experiment binds the
-scorer's code to its epoch; a change to it that no epoch declares refuses to run.
+ground truth; unlocked hyperparameters are legitimate levers. The metric's epoch is `configs/loop.json`
+`campaign.metric_version`; who may open a new one is `campaign.metric_revision`, the user's dial. The
+first experiment binds the scorer's code to its epoch, and a change to it that no epoch declares refuses
+to run.
 
-### HARD GATES (do not skip — these are the ones that get skipped under time pressure)
+### HARD GATES (each enforced in code; the text is the rule, the mechanism is named)
 1. **No promotion without its verification label.** Promotion means updating the current-best
    (`RECOMMENDED.json`), marking a scoreboard row `verified: CONFIRMED` / `NEW BEST`, or recording a
-   system-level finding in the project overview (`../../PROJECT.md` §Updates from discoveries, citing
-   the verdict artifact by path; a legacy project's `../../DISCOVERIES.md` stays hook-gated). Every
-   exported claim carries an honest verification label; `unverified` is a legitimate label, a softened
-   one is not. How much verification runs is the campaign's preset (`configs/loop.json` `verify.preset`)
-   — not your choice, and never lowered by a worker. Where the preset checks promotions, run
-   `{{VERIFY_SKILL}}` for that finding and get CONFIRMED before any of those writes; it spawns an
-   independent refuter sub-agent: a fresh agent, different or peer model, that never saw your
-   reasoning, at the depth the driver decided from the preset and the unit's measured cost (re-execution
-   when the unit is cheap and reproducible, review from the frozen record otherwise). Quote the verdict
-   line, with its mode, in the logbook entry. Where the preset checks nothing, the row promotes stamped
-   `unverified` — the promotion write says the word, never a verdict word you did not earn.
-   A finding that is PROVISIONAL / QUESTIONABLE / INCONCLUSIVE does not graduate and is not relabelled
-   `unverified`. A PreToolUse hook enforces this, subject-matched to the preset: a promotion write is
-   blocked until `results/verdicts/` holds the CONFIRMED verdict **for that experiment** wherever the
-   preset requires one — in supervised runs the driver's verification service writes it; run
-   `{{VERIFY_SKILL}}` yourself where it has not.
-   A settled finding is its ledger row's `finding` cell (`results/scoreboard.tsv`), written through
-   `python scripts/run_campaign.py --record <exp> --finding "..."` and citing its verdict artifact by
-   name — a claim with no verdict citation is an open question, not a finding, and steers nothing (the
-   one exception: a metric-epoch line, whose evidence is its `campaign.metric_epochs` entry). A promotion under a *pending* metric
-   epoch is legitimate — the row carries its `metric_version` and the epoch's standing rides with it
-   (promote-and-label) — but never under a rolled-back epoch, and never across an epoch boundary:
-   re-score first.
-2. **Name the levers each experiment moved, and weigh what moving several together costs.** Moving one
-   makes the cause plain. Moving several buys speed and turns the result into a claim about the
-   combination: `{{VERIFY_SKILL}}` then grades why it won as QUESTIONABLE (the score still stands), and a
-   multi-lever loss kills only the combination, clearing no member lever. Either is legitimate.
-   Leaving it unrecorded is not: nothing downstream can recover which knob did the work. The record is
-   the config's `_levers` list; the runner cross-checks it against the keys that changed and flags a
-   moved-but-undeclared key in `results/checks_<NN>.json`.
+   system-level finding in `../../PROJECT.md` §Updates from discoveries (citing the verdict artifact by
+   path). Every exported claim carries an honest verification label; `unverified` is a legitimate label,
+   a softened one is not. How much verification runs is the campaign's preset (`configs/loop.json`
+   `verify.preset`), never lowered by a worker: each result gets at most one check, the strongest its
+   preset owes it, and its label says which ran. The current-best pointer follows the true best at once
+   with that label; the PreToolUse hook blocks a promotion write carrying any other label or promoting a
+   refuted result, and a finding recorded upward needs a CONFIRMED independent verdict in
+   `results/verdicts/`. A PROVISIONAL /
+   QUESTIONABLE / INCONCLUSIVE finding does not graduate. A settled finding is its ledger row's `finding`
+   cell (`--record <exp> --finding "..."`), citing its verdict by name; a claim with no verdict citation is
+   an open question. A promotion never crosses a metric-epoch boundary without a re-score, and never
+   stands under a rolled-back epoch.
+2. **Name the levers each experiment moved.** The record is the config's `_levers` list; the runner
+   cross-checks it against the keys that changed and flags a moved-but-undeclared key in
+   `results/checks_<NN>.json`. Moving several at once is legitimate and makes the result a claim about
+   the combination (`{{VERIFY_SKILL}}` grades why it won as QUESTIONABLE; a multi-lever loss clears no
+   member lever). Leaving it unrecorded is not.
 3. **Clear this campaign's own resolution.** A win must exceed the noise, not sit within it. What "the
-   noise" means is set once, in `configs/loop.json` `campaign.noise_model`: a `stochastic` campaign
-   compares the delta against the replicate spread. Report `Δ ± spread`. A `deterministic` one compares
-   it against a numerical `tolerance`, because repeated runs are identical and there is no spread to
-   clear. The runner records the verdict in `results/checks_<NN>.json`.
+   noise" means is set once, in `configs/loop.json` `campaign.noise_model`: `stochastic` compares the
+   delta against the replicate spread (report `Δ ± spread`); `deterministic` compares it against the
+   numerical `tolerance`. The runner records the verdict in `results/checks_<NN>.json`.
 4. **A result is not saved until it has a scoreboard row, a `result_<NN>.json`, its figure, and its
-   snapshot.**
-5. **The loop does not end when an experiment does.** Step 12 goes back to step 1; a completed experiment
-   is not a stopping cue. The loop ends only on the human's `results/STOP` or a recorded
-   `results/stop_request.json` (reason code and evidence; `exhausted` must name zero untried levers).
-   Stopping is a decision you record, not a turn that happens to end. A Stop hook enforces this: it
-   refuses an unearned end-of-turn and hands you the JOURNAL NEXT pointer. Record the stop. Those two
-   exits are the whole contract; this gate is where it lives. Supervisor mode: they govern the driver's
-   campaign level; a worker's turn ends legitimately when its unit's iteration contract validates, and
-   the Stop hook stands down for driver-spawned workers. The **stall release**, the hook letting a session
-   go after ~25 continuations with no new scoreboard row, is not a third way out. It is a report that the
-   loop is alive and producing nothing. Diagnose it rather than riding to it; `roles/worker.md` has the
-   procedure.
+   snapshot.** The runner writes the first; the driver checks the set before it counts the unit.
+5. **The loop does not end when an experiment does.** Step 12 goes back to step 1. The loop ends only on
+   the human's `results/STOP`, the worker's recorded `**NEXT:** STOP - <why>` (the driver then runs the
+   claim audit), or — in an attended session — a valid `results/stop_request.json` (reason code and
+   evidence; `exhausted` must name zero untried levers). Stopping is a decision you record, not a turn
+   that happens to end; the Stop hook refuses an unearned end-of-turn in attended sessions and stands
+   down for driver-spawned workers, whose turn ends legitimately when the unit's iteration contract
+   validates. The hook's **stall release** (~25 continuations with no new scoreboard row) is not a third
+   way out; it is a report that the loop is producing nothing — diagnose it.
 
-## Where things live (this campaign's map; skills route through this table, not a hardcoded path)
+## Where things live — the reads the brief does not already carry
 
-Where a kit skill needs a campaign document, it is told to consult this table rather than assume a path,
-so a campaign that renames or relocates one corrects the row here and those skills follow. Skills still
-name fixed per-run artifacts (`results/result_<NN>.json`, `results/checks_<NN>.json`,
-`results/queue.json`, …) inline; this table covers the documents whose location varies between campaigns,
-not every path in the tree.
-
-The rows below are the standard layout. Correct any that this campaign does not match, and do it before
-the first experiment. A pre-restructure tree keeps the whole contract in one `docs/charter.md` (lint-ok:
-names the retired layout on purpose) and has no `campaign.md` or `roles/`; a campaign using the retired
-multi-stage suffix has `docs/charter_<NAME>.md`, `configs_<NAME>/`, `results_<NAME>/`; the oldest trees
-call the campaign definition `docs/program.md` (lint-ok: names the retired layout on purpose). A row
-naming a file this campaign does not have is worse than no row, because an agent will trust it.
+Everything else is in the brief. Skills route through this table rather than a hardcoded path; correct a
+row this campaign does not match before the first experiment — a row naming a file you do not have is
+worse than no row, because an agent will trust it.
 
 | What you need | Where it is |
 |---|---|
-| The campaign definition — mission, scope, the whole contract | `campaign.md` |
-| The metric, its direction, the guardrail, the self-test | `campaign.md` §The ONE metric |
-| What is FROZEN / out of scope | `campaign.md` §FROZEN / out of scope |
-| The levers you may change | `campaign.md` §The levers |
-| Run caps (hard) | `campaign.md` §Caps |
-| A-priori prediction rule (bound it before running) | `campaign.md` §Bound expectations BEFORE you run |
-| Promotion / current-best | `campaign.md` §Decision / promotion |
-| Your code — the five experiment hooks and the seams; the one script a campaign edits (the runner is the kit's machinery) | `scripts/experiment.py` |
-| The per-experiment procedure | `roles/worker.md` §The Experiment Loop |
-| Checkpoint cadence N — the CHECKPOINT step | `roles/worker.md` §The Experiment Loop |
-| This campaign's own verification checks | `campaign.md` §Verification |
-| Known landmines — re-check before any matching action | `campaign.md` §Known landmines |
-| Campaign decision record (append-only "why"s) | `campaign.md` §Decision record |
-| What every unit must save before it ends | `roles/worker.md` §The save-set |
-| Strategy — getting unstuck, reopening shelved directions | `roles/planner.md` |
-| What is not built yet, and what each item blocks | `README.md` §Setup status |
-| How the loop ends | `CLAUDE.md` §HARD GATES |
-| Plateau knobs, planner cadence, timeouts, loop settings | `configs/loop.json` |
-| Campaign properties — prediction mode, noise model, comparability tags | `configs/loop.json` |
-| Metric epochs — the current version, its standing, who may revise the metric | `configs/loop.json` |
-| The metric-epoch procedure — proposing, enacting, re-baselining a revision | `roles/worker.md` §Metric epochs |
-| The journal — the campaign's working memory: NEXT pointer, where we stand, live hypotheses, what to try next, traps, open questions | `results/JOURNAL.md` |
-| Settled findings, positive and negative (verdict-cited) | `results/scoreboard.tsv` `finding` cells (via `--record <exp> --finding`) |
-| The scoreboard — one row per experiment, every cell runner-written | `results/scoreboard.tsv` |
-| Per-experiment narrative detail (`--show <exp>`; Analysis and NEXT via `--record`) | `results/logbook.md` |
-| The current best configuration | `configs/RECOMMENDED.json` |
-| Verdict artifacts from independent verification (and `audit_<NN>.json`, the end-of-campaign claim audit's) | `results/verdicts/` |
-| A-priori predictions, written BEFORE each solve (the spend gate refuses without one) | `predictions/` |
-| Project overview — physics · conventions · instrument · durable decisions · lineage | `../../PROJECT.md` |
-[[OPTIONAL — the campaign keeps a LITERATURE.md (starting sources or ongoing search):
-| Curated references + the literature idea roadmap | `LITERATURE.md` |
-]]
-| The kit version this campaign runs under (the doctrine record) | `campaign.md` (header stamp) |
+| One old logbook entry (`--show <exp>`) | `results/logbook.md` |
+| The change record behind a unit (`--diff <exp>`) | `scripts/run_campaign.py` |
+| The knobs — prediction mode, noise model, verify preset, metric epochs, loop settings | `configs/loop.json` |
+| REFERENCE — metric epochs, verification presets, the reproducibility bundle | `roles/REFERENCE.md` (by section, when the contract names it) |
+| Decision record — the append-only "why"s (on disk; omitted from the brief) | `campaign.md` §Decision record |
+| Project overview — physics, conventions, instrument, durable decisions, below the constraints the brief already carries | `../../PROJECT.md` §Standing constraints |
 
 ## Standing authorization
-Sub-agent delegation is pre-authorized: the gate-1 refuter, independent checks, bounded parallel work.
-A skill that prescribes a sub-agent is the request. Spawn it; never pause the loop to ask, never
-substitute a self-run check. If no sub-agent can be spawned, record a BLOCKER and stop; do not promote
-where the preset requires a verdict.
+Sub-agent delegation is pre-authorized for bounded parallel work, and for the verifier's and the claim
+audit's refuters: a skill that prescribes a sub-agent is the request - spawn it, never pause the loop to
+ask. A worker never spawns an agent to check a result: its self-verify runs in its own session, and a
+result's independent check is the next worker's, the driver's verifier's or the claim audit's.
 
 Skills available as `{{VERIFY_SKILL}}`, `/physkit:frame-problem`, `/physkit:debug`,
 `/physkit:correctness-suite`, `/physkit:campaign-status`, `/physkit:report`, … — invoke them.

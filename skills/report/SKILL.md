@@ -130,8 +130,8 @@ re-check what a reader will act on, not every digit.
 - **Recompute/confirm each from source** rather than transcribing: re-run or re-read the producing
   computation and confirm it matches the stated value. A number the model produced by mental arithmetic
   (a delta, a ratio, a "which is larger") is not a source; regenerate it from code and point at the code.
-  In a campaign, reconcile against the frozen record and require the verification status the campaign's
-  preset owes the headline (the reference says which), and print the label.
+  In a campaign, reconcile against the frozen record and print each claim's verification label; a
+  shareable report needs the headline's to be independent (the reference says how).
 - **Internal consistency:** totals/sums, units, cross-references, and figures all agree with the numbers
   in the text, and the abstract matches the body. A number restated in several places agrees at all of
   them.

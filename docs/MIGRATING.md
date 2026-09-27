@@ -14,6 +14,209 @@ versions behind, work upward from the oldest section that matches your tree.
 > `python` is correct on macOS and Linux. Every command in this file works either way with that
 > substitution.
 
+## To one check per result — five presets, `heavy`, the survivor check (kit ≥ v0.12.0, ADR-0031)
+
+**What changed.** `verify.preset` is one of `none` · `minimal` (the default) · `light` · `heavy` ·
+`intensive` (`docs/reference/verification-presets.md`). Each result gets at most one check, the strongest
+its preset owes it: a self-verify in its own worker's session, a peer check by the next worker, or a
+driver-spawned verifier; a new best's independent check waits until the next unit has not beaten it.
+Review versus re-execution is gone (no `review` / `re_execution` rows, no eligibility rule, no verdict
+`mode`; a verdict carries `"kind": "peer" | "verifier"`). Labels: `unverified` · `self-checked` ·
+`self-verified` · `self-refuted` · `<VERDICT>/peer` · `<VERDICT>/verifier` · `<VERDICT>/audit`; an old
+`/review` or `/re-execution` reads as `/verifier`. `RECOMMENDED.json` follows the true best at once with
+its `verification_label`; the guard checks that label, a refuted result never promotes, and the driver
+rolls the pointer back on a refutation. The claim audit runs under every preset but `none`, re-checks the
+final best, and has no `panel` level; `intensive` has no different-model refuter and no per-block
+batching. Workers never spawn verification agents.
+
+**What breaks.** Preflight refuses `verify.preset: "moderate"` (renamed `heavy`, and not the same table:
+`heavy` self-verifies every other result and spawns a verifier for each best that survives) and any
+`campaign.verification` key (retired; no `per-block` / `promotion-only` mapping remains). `light` changed
+meaning: a new best's independent check is the next worker's peer check once it survives, not a spawned
+review of every promotion; choose `heavy` for a spawned verifier.
+
+**Procedure.** There is no migration machinery: no campaign ran the ADR-0021 presets for its result. Set
+`verify.preset` to one of the five names and delete `campaign.verification` / `verification_reason`;
+`upgrade_campaign.py --preset <name>` does both and brings in the runner, the guard and `roles/*.md` (the
+worker role has one section per preset, and the brief delivers only yours). Results recorded earlier keep
+their labels; one whose checks artifact has no `verification.owed` keeps the established verdict rule at
+the guard.
+
+## To runner-placed side documents and the artifact digest (kit ≥ v0.12.0)
+
+**What changed.** A worker's record file takes two more keys - `landmine` (a row of campaign.md §Known
+landmines, sourced to the unit) and `discovery` (PROJECT.md §Updates from discoveries, only with a
+CONFIRMED verdict the guard's own checks accept); the brief carries the shape of the last two units'
+artifacts; `--record` ends with the save-set; `--digest <exp>` is new. A gotcha belongs in the JOURNAL's
+*Traps and tooling*, no longer in PROJECT.md by hand.
+
+**Procedure.** `upgrade_campaign.py` brings in the runner and `roles/*.md`; nothing else has to change.
+A campaign whose `campaign.md` has no §Known landmines table refuses the `landmine` key until one is added
+(the kit's campaign template shows it); a project file without §Updates from discoveries refuses the
+`discovery` key the same way.
+
+## To isolated campaign spawns — no auto-memory, no MCP servers (kit ≥ v0.12.0)
+
+**What changed.** Every agent the driver spawns (workers, verifiers, the capstone, the preflight smoke
+spawn) now runs with two more defaults, both only on the default claude CLI:
+- **Auto-memory off.** The harness keeps a memory folder per working directory
+  (`~/.claude/projects/<dir>/memory/`) and loads it into every later session there, so one worker could
+  leave notes for the next that appear in no record of the campaign — not the JOURNAL, the ledger or a
+  snapshot — and exist on one machine only. The driver's `--settings` now also carries
+  `"autoMemoryEnabled": false`. A note worth passing on goes in the JOURNAL's *Traps and tooling*.
+- **No MCP servers.** The driver passes `--strict-mcp-config`, so a spawn loads no MCP server: not the
+  user's, not a project `.mcp.json`, not the claude.ai account's connectors. A spawn runs unattended,
+  and the connectors attach nondeterministically (one probe run in three got two of them, ~8k tokens).
+
+An interactive session opened in the campaign directory is untouched by both.
+
+**Procedure.** Nothing in a campaign tree has to change; `upgrade_campaign.py` brings in the runner that
+carries the defaults. If the campaign's workers kept notes in the auto-memory folder, read them once and
+move anything still true into the JOURNAL's *Traps and tooling* (or PROJECT.md's *Environment gotchas*)
+before the next launch. To change either default, `configs/loop.json` `driver`:
+- `auto_memory`: `off` (the default, and what an older `loop.json` without the key gets) or `on`; env
+  override `AUTORESEARCH_AUTO_MEMORY`.
+- `mcp_servers`: `none` (the default), `inherit` (whatever the harness would load), or the path of an MCP
+  config file relative to the campaign — exactly those servers, e.g. an instrument driven through MCP;
+  env override `AUTORESEARCH_MCP_SERVERS`. Preflight refuses a path that is not a file.
+
+## To the trimmed brief — the contract is facts and constraints, steering carries its source (kit ≥ v0.12.0)
+
+**What changed.** `roles/worker.md` lost its strategy sections (Decision-making guidelines, Getting
+unstuck, Before writing off or accepting, Rigor, After the run, When something looks unphysical) and
+kept every mechanical rule; `campaign.md` lost §Operating stance and its advice paragraphs, folded
+§Bound expectations into §The ONE metric, and gained a rule: every steering line (a landmine, a check to
+guard against, a range) carries its source, and the landmine table has a fourth column, `source`, that
+the validator requires. What the setup could only infer is written into the opening JOURNAL marked
+`[setup inference]`. `CLAUDE.md`'s gates are shorter, not weaker. The reasoning is ADR-0026.
+
+**Migration.** Nothing breaks: a campaign is frozen with the doctrine it was scaffolded under, and the
+runner reads none of the removed text. `upgrade_campaign.py` three-way-merges the three files if you
+want the trimmed versions in a running campaign; the removed placeholders need no fill. To adopt the
+source rule on an existing `campaign.md`: add the `source` column to §Known landmines and, for each
+row, either name where it came from or move it to the JOURNAL as `[setup inference]` - the validator
+skips a three-column table, so an untouched campaign stays valid. A campaign scaffolded fresh (a
+sibling for the performance test) gets all of it.
+
+## To the seams of the first field split — zero-evaluation units, the payload at the seams, non-comparand rows (kit ≥ v0.12.0)
+
+**What changed.** Seams `experiment.py` lacked, found when photophysics10's `ledger` units stopped
+recording after the split (its deliverable arm of the prediction gate, its scoring bypass, its
+`theta`-keyed comparand rule and its payload merge were edits to kit-owned functions the split could not
+carry): `ZERO_EVALUATION_MODES`; `prediction=` at `campaign_scoreboard_fields` / `campaign_checks`;
+`campaign_result_fields`; `campaign_comparand` and a payload `comparand: false`. The changelog has the
+detail; the seam file's header documents each.
+
+**Migration.** `upgrade_campaign.py` brings in the runner. Then, only if your campaign had such edits:
+1. A mode that records no score: add `ZERO_EVALUATION_MODES = {"<mode>"}` to `experiment.py`; make
+   `validate_method` refuse the mode to any config that fits, scores or spends; have `save_figure`
+   dispatch a card for it (the payload carries `is_evaluation: False`); its `run_experiment` branch is
+   its record gate (the deliverable on disk before the row). Its prediction file names
+   `{"predicted": {"deliverable": "..."}}` and no numeric range.
+2. Columns computed from the fit: take `prediction` in `campaign_scoreboard_fields` instead of reading
+   `result_<NN>.json` back. The payload keys the result JSON used to carry: return them from
+   `campaign_result_fields` (photophysics10: every non-private key except the raw arrays, `theta`
+   normalised to a list).
+3. A threshold row: return `comparand: False` in its payload; for rows already recorded, define
+   `campaign_comparand(result)` (photophysics10: `bool(result.get("theta"))`).
+4. `tests/correctness_checks.py`: a check that drives the record path redirects the paths of BOTH
+   modules (`run_campaign.IMAGES` and `experiment.IMAGES`), takes hooks and constants from
+   `experiment` and the record path from `run_campaign`. A check that pins a ledger column by name:
+   the narrative cell is `note` since the bounded record (`notes` before it).
+
+## To setup-run baselines and no expectations section (kit ≥ v0.12.0)
+
+**What changed.** New campaigns run experiment 000 in the setup session (the floor is on the ledger at
+handoff; `campaign.md` §Decision record ED-000 records it) and carry no §Loosely-held expectations: the
+hypotheses live in the JOURNAL's §Live hypotheses as questions. **An existing campaign needs no step**:
+its exp 000 has run, and the in-place upgrade merges `campaign.md` three-way - accept the removal of
+§Loosely-held expectations (move anything still live into the JOURNAL's §Live hypotheses, as a question)
+and of §Baseline gate (the floor is your exp000 row; copy the methods and criteria into an ED-000 entry
+if you want them on the record). `campaign-status` now reads the hypotheses from the JOURNAL.
+
+---
+
+## To the contract in the role file (kit ≥ v0.12.0)
+
+**What changed.** The runner no longer carries the worker's, the verifier's or the capstone's
+instructions: they live in `roles/worker.md`, `roles/verifier.md` and `roles/capstone.md`, delivered
+first in every brief, frozen with the campaign, yours to read and edit. The runner's own prompt is one
+opening line (plus the per-spawn values for the verifier and the capstone). Reference material the
+worker needs rarely - the metric-epoch procedure, the verification presets, the
+reproducibility bundle, quicker-check and extra visualization - lives in `roles/REFERENCE.md`, which no
+spawn reads whole; the contract names the section to open. `scripts/experiment.py` is not delivered any
+more (open it by line range or grep when a unit changes code). `campaign.md` §Caps is §Targets - the
+maxima were never checked; the enforced number is the disk floor in `loop.json`. The retention plan's
+reasoning belongs in `campaign.md` §Decision record (the template has an entry for it).
+
+**The step.** `upgrade_campaign.py` (the in-place upgrade below) merges `roles/worker.md` three-way
+against the template it was scaffolded from - expect conflicts where your campaign edited the role, and
+resolve them knowing that the new file is ONE copy of everything (a rule the old role stated twice is
+stated once now). It creates `roles/verifier.md`, `roles/capstone.md` and `roles/REFERENCE.md` from the
+templates with the values it can recover; a placeholder it cannot recover is left literal and named in
+the upgrade log - copy the rendered text from your old `roles/worker.md` backup beside it. Preflight
+requires all four files. A `roles/worker.md` over 24 KB gets a preflight WARN, never a clip.
+
+**Why.** The scaffolding audit (`synthesis/SCAFFOLDING_AUDIT_2026-09.md`) measured a field worker spawn
+at ≈166 KB before its first tool call, one third of it duplicated between the runner's prompt string
+and the role file, and a prompt string the upgrade rewrote in place as the one instruction surface
+that broke the freeze-and-stamp rule. Niko's call (decision 1): the researcher's tree holds the record
+of exactly what an agent was told.
+
+---
+
+## To the loop without a queue (kit ≥ v0.12.0)
+
+> **Since the first cut of this section:** the driver's counters live in `results/driver_state.json`,
+> not `results/loop_state.json` (that name is the Stop hook's, and the two collided). A campaign that ran
+> the queueless driver before the rename: delete the driver's keys (`accepted_units`, `accepted`,
+> `pending_verification`, `consecutive_operational_failures`, `last_accept_utc`) from
+> `results/loop_state.json` by hand, and relaunch - the driver re-seeds from the archived queue if one
+> is there, else starts its counters fresh. And **check `driver.permission_mode`**: the current CLI
+> denies a headless `auto` spawn its Write and Bash, and the driver now halts on the first denied spawn
+> naming the fix (`bypassPermissions`).
+
+**What changed.** The planner agent and `results/queue.json` are retired (ADR-0024). Niko's tests found
+the queue actively negative: agents filled it with trivial variations of the last unit instead of asking
+what the problem needs now, and a setup-written direction sat at the head of it for ~20 units while the
+campaign's actual question never ran. The driver now spawns a fresh worker per unit with **no unit
+assigned**; the worker chooses the one experiment the campaign needs now from the JOURNAL's `**NEXT:**`
+line and *What to try next and why*, the ledger's last rows and the previous card, names it
+`exp<NN>_<slug>`, writes its config from the template the brief delivers, predicts, runs, records, writes
+the JOURNAL anew, and exits. One unit per spawn.
+
+What that removes from your tree and your vocabulary: `results/queue.json` and `results/queue_drop/`,
+`--record --propose` / `--decline`, `roles/planner.md`, the planner cadence, the plateau knobs and
+`queue.max_outstanding_units`, and unit `block`s. What replaces them:
+
+| Was | Is now |
+|---|---|
+| a queued unit / a proposal | a ranked entry under the JOURNAL's *What to try next and why*; an idea whose unit is recorded leaves the list, and its ledger row is its record |
+| `queue.json` accept counters, `pending_verification` | `results/driver_state.json` — the driver's counters only, driver-written, read by no agent |
+| a verifier proposal through `queue_drop/` | the verdict artifact's `follow_up` field on a REFUTED or INCONCLUSIVE verdict; the driver relays it to the next worker as `results/inbox/verifier_<exp>.md` |
+| the queue running empty = the loop is done | the worker writes `**NEXT:** STOP - <why>` as the JOURNAL's NEXT line; the driver runs the claim audit, then halts with that reason as a stopping decision for you |
+| `loop.json` `planner` block (model / effort) | `loop.json` `verifier` block, which also governs the end-of-loop claim audit. An older file's `planner` block is still honoured by the runner, so this one is optional |
+
+**The step.** From the campaign directory, after the in-place upgrade below:
+
+```bash
+python "<kit>/skills/new-campaign/scripts/upgrade_campaign.py" . --retire-queue
+```
+
+It archives `results/queue.json` to `results/queue_archive/`, folds its open `next` ideas into
+`results/JOURNAL.md` under a *migrated from the retired queue* heading inside *What to try next and why*
+(with their rationales, so nothing live is lost), and moves `roles/planner.md` and `results/queue_drop/`
+into the archive beside it. Nothing is deleted. Shelved and declined entries stay in the archived file as
+the record of what was tried and why it was set aside; fold back by hand only what you still want run.
+
+**Afterwards.** Read the JOURNAL's *What to try next and why* yourself before relaunching: it is now the
+only thing steering the campaign, and a migrated list is only as good as the queue it came from. Prune
+what the evidence has since killed. A campaign whose JOURNAL leaves that section empty will have its
+next worker choose from the ledger alone, which is legitimate but blind; a campaign you believe is
+finished should say so through a worker's `NEXT: STOP`, not through an empty list.
+
+---
+
 ## Upgrading an existing campaign in place — `upgrade_campaign.py` (kit ≥ v0.11.0, 2026-09-03)
 
 Re-scaffolding a running campaign re-answers an interview whose answers already sit in the rendered
@@ -32,14 +235,14 @@ so the script can fetch the base templates; `--base-dir` points at an older plug
 python "<kit>/skills/new-campaign/scripts/upgrade_campaign.py" . --preset light --base-git <kit repo>[@<ref>]
 ```
 
-`--preset` is required (there is no default for a campaign that already has a history: `intensive`
-keeps today's spend, `light` is what a new campaign would get; `docs/reference/verification-presets.md`).
+`--preset` is required (there is no default for a campaign that already has a history: `light` is what
+a new campaign would get; `docs/reference/verification-presets.md`).
 `--dry-run` prints the merge outcome without writing. Every file changed gets a
 `<file>.pre_upgrade_<UTC>` backup beside it; the log lands in `results/diagnostics/upgrade_<UTC>.md`;
 `campaign.md` and the logbook gain an "Upgraded in place to physkit …" provenance line under the
 scaffold stamp. The script also edits `configs/loop.json` (`verify.preset`; `campaign.reproducible`;
 `driver.verifier_retries`; the legacy `campaign.verification` / `verification_reason` removed; a
-`full_reproduction_threshold_s` kept as the extra cap it now is), adds `_metric_version` to
+`full_reproduction_threshold_s` removed), adds `_metric_version` to
 `RECOMMENDED.json`, and materializes the project-level `AGENTS.md` twin when the project has one
 unmarked `CLAUDE.md` and no `AGENTS.md`. Exit 0: merged clean and validated. Exit 2: conflicts left.
 Exit 3: the validator failed.
@@ -72,9 +275,9 @@ which makes them `invariants` — run every unit, metered. Preflight runs the wh
 refuses an over-budget every-set by name, each with its row. On photophysics10's sixteen-check suite
 (206 s whole, against a 150 s budget) that line named `convergence` (164 s) and
 `conservation_invariants` (29 s). Declaring them `@check(row="machinery", depends_on=("scripts/<engine>.py",))`
-is the fix under `light` and `moderate`, where machinery runs at setup and on code change: the every-set
+is the fix under `light` and `heavy`, where machinery runs at setup or on code change: the every-set
 fell to 34 s. Under `intensive` the machinery row fires every unit too, so the declaration alone changes
-nothing and preflight says so — choose `moderate`, make the check cheaper, or declare a per-result
+nothing and preflight says so — choose `heavy`, make the check cheaper, or declare a per-result
 check `gates`. Fill the contract checks or record `tests/CORRECTNESS_NA.md`.
 
 **Finish** with the validator and preflight, the latter under the campaign's own interpreter (the one
@@ -88,9 +291,9 @@ python "<kit>/skills/new-campaign/scripts/validate_campaign.py" .
 <campaign python> scripts/run_campaign.py --preflight
 ```
 
-Read the new HARD GATE 1 in the campaign `CLAUDE.md` and the presets doc before relaunching: promotions
-now follow the label, not the verdict alone. Results recorded before the upgrade keep the established
-promotion rule (their checks artifacts predate the presets).
+Read the new HARD GATE 1 in the campaign `CLAUDE.md` and the presets doc before relaunching: each result
+gets one check, and the current-best pointer carries its label. Results recorded before the upgrade keep
+the established promotion rule (their checks artifacts predate the presets).
 
 ## To `report` as the campaign capstone — `final-report` merged away (kit ≥ v0.11.1, 2026-09-16)
 
@@ -176,7 +379,8 @@ which now binds — lower it to 1 (the new-campaign default) if you want one pro
 
 **What changed.** The five experiment hooks (`validate_method`, `run_experiment`, `load_target`,
 `guardrail`, `save_figure`) left `scripts/run_campaign.py` for a new campaign-owned
-`scripts/experiment.py`, with four optional seams the runner calls when the campaign defines them:
+`scripts/experiment.py`, with four optional seams the runner calls when the campaign defines them (more since
+v0.12.0 - the seams section above):
 `residual(prediction, target)`, `campaign_scoreboard_fields(cfg, diags, score)` (the campaign's
 scoreboard columns), `campaign_checks(exp_id, label, score, diags, cfg)` (merged into
 `results/checks_<NN>.json`), and `baseline_config()` (what `--baseline` runs). `run_campaign.py` is now
@@ -251,6 +455,11 @@ section exceeds the driver's cap. Evidence: `synthesis/BUILD_BACKLOG.md` §2026-
 
 ## To the verification preset — `configs/loop.json` `verify.preset` (kit ≥ v0.11.0, 2026-09-03)
 
+> **Superseded by ADR-0031** (the section at the top): the four presets' tables, the `review` /
+> `re_execution` rows, the verdict `mode`, the `/review` and `/re-execution` labels and the
+> `campaign.verification` fallback below are retired, and preflight now refuses that key and `moderate`
+> (renamed `heavy`). What follows is the v0.11.0 record; for the edit today, use the top section.
+
 **Symptom.** Preflight prints `preflight OK: verify: preset=… (invariants=… machinery=… gates=…
 self_check=… review=… re_execution=… capstone=…)` — or, for an older file,
 `rows from campaign.verification='per-block' (legacy - no verify.preset; docs/MIGRATING.md)`. The
@@ -290,6 +499,10 @@ non-independent. The verbatim sentence lives in `docs/CORE.md`, `docs/PRINCIPLES
 `CLAUDE.md` (HARD GATE 1), and `campaign.md`.
 
 ## To measured verification depth, the change manifest, and the time ledgers (kit ≥ v0.11.0, 2026-09-03)
+
+> **Since ADR-0031** there is no verification depth: `verification.re_execution` and the quarter-of-the-
+> iteration-timeout rule are gone, and `campaign.reproducible` is only a fact a verifier reads when it
+> chooses how to refute. The change manifest and the time ledgers stand.
 
 **Symptom.** A relaunched campaign prints `correctness suite: status=green wall=…s` before each unit,
 `[supervise] … done: status=… elapsed=…s` after each spawn, and `utc=` on the driver's decision lines;
@@ -456,7 +669,8 @@ constraint delivery. Migrate a project you are still working in; leave finished 
    completed unit or block, stamps the scoreboard's `verified` column from the verdict, and will not
    clear the block without it — `configs/loop.json` `campaign.verification`, default `per-block`)
    all live in `scripts/run_campaign.py`; a migrated campaign keeps the old behavior until you
-   re-copy the new driver template and add the `verification` keys to its `campaign` block. Check
+   re-copy the new driver template and add the `verification` keys to its `campaign` block (today's
+   driver refuses that key: set `verify.preset` instead, per the top section). Check
    `frozen_core` before swapping mid-campaign: if the driver is in the core file set, the swap
    changes the core hash and the recorded correctness green no longer applies.
 7. Re-run the validator on the project root; it must PASS with zero issues.

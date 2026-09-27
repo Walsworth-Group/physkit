@@ -145,9 +145,9 @@ def model_for(section: dict, selection: Selection) -> str:
 
 def model_errors(loop_cfg: dict, selection: Selection) -> list[str]:
     errors = []
-    for role in ("worker", "planner"):
+    for role in ("worker", "verifier"):
         try:
-            section = loop_cfg.get(role) or {}
+            section = loop_cfg.get(role) or (loop_cfg.get("planner") if role == "verifier" else None) or {}
             model_for(section, selection)
             effort_for(section, selection)
         except BackendError as exc:

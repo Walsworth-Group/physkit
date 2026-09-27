@@ -1,83 +1,46 @@
 # Autonomous Research Loop — {{CAMPAIGN_TITLE}}
 
-The definition of this {{CAMPAIGN_KIND}} campaign: the mission, the FROZEN metric, the levers, and the
-constraints both roles work under. Per-role procedure is in `roles/worker.md` and `roles/planner.md`;
-the hard gates are in `CLAUDE.md`. Run continuously until manually stopped.
+The contract for this {{CAMPAIGN_KIND}} campaign — everything above §Decision record; that section is the
+append-only record. **Scaffolded by physkit {{PHYSKIT_VERSION}}**: the pin that recovers the exact kit
+this run is governed by (a later kit does not govern it retroactively).
 
-> **Scaffolded by physkit {{PHYSKIT_VERSION}}** (also stamped at the top of `results/logbook.md`).
-> That version pin recovers the exact kit — skills, reference docs, templates — this campaign was
-> generated under and runs with; a later kit does not retroactively govern this run. Everything above
-> §Decision record is the signed-off contract; that section is the campaign's append-only record.
+**What this file is, and is not.** The facts of the problem and the constraints of the campaign: what
+is measured, what may change, what is frozen, what is known. It is not a strategy. Every steering
+statement in it — a landmine, a check to guard against, a range — carries its source (the user, a
+ledger id, a verdict, a literature key); a statement the setup could only guess at is not here but in
+the JOURNAL, marked as the setup's inference, where the worker who tests it may overturn it.
 
 ## Mission
 {{MISSION_STATEMENT}} — by optimizing {{LEVER_SUMMARY}}, maximizing the single FROZEN metric
 `{{PRIMARY_METRIC}}` ({{PRIMARY_DIRECTION}} = better) on {{EVAL_TARGET}}, with
-{{GUARDRAIL_SUMMARY}} co-tracked as a guardrail (necessary-but-not-sufficient). Run continuously until
-stopped; the loop ends only in the ways HARD GATE 5 in `CLAUDE.md` sets out.
+{{GUARDRAIL_SUMMARY}} co-tracked as a guardrail (necessary-but-not-sufficient). The loop ends only in
+the ways HARD GATE 5 in `CLAUDE.md` sets out.
 - **The decision/outcome this campaign serves:** {{DECISION_SERVED}}
 - **Done looks like:** {{DONE_CRITERIA}}
 
-## Loosely-held expectations (hypotheses to test, not commitments)
-These are what the campaign tests. Updating them as evidence arrives is success, not failure;
-`campaign-status` re-checks them at every checkpoint against what the scoreboard actually shows.
-- <what we expect / suspect — and how a result would confirm or kill it>
-- <the first-instinct answer, recorded so it can be checked against what actually worked>
-
 ## The ONE metric (FROZEN — revised only as a declared epoch, never edited in place)
 `{{PRIMARY_METRIC}}` = {{METRIC_DEFINITION}}. {{PRIMARY_DIRECTION}} = better. Computed by
-`{{FROZEN_SCORER_PATH}}` (FROZEN). You change what FEEDS the metric, never how it is computed — unless
-the metric itself is found wrong, which is a **metric epoch** (`roles/worker.md` §Metric epochs): a new
-`metric_version`, a verified kill of the old metric (or, for a scorer that did not compute this
-specification, the check that reproduces the discrepancy), this section updated, and the retained
-contenders re-scored. The epoch record is `configs/loop.json` `campaign.metric_epochs` — the block is
-absent until the first revision; with no block, the current `metric_version` is the co-designed first
-epoch, ratified, and it never needs an entry of its own; who may open one is `campaign.metric_revision`,
-the user's dial. **Epoch, not fork:** when
-the ruler was wrong but the save-sets are valid and re-scorable, open an epoch and the ledger survives;
-when the artifacts themselves are tainted (a forward-model bug, corrupted data), that is
-`fork-campaign` — a clean break with a fresh ledger.
+`{{FROZEN_SCORER_PATH}}` (FROZEN). You change what FEEDS the metric, never how it is computed; a metric
+found wrong is a declared **metric epoch** (`roles/REFERENCE.md` §Metric epochs; the runner refuses to
+spend under a `metric_version` no epoch declares, `configs/loop.json` `campaign.metric_epochs`).
+**Epoch, not fork:** a wrong ruler over valid, re-scorable save-sets is an epoch; tainted artifacts are
+`fork-campaign`, a clean break with a fresh ledger.
 - **Hard bounds:** {{METRIC_HARD_BOUNDS}}.
-- **Plausible a-priori range:** {{METRIC_PLAUSIBLE_RANGE}}. Predict before you run. A result outside
-  this range is a red flag to investigate, not a triumph. What the spend gate accepts as a prediction is
-  `configs/loop.json` `campaign.prediction_mode`, set once at setup; this campaign is
-  `{{PREDICTION_MODE}}`. Never weaken it to get past an awkward prediction: a fabricated range is a fake
-  control, and so is a mode picked for convenience.
-- **Baseline (exp 000):** {{BASELINE_DESCRIPTION}} → the floor to beat. Measure it; don't assume it.
-  Also keep the **trivial/degenerate reference** scores (all-zeros / constant / mean / a trivial physical
-  state): a result that loses to a trivial answer is not a win, and a non-physical trivial answer that
-  wins flags a metric/units error (`{{VERIFY_SKILL}}` checks this per claim).
+- **Physical bounds and scales:** {{PHYSICAL_BOUNDS_NOTES}}. A fitted parameter that runs to a
+  non-physical value is a result about the model being wrong, not a free win.
+- **A-priori range, with its basis:** {{METRIC_PLAUSIBLE_RANGE}}. The basis is a source — a bound, the
+  floor, a published value ({{APRIORI_BOUND_NOTES}}) — never an expectation. The prediction each unit
+  writes before it runs is the control (`configs/loop.json` `campaign.prediction_mode`, here
+  `{{PREDICTION_MODE}}`; the spend gate prints the shape it wants).
+- **Baseline (exp 000):** {{BASELINE_DESCRIPTION}} → the floor to beat, measured at setup (§Decision
+  record ED-000). Keep the **trivial/degenerate reference** scores (all-zeros / constant / mean / a
+  trivial physical state) beside it: a result that loses to a trivial answer is not a win, and a
+  non-physical trivial answer that wins flags a metric/units error.
 [[OPTIONAL — metric has theoretical ceilings (e.g. an upper bound any decoder can reach under a fixed forward):
 - **Ceilings:** {{CEILING_LIST}}. A score above its own ceiling is impossible: a bug or a metric leak,
   not a breakthrough. Distinguish **ceiling moves** (the bound itself rose: physical) from
   **gap-to-ceiling moves** (a freer model closed the gap, often overfitting; must pass the guardrail).
 ]]
-
-## Baseline gate — experiment 000
-
-Fires once, before the loop. Experiment 000 does two jobs: it establishes the floor every later method
-must beat, and it validates the full {{VALIDATION_CHAIN}} chain end-to-end, so a later win is not an
-artifact of a broken pipeline.
-
-### Baseline method(s)
-{{BASELINE_METHODS}}
-<!-- The simplest defensible method(s) — e.g. a closed-form / least-squares / matched-filter / naive
-     solution. No learned or heavily-tuned components. This is the no-skill-to-low-skill reference. -->
-
-### Run the baseline
-```
-{{BASELINE_COMMAND}}
-```
-
-### Gate criteria (STOP and debug if violated)
-{{GATE_CRITERIA}}
-<!-- The expected baseline value/range and the sanity checks that prove the chain is sound (e.g. a
-     known input maps to a known output; the metric collapses on a null input; units come out right).
-     A floor you can't trust makes every later delta meaningless. -->
-
-### Record the floor
-{{FLOOR_RECORD_RULE}}
-<!-- The runner writes the exp000 ledger row; `--record` it and put the floor under the JOURNAL's
-     §Where we stand. This value is the "current best" until a verified promotion replaces it. -->
 
 ## Dataset / inputs
 
@@ -85,10 +48,9 @@ artifact of a broken pipeline.
 For such a campaign, keep just this note: "Inputs are the fixed experimental data at {{DATA_SOURCE}};
 READ-ONLY, never modify or regenerate. Verify the files exist before experiment 000."]]
 
-Fires on a fresh tree or when inputs change. Defines how the campaign's inputs are obtained/generated
-and split, so the data is reproducible and the splits stay fixed.
-> Never regenerate or overwrite inputs on an unconfirmed diagnosis. Inputs are load-bearing and
-> overwriting them is usually irreversible.
+How the campaign's inputs are obtained or generated and split, so the data is reproducible and the
+splits stay fixed. Never regenerate or overwrite inputs on an unconfirmed diagnosis: inputs are
+load-bearing and overwriting them is usually irreversible.
 
 ### Source
 {{DATA_SOURCE}}
@@ -113,96 +75,64 @@ and split, so the data is reproducible and the splits stay fixed.
 <!-- What distribution the inputs represent and which knobs are a data choice (held fixed) vs a
      method lever (varied). -->
 
-## Bound expectations BEFORE you run (a-priori prediction)
-Predicting the answer first turns each run into a real test instead of a fishing trip, and it is the
-fastest way to catch bugs, leakage, and good-news-too-good results.
-- Write the prediction before the run, in the shape this campaign's `prediction_mode` requires
-  (`configs/loop.json` `campaign`; this campaign is `{{PREDICTION_MODE}}`). `range` → a defensible numeric
-  `[low, high]` from physical units, known system properties, and the literature, not from hope.
-  `direction` → which way `{{PRIMARY_METRIC}}` should move and versus which prior experiment.
-  `none` → the reasoning alone, for a campaign that cannot bound its answer. The runner refuses to spend
-  an evaluation without one. The rationale is ONE SENTENCE - the number and the one basis it rests on;
-  the bound notes below are cited, not restated. {{APRIORI_BOUND_NOTES}}.
-- Respect physical bounds and scales. {{PHYSICAL_BOUNDS_NOTES}}. A fitted parameter that runs to a
-  non-physical value is a result about the model being wrong, not a free win.
-
 ## The levers (what the agent CAN change)
 {{LEVERS_LIST}}
 
-Roughly orthogonal families: {{LEVER_CATEGORIES}}. After a plateau, escalate to an orthogonal lever;
-do not keep tweaking one knob.
+Every lever as the code exposes it — the setup agent fills this table while it implements the code, and a
+new lever is added here in the unit that introduces it. This table is what a worker reads instead of
+grepping the source:
 
-### Choosing among levers and models (parsimony + tie-breaking)
-- Could another model/parameterization explain the data equally well? If two options fit comparably
-  they are degenerate on this metric: prefer the simpler, and design a discriminating test rather than
-  declaring a winner by a coin-flip-sized margin.
-- When two options tie within the spread, break the tie on the cost that matters here:
-  {{TIEBREAK_COSTS}} (computational time, parameter complexity, robustness across conditions,
-  interpretability). Don't add a knob you can't justify.
+| config key | meaning | range or values | default | where in code |
+|---|---|---|---|---|
+| `<key.subkey>` | <what it changes, physically> | <[lo, hi], or the allowed values> | <default> | <file:function> |
 
-### Idea sources — novel ideas welcome, cite the borrowed ones
-Well-founded novel ideas that go beyond the published literature are in scope; the campaign is not
-limited to known approaches. When a hypothesis comes from a specific source (a paper, a doc, the user),
-cite that source in the config's `_hypothesis` (the runner carries it onto the logbook's `Hypothesis`
-line), and in `LITERATURE.md` if it exists. Tracking where
-each idea came from is part of the record. When an idea comes from a related solved problem, note the
-analogy and what transfers: the closest prior art's approach, not just its citation. A method that
-worked on a nearby problem is often the fastest lever to try.
-
-## FROZEN / out of scope (never changed quietly; the scorer only as a declared metric epoch)
+## FROZEN / out of scope
 - **Out of scope / explicitly not claimed:** {{OUT_OF_SCOPE}}
-- **FROZEN** (never edited in place; a change to the scoring math is a declared metric epoch —
-  `roles/worker.md` §Metric epochs — re-validated and ratified by the user): the scoring math
-  `{{FROZEN_SCORER_PATH}}`; {{FROZEN_LIST}}; the experimental data (read-only, and never revised).
+- **FROZEN** (changed only as a declared metric epoch): the scoring math `{{FROZEN_SCORER_PATH}}`;
+  {{FROZEN_LIST}}; the experimental data (read-only, never revised).
 - **READ-ONLY** (use, don't edit): {{READONLY_LIST}}.
 - **MUTABLE**: {{MUTABLE_LIST}} (+ `configs/` — a new file per experiment).
 [[OPTIONAL — the campaign has a data/distribution choice that must be held fixed:
 - **{{DATA_CHOICE_WARNING}}** — changing {{DATA_DISTRIBUTION}} changes the target; hold it fixed unless
-  the change is the object of study; log the change loudly, at most a couple of early experiments.
+  the change is the object of study, and log the change loudly. Where the code can refuse it, it does
+  (`validate_method` in `scripts/experiment.py`); where it cannot, this line is the only guard.
 ]]
 
 ## Known landmines / Do-not-repeat
-The hazards already paid for: what broke the machine, corrupted a run, or cost hours. Re-check this
-table before any action matching a listed trigger (GPU use, launching a detached process, overwriting
-inputs, …). Before complying with a request that would hit one, surface it — never walk into a listed
-landmine silently. A hazard recorded only in a chat message or a memory file is not re-checked, and
-recurs: record it here. A landmine leaves this table only when the *condition* that made it dangerous
-changes, never to save space.
+What is KNOWN to go wrong, each row with its source: the user, a unit of this campaign (its ledger id),
+a sibling campaign's record, a verdict. **A row without a source does not ship** — a guessed landmine
+steers a campaign away from a path nobody tested, and it cannot be argued with from inside a spawn.
+Re-check the table before any action matching a listed trigger; remove a row only when the condition
+that made it dangerous changes, never to save space. An empty table is the correct state of a fresh
+campaign with no prior run.
 
-| trigger (when about to…) | landmine (what went wrong) | do instead |
-|---|---|---|
-| <e.g. use the GPU for the dictionary build> | <froze the machine; hard reboot> | <use the CPU-parallel path; do not re-enable the GPU build> |
+| trigger (when about to…) | landmine (what went wrong) | do instead | source |
+|---|---|---|---|
+| <e.g. use the GPU for the dictionary build> | <froze the machine; hard reboot> | <use the CPU-parallel path> | <the user / exp007 / ../02_x/results/verdicts/…> |
 
-## {{RUN_NOUN}} Caps (HARD, never exceed)
-| Tier | Target | HARD MAX | When |
-|------|--------|----------|------|
+## {{RUN_NOUN}} Targets
+| Tier | Target | max (a target — nothing checks it) | When |
+|---|---|---|---|
 | **Scout** | {{SCOUT_TARGET}} | {{SCOUT_MAX}} | Default for any new idea |
 | **Confirmation** | {{CONF_TARGET}} | {{CONF_MAX}} | Promising scouts, every {{CONF_CADENCE}} exps |
 | **Extended** | {{EXT_TARGET}} | {{EXT_MAX}} | Primary still improving at confirmation length |
 
-Cost unit = {{COST_UNIT}}. Disk cost ≈ {{DISK_PER_EXP}} per experiment — the loop's floor is enforced
-from `configs/loop.json` (`unit_cost.typical_disk_mb`); what to keep vs regenerate is the save-set in
-`roles/worker.md` §Where everything is saved.
+Cost unit = {{COST_UNIT}}; disk ≈ {{DISK_PER_EXP}} per experiment. The one enforced number is the disk
+floor, `configs/loop.json` `unit_cost.typical_disk_mb`: the driver halts below three units' worth of
+free disk.
 [[OPTIONAL — experiments are cheap/fast (seconds–minutes, e.g. a closed-form solve or short fit):
-Experiments here are cheap ({{COST_NOTE}}); never judge an idea from a single run. Replicate with
-seeds/perturbed params and report the spread (`roles/worker.md` §Rigor).
+Experiments here are cheap ({{COST_NOTE}}).
 ]]
 
 [[OPTIONAL — this campaign is COUPLED to sibling campaigns in the same project (e.g. a forward-model campaign whose output a decoder campaign consumes):
 ## Relationship to sibling campaigns
 This campaign shares a project with siblings attacking the same system. Coupling is kept explicit here
-so no campaign silently changes a lever a sibling depends on. The failure mode: a forward-model bug
-scored a decoder on wrong test data. See the project `CLAUDE.md` fork-and-archive rule.
+so no campaign silently changes a lever a sibling depends on (the failure mode: a forward-model bug
+scored a decoder on wrong test data; see the project `CLAUDE.md` fork-and-archive rule).
 - What this campaign holds FROZEN that a sibling treats as MUTABLE (and vice versa): {{SIBLING_FROZEN_MUTABLE}}
-  <!-- e.g. "We hold the forward model F FROZEN and promote it to ../../models/forward_<ver>/; the decoder
-       campaign treats F as fixed. The decoder treats the decoder architecture as MUTABLE, which is
-       out-of-scope here." -->
 - Consumed artifacts come from the promoted project-level dirs, never a sibling's working folder: {{CONSUMED_ARTIFACTS}}
-  <!-- the promoted, versioned artifacts this campaign reads (a frozen forward model, a generated training set),
-       each at ../../<dir>/<artifact>_<ver>/ with a PROJECT.md §Lineage promotion line. A sibling's
-       results/ is off-limits. -->
 - Changing a lever a sibling froze is a cross-campaign change: coordinate it, re-promote the artifact
-  under a new version tag, and record it in `../../PROJECT.md` §Lineage. Do not silently repurpose a frozen input.
+  under a new version tag, and record it in `../../PROJECT.md` §Lineage.
 ]]
 
 [[OPTIONAL — hardware-in-the-loop campaign (the loop drives real instruments):
@@ -210,40 +140,16 @@ scored a decoder on wrong test data. See the project `CLAUDE.md` fork-and-archiv
 - Respect hardware limits as hard constraints. {{HARDWARE_LIMITS}}. A setpoint outside the safe range
   is out of scope, never a lever — never exceed it to chase a number.
 - Confirm before any hard-to-reverse or destructive action: anything that could damage the sample or
-  instrument, or consume a limited resource. Hardware runs are expensive and often irreversible; plan
-  each one, because you cannot cheaply re-run. Pre-screen candidates with a forward model / digital
-  twin where one exists.
-- Beat drift: interleave/randomize comparisons (A-B-A) rather than all-A-then-all-B, so calibration or
-  condition drift is not read as an effect; keep key parameters fixed and fair between compared runs.
-- Rule out measurement artifacts before claiming a real effect: re-check calibration and baseline
-  first. The primary metric carries statistical and systematic error; never act on a single read.
-- Log the full instrument + environment state every run: settings, calibration, firmware, conditions
-  ("thermostat in the box").
-- Set each threshold from the operational doctrine, not from scratch: the kit's
-  the physkit plugin's `docs/reference/hardware-in-the-loop.md` (readiness gate; agent–instrument
-  file protocol;
-  drift/starvation guard; progress-not-liveness monitoring; ingest quarantine; deterministic abort).
+  instrument, or consume a limited resource. Pre-screen candidates with a forward model / digital twin
+  where one exists.
+- Beat drift: interleave/randomize comparisons (A-B-A) rather than all-A-then-all-B; keep key
+  parameters fixed and fair between compared runs. Rule out measurement artifacts (calibration,
+  baseline) before claiming a real effect; never act on a single read.
+- Log the full instrument + environment state every run: settings, calibration, firmware, conditions.
+- Each threshold comes from the operational doctrine, the physkit plugin's `docs/reference/hardware-in-the-loop.md`
+  (readiness gate; agent–instrument file protocol; drift/starvation guard; progress-not-liveness
+  monitoring; ingest quarantine; deterministic abort).
 ]]
-
-## Operating stance (applies to EVERY decision in the loop)
-- Critically evaluate every decision. {{DECISION_EXAMPLES}} — each is a hypothesis, not a given. State
-  why before you commit.
-- Anchor facts to the authoritative source; tag their provenance. A spec value from a paper, leftover
-  code, or memory is a description of the system, not the system. Pin every load-bearing fact
-  (architecture, recipe, units, conventions) to the highest-authority artifact you can parse or run:
-  the source-authority ledger in §Decision record below. Treat a fact you can only mark
-  INFERRED/RECALLED as a gap to resolve before building an expensive run on it. When a faithful repro
-  disagrees with a published number, find out why: your bug, the target's quirk, or a wrong spec. Never
-  reverse-engineer the original's bug just to match its table (`debug`, the compare-to-a-reference
-  rung). Do not graduate a load-bearing fact from INFERRED to PINNED without an explicit attempt to
-  falsify it. Run any cheaper discriminating check that is already in hand before promoting. An
-  unfalsified inference can otherwise carry a long series of experiments before it is caught.
-- Prefer the minimally sufficient model/design. Reach for the simplest {{MODEL_NOUNS}} that explains
-  the data; add a parameter/term only when it earns its keep against the {{SPREAD_NOUN}} spread, is
-  physically/theoretically motivated, and generalizes. Near-universal: apply by default.
-- Use precise notation and units everywhere. Name the quantity, its units, and its scale.
-  {{UNITS_EXAMPLE_LINE}}. Ambiguous notation is how sign/convention bugs survive (see
-  `../../PROJECT.md` §Standing constraints).
 
 ## Decision / promotion
 - **PRIMARY** (cross-experiment ranking, "current best"): `{{PRIMARY_METRIC}}`. {{PRIMARY_REPORT_RULE}}
@@ -251,65 +157,28 @@ scored a decoder on wrong test data. See the project `CLAUDE.md` fork-and-archiv
 - **Diagnostic**: {{DIAGNOSTIC_METRICS}}.
 
 **Promotion rule.** A config becomes "current best" only if it (1) improves `{{PRIMARY_METRIC}}` by more
-than this campaign's own resolution: the {{SPREAD_NOUN}} spread if `campaign.noise_model` is
+than this campaign's own resolution — the {{SPREAD_NOUN}} spread if `campaign.noise_model` is
 `stochastic`, the numerical `campaign.tolerance` if it is `deterministic` (the runner records which, and
-the verdict, in `results/checks_<NN>.json`), (2) does not materially worsen `{{GUARDRAIL_METRIC}}`, (3) is
-no less parsimonious without justification, and (4) survives the independent verification its preset
-requires (`roles/worker.md` §Independent verification) — or, under `minimal`, is promoted stamped
-`unverified`, which the claim audit at the end of the campaign then checks.
-{{PROMOTION_CONFIRM_RULE}}
+the verdict, in `results/checks_<NN>.json`) — (2) does not materially worsen `{{GUARDRAIL_METRIC}}`,
+(3) is no less parsimonious without justification, and (4) carries the honest label its checks earned
+— the pointer follows the true best at once, `configs/loop.json` `verify.preset` decides the one check
+each result gets, and a refuted result never promotes. {{PROMOTION_CONFIRM_RULE}}
 [[OPTIONAL — metric has ceilings:
 Distinguish **ceiling moves** (forward/registration/preprocessing raised the bound: real, physical)
 from **gap-to-ceiling moves** (a freer decoder closed the gap, often overfitting; check the guardrail).
 ]]
-On promotion to current-best, update `configs/RECOMMENDED.json` to point at the promoted config and save
-the full artifact set (`roles/worker.md` §Where everything is saved). Keep the artifacts for each
-successive best so the progression is inspectable.
-
-**Steering-negatives are promotions too.** A negative result the campaign will act on (killing a
-lever/topology branch, declaring a ceiling, shelving a direction, or contradicting its a-priori
-prediction) is recorded as its ledger row's `finding` cell (`--record <exp> --finding`) under the same
-verdict rule, graded on the
-kill tiers: **REFUTED** (mechanism
-understood, so it prunes) / **EVIDENCE AGAINST** (clean single negative, shelved, revivable,
-accumulates) / **INCONCLUSIVE** (cause unattributed, never graduates; queue a fix-and-rerun unit).
-
-The failed-experiment population is more bug-contaminated than the winning one: most implementation
-errors degrade performance. An unexamined negative is how a campaign silently kills a live branch. A
-claimed **invalidation** ("prior results are tainted", "the metric is wrong") gets a verify verdict
-before the plan reprioritizes, shelves, forks, or opens a metric epoch on it.
-
-Promotion compares only within one `(metric_version, data_version)`. Never rank a row against one scored
-under a different metric or dataset version; re-score first, per §`results/scoreboard.tsv` below. A
-`metric_version` bump is a metric epoch (§The ONE metric): the runner refuses to run under a version no
-epoch declares, sets earlier rows aside rather than ranking them, and the checks artifact names the
-boundary until the contenders are re-scored. A pending epoch promotes with its standing on the row
-(promote-and-label); a rolled-back one does not.
-
-**Every exported claim carries an honest verification label; `unverified` is a legitimate label, a
-softened one is not.** Under this campaign's preset (§Verification) a promotion either holds the
-CONFIRMED verdict the preset requires — quoted with its mode — or, where the preset checks nothing,
-promotes stamped `unverified`; a PROVISIONAL / QUESTIONABLE ASSUMPTION row may act as working
-current-best only with its caveat recorded beside it, and never as `unverified`. And **no claim-splitting**: a
-promoted config may not shed the unphysical part it rests on. A headline number is inseparable from its
-config, and a fitted parameter outside its physical range blocks promotion until it is explained. Report
-each number with its **metric path**: the frozen PRIMARY vs any relaxed/auxiliary score.
+On promotion, point `configs/RECOMMENDED.json` at the promoted config and save the full artifact set
+(`roles/worker.md` §The save-set). Rank only within one `(metric_version, data_version)`;
+`check_comparability` refuses the rest. **Every exported claim carries an honest verification label;
+`unverified` is a legitimate label, a softened one is not.** `guard_promotion.py` enforces it at the
+write (`CLAUDE.md` HARD GATE 1).
 
 ## Verification — this campaign's own checks (captured at setup, kept living)
-The *procedure* is the kit's and is not restated here: `{{VERIFY_SKILL}}` adjudicates every finding
-through an independent refuter (assume-wrong; recompute every number; residual-nature analysis), and
-`correctness-suite` maintains the standing regression gates in `tests/correctness_checks.py`, green-gated
-on every run. How much verification runs, and when, is this campaign's **preset** (`configs/loop.json`
-`verify.preset`, one of `minimal` · `light` · `moderate` · `intensive`;
-the physkit plugin's `docs/reference/verification-presets.md` is the one description): the driver spawns the independent
-check the preset owes an accepted unit — per promotion candidate, or per batch of related units sharing
-a queue `block` id — decides its depth from the unit's measured cost (re-execution when cheap and
-reproducible, review from the frozen record otherwise), and does not clear a unit until its verdict
-artifact exists. Every result carries the preset it ran under and its label. Bounds live in §The ONE metric; the physics inventory and domain of validity in
-`../../PROJECT.md` §Standing constraints. For a simulation-heavy campaign the V&V&UQ method
-is the physkit plugin's `docs/SIMULATION_VALIDATION.md`. What belongs here is only what generic doctrine
-cannot supply — the checks specific to this campaign. Append new ones as the work uncovers them; when a
-bug is found, add the check that would have caught it and promote it to a regression gate.
+`{{VERIFY_SKILL}}` is the protocol behind every check this campaign's preset buys (`configs/loop.json`
+`verify.preset`: at most one per result - a self-verify, a peer check, or the driver's verifier);
+`tests/correctness_checks.py` is green-gated every run. Below is only what generic doctrine cannot supply, each line with its source (a derivation, a
+reference, the user, a unit): a check nobody can source is a guess and goes to the JOURNAL's open
+questions instead. Append a check as the work uncovers one.
 
 - **Analytic / closed-form limits the result must reproduce:** {{ANALYTIC_LIMITS}}
 - **Conservation / symmetry invariants that must hold:** {{INVARIANTS}}
@@ -317,36 +186,19 @@ bug is found, add the check that would have caught it and promote it to a regres
 - **Independent-method parity — the mechanism-diverse second route:** {{PARITY_METHOD}}
 - **Validation data (held out — validation, never calibration):** {{VALIDATION_DATA}}
 - **Field-standard checks for this problem:** {{APP_CHECK_1}} · {{APP_CHECK_2}}
-- **Known artifacts / failure modes to guard against:** {{KNOWN_ARTIFACTS}}
+- **Known artifacts / failure modes to guard against (sourced):** {{KNOWN_ARTIFACTS}}
 - **Generalization a promoted finding must survive (not a lucky subset):** {{GENERALIZATION_AXIS}}
 
+[[OPTIONAL — DELETE this whole section if the campaign has no surrogate/synthetic stage:
 ## Mind the simulation-to-experiment gap
-{{SIM_GAP_NOTE}} Treat any guardrail resting on simulation/synthetic data as necessary-not-sufficient.
-Give a method tuned against synthetic labels extra scrutiny: it can learn the simulator's
-idiosyncrasies. Prefer gains that show up as physical improvements on the real data. When a conclusion
-depends on the simulation being faithful, say so explicitly and, where cheap, test sensitivity to its
-assumptions.
+{{SIM_GAP_NOTE}} A guardrail resting on simulation or synthetic data is necessary, not sufficient; a
+method tuned against synthetic labels can learn the simulator's idiosyncrasies. Where a conclusion
+depends on the simulation being faithful, say so.
+]]
 
 ## `results/scoreboard.tsv` (schema)
 `{{SCOREBOARD_COLUMN_LIST}}`
-PRIMARY = `{{PRIMARY_METRIC_COL}}`. This is the campaign's quantitative record and one-line timeline;
-the logbook is the narrative one, the JOURNAL the working memory. Every experiment's numbers live here:
-the primary metric, every supplemental metric/sanity score, the experiment-type **run numerics** (e.g.
-epochs trained + best epoch, iterations, wall-clock), and the narrative cells — `what`,
-`expected_vs_found`, `verified`, `note`, `finding` — every cell runner-written (the last two through
-`--record`); nobody edits this file by hand. Append-only. Never delete or rename a column mid-campaign: it breaks
-comparability. Keep the PRIMARY column position stable. A new column requires the run-writer to emit it
-first. The `verified` column carries the independent-verification verdict, blank until the driver stamps
-it from a verdict artifact; under a preset that owes a unit no independent check it stays blank and the
-unit's `label` in `results/checks_<NN>.json` is the record. The `tier`
-column records the run-length tier (Scout / Confirmation / Extended) so cap-compliance stays
-machine-auditable on every row. The `metric_version` and `data_version` columns tag the FROZEN metric and
-dataset this row was scored under: a "current best" or ranking is valid only within one
-`(metric_version, data_version)` pair. Never compare across versions; this is the single most common
-silent landmine. When either changes, bump the tag and re-score saved contenders under the new version
-before comparing; every row must carry both tags. A row is never re-labelled when its epoch is rolled
-back: the version it carries is the record. The full per-experiment breakdown is also saved to
-`results/result_<NN>.json`.
+PRIMARY = `{{PRIMARY_METRIC_COL}}`. Append-only, every cell runner-written; neither role opens it.
 
 ---
 
@@ -361,11 +213,31 @@ this campaign is promoted to `../../PROJECT.md` §Durable decisions. A metric ep
 its record is the `campaign.metric_epochs` entry, the verdict it cites, the §The ONE metric diff, and
 one line in the JOURNAL's §Where we stand.
 
-<!-- ### ED-001 — <one-line title>  (YYYY-MM-DD · active · <method / model / convention / tooling>)
+### ED-000 — The baseline floor: experiment 000, run at setup  (YYYY-MM-DD · active · method)
+**Decision.** Experiment 000 ran in the setup session, before handoff, and set the floor every later
+unit must beat: {{PRIMARY_METRIC}} ≈ {{BASELINE_VALUE}}. Method(s): {{BASELINE_METHODS}} Command:
+`{{BASELINE_COMMAND}}`. It validated the {{VALIDATION_CHAIN}} chain end-to-end, so a later win is not an
+artifact of a broken pipeline.
+**Alternatives considered.** <a tuned or learned baseline (rejected: the floor is the no-skill reference)>
+**Why this one.** <the simplest defensible reference the field would accept as the floor>
+**Provenance.** The exp000 ledger row and results/result_000.json; the gate criteria it met:
+{{GATE_CRITERIA}} The floor is recorded as {{FLOOR_RECORD_RULE}}
+**Conditions it depends on.** <the data version and the metric epoch it was scored under>
+**Revisit-if.** <the data or the metric changes (a new epoch re-baselines); a trivial reference beats it>
+
+### ED-001 — Retention plan: what is kept vs regenerated  (YYYY-MM-DD · active · tooling)
+**Decision.** <what every unit keeps permanently vs what is regenerated on demand; the per-unit disk
+figure is `configs/loop.json` `unit_cost.typical_disk_mb`>
+**Alternatives considered.** <keep every byte / keep only the ledger row and the config>
+**Why this one.** <the smallest artifact set that still reproduces a promoted result independently>
+**Provenance.** <who set it, and the measured unit cost it was set from>
+**Conditions it depends on.** <the measured per-unit size; free disk on this machine>
+**Revisit-if.** <a unit's artifacts exceed the estimate, or free disk approaches the floor>
+
+<!-- ### ED-002 — <one-line title>  (YYYY-MM-DD · active · <method / model / convention / tooling>)
 **Decision.** …
 **Alternatives considered.** …
 **Why this one.** …
 **Provenance.** …
 **Conditions it depends on.** …
 **Revisit-if.** … -->
-

@@ -31,7 +31,7 @@ run), or `results/.loop_armed` exists. Without this the setup/validation session
 and stops would be trapped in the loop it is still building.
 
 STAND-DOWNS (who owns loop persistence right now):
-  * AUTORESEARCH_SUPERVISED=1 — a driver-spawned worker/planner: its per-unit end-of-turn is EARNED.
+  * AUTORESEARCH_SUPERVISED=1 — a driver-spawned agent: its per-unit end-of-turn is EARNED.
   * results/.driver_alive fresh (mtime within DRIVER_ALIVE_WINDOW_MIN) — a supervisor driver IS running,
     so campaign-level persistence is the DRIVER's job: an attended session (the run-campaign concierge, a
     user checking in) may end its turns freely. A crashed driver stops refreshing the sentinel and the
@@ -340,8 +340,8 @@ def continuation_reason(exp_id, nxt, threads, blocks, rows_since):
 
 def main():
     # Supervisor-mode stand-down: a driver-spawned worker's per-unit end-of-turn is EARNED (its unit's
-    # iteration contract validates); campaign-level stopping is the driver's job (ESCALATE / STOP / empty
-    # queue). Without this, the Stop hook would refuse every worker's legitimate exit.
+    # iteration contract validates); campaign-level stopping is the driver's job (ESCALATE, or the
+    # worker's NEXT: STOP). Without this, the Stop hook would refuse every worker's legitimate exit.
     if os.environ.get("AUTORESEARCH_SUPERVISED") == "1":
         sys.exit(0)
 

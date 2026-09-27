@@ -19,6 +19,14 @@ It works at two scales. General mode checks a standalone claim in any session. C
 scorer, and rules from the campaign's own charter and spawns an independent refuter. Use the depth the
 stakes deserve.
 
+**A campaign worker's self-verify** is general mode run on its own result, in its own session, without
+§4's fresh-agent step: a worker never spawns an agent to check its work. Its output is not a
+verdict and never INCONCLUSIVE for want of an agent; it goes in the unit's record as `self_verify`, and
+its label (`self-verified` / `self-refuted`) says it is not independent. A **peer check** - the next
+worker checking a surviving best - runs the same way, in that worker's session, and writes the verdict
+artifact below with `"kind": "peer"`: independent of the reasoning that produced the result, because it
+comes from a fresh context.
+
 ---
 
 ## General mode — check any result or claim
@@ -219,41 +227,41 @@ scorer and every derived number, recomputed from the stored raw artifact — is 
 - **Always, at any cost tier:** recompute every derived number from the raw artifacts, because a
   transcribed value is never trusted; check that the config actually ran, log consistency, and
   prediction-vs-result.
-- **Cheap to recompute** — in a campaign, the runner has already decided this per unit from its MEASURED
-  solve time and the campaign's `reproducible` flag: `results/checks_<NN>.json` `verification.re_execution`
-  says `eligible` and why (outside a campaign: seconds to minutes, seeded, re-runnable from its inputs).
-  Then: full from-scratch re-execution, plus multiple seeds or perturbations and a statistical test. A
-  cheap computation has no excuse for a single-seed conclusion.
-- **Expensive / long** (the artifact says not eligible, and names the reason): do not force a full
-  re-run, but never zero re-execution. Scrutinize the code (the change, its logic, its conventions) and
+- **Cheap to recompute** (seconds to minutes, seeded, re-runnable from its inputs; in a campaign, the
+  result's `solve_wall_clock_s` and `configs/loop.json` `campaign.reproducible`): re-run it where the
+  claim depends on the computation - a search's reach, a stochastic spread - with multiple seeds or
+  perturbations and a statistical test; a cheap computation has no excuse for a single-seed conclusion.
+  Deterministic code re-derives the same bytes: re-scoring the saved artifact in a fresh process is the
+  check there, not re-running the solve.
+- **Expensive / long**: do not force a full re-run, but never zero re-execution. Scrutinize the code (the change, its logic, its conventions) and
   the conclusions (do they follow from the logged numbers? are saved metrics internally consistent and
   recomputable from saved outputs?), re-check the saved artifacts, and run the cheapest discriminating
   spot-check: one config of the sweep, a coarse-mesh replica, or the selftest. That is the minimum
   re-execution that could catch the error class at issue.
 
-Start from what changed. The same artifact's `changes` block names what this unit moved since the last
-verified one (code, compared as code; config keys; version tags), and
-`python scripts/run_campaign.py --diff <exp>` prints the full diff. Verify that delta and its interaction
-with the unchanged parts; what did not change since the last CONFIRMED verdict inherits that verdict's
-coverage and is spot-checked, not re-derived. A change with no declared effect on the result, or a
+Start from what changed. The delta is delivered in your spawn's VALUES — the `changes` summary (code,
+compared as code; config keys; version tags) and the full snapshot diff, by value — so you read it there,
+not from disk; `python scripts/run_campaign.py --diff <exp>` reprints it on demand. Verify that delta and
+its interaction with the unchanged parts; what did not change since the last independent check inherits
+that check's coverage and is spot-checked, not re-derived. A change with no declared effect on the result, or a
 claimed effect with no change behind it, is a red flag in its own right.
 
-State which mode you used in the verdict. Tiering applies to re-solving only; it never licenses skipping
-the recomputation of derived numbers from raw artifacts. If a tiered verification later proves to have
-missed an error in the part not re-run, say so in the verdict: that is the evidence the eligibility rule
-is revised on.
+Say in the verdict's summary what you re-ran and what you re-derived. Tiering applies to re-solving only;
+it never licenses skipping the recomputation of derived numbers from raw artifacts. If a tiered
+verification later proves to have missed an error in the part not re-run, say so in the verdict.
 
 ---
 
 ## Campaign mode — promoting a finding (the full adversarial apparatus)
 
 When the claim is a candidate result in an autoresearch campaign, verification is the gate between "looks
-like a win" and recording it as settled — a ledger `finding` cell, a current-best, a scoreboard
-verdict token. A promotion is not real until this returns CONFIRMED. In supervised loops this mode
-runs on the driver's schedule, not the worker's judgment: after every completed unit or block the
-driver spawns a verification agent that invokes this skill per experiment (the block is not cleared
-until every verdict artifact exists, and the driver stamps the scoreboard from it). Attended
-sessions, and mid-unit suspicions, invoke it directly.
+like a win" and recording it as settled — a ledger `finding` cell, an independent label on the
+current-best, a scoreboard verdict token. A finding is not settled until this returns CONFIRMED; the
+current-best pointer carries its honest label meanwhile. In supervised loops this mode runs
+on the driver's schedule, not the worker's judgment: when the preset owes a result an independent check,
+the driver spawns a verification agent that invokes this skill per experiment (the entry is not cleared
+until every verdict artifact exists, and the driver stamps the label from it). Attended sessions invoke
+it directly.
 
 **Step 0 — learn the campaign (parametrize the check).** Read the campaign's `CLAUDE.md` and follow its
 **§Where things live** table to the campaign definition and each document below — it is that campaign's own
@@ -274,9 +282,8 @@ scoreboard row, the result JSON. Do not pre-read the JOURNAL narrative; the veri
 independent view.
 
 **Spawn the independent refuter** (Agent tool, one call per candidate; verify several in parallel in one
-message) with the prompt below, `<…>` filled from Step 0, in the mode the driver decided for this unit (the
-spawn prompt's mode line: RE-EXECUTION when the unit is cheap and reproducible, REVIEW otherwise; in an
-attended session read `verification.re_execution` in the experiment's checks artifact). Run it on a
+message) with the prompt below, `<…>` filled from Step 0, starting from the delta in your VALUES (in an
+attended session, the experiment's checks artifact `changes_independent`, or `--diff <exp>`). Run it on a
 model at least as capable as the one that produced the result. A different capable model is preferable: it
 adds mechanism diversity. Never use a weaker model, which yields false CONFIRMs.
 
@@ -285,8 +292,7 @@ adds mechanism diversity. Never use a weaker model, which yields false CONFIRMs.
 (the current-best/scoreboard surface and the project-ledger surface) and by the loop driver. Copy this
 stub and fill every `<…>`; all fields are REQUIRED. Do not hand-improvise a subset:
 ```json
-{"claim": "<one line>", "exp_id": "<id>", "verdict": "CONFIRMED",
- "mode": "<review | re-execution>", "mode_basis": "<the driver's mode line, or 'ineligible: <why>'>",
+{"claim": "<one line>", "exp_id": "<id>", "verdict": "CONFIRMED", "kind": "verifier",
  "kill_tier": null, "refuter": "<the spawned agent's id — never this session>",
  "confounded_levers": [], "disentangler": null, "resolves_confounded": [],
  "utc": "<current UTC stamp>", "summary": "<2-3 sentences>"}
@@ -309,8 +315,12 @@ was called to test. Do the same for any concern the user raises.
 
 Then gate. CONFIRMED → may promote. PROVISIONAL / QUESTIONABLE ASSUMPTION → working result only: it must
 not be written into a `finding` cell, and must not be reported as "current-best" or "best" without its caveat
-carried inline, until the adaptation or assumption is reviewed. REFUTED → do not promote; add the refuting
-control as its own experiment. INCONCLUSIVE → run the named control before deciding. No claim-splitting: a
+carried inline, until the adaptation or assumption is reviewed. REFUTED → do not promote; the refuting
+control is its own experiment. INCONCLUSIVE → the named control runs before anything is decided.
+**In campaign mode, a REFUTED or INCONCLUSIVE verdict names that control or fix-and-rerun in the verdict
+artifact's `follow_up` field** — one line, concrete, citing `results/verdicts/<id>.json`. You propose no
+config and start no unit: the driver relays the field to the next worker as a note, and the worker
+decides (there is no queue). No claim-splitting: a
 headline number is inseparable from the config that produced it, so you may not promote "the number" while
 grading its config's physics QUESTIONABLE, nor let a promoted config keep a fitted parameter outside its
 physical range. This is about the config's validity, not about attribution among its levers. "Which lever
@@ -338,9 +348,9 @@ by accident, record the entangled set and the experiment that would separate it:
 
 An empty list asserts attribution is clean. A non-empty list requires `disentangler`: the cheapest ablation
 that would isolate the suspected contributor. The field names a debt rather than discharging one, so
-stamping it settles nothing and instead queues the run that will. When you later run that disentangler,
+stamping it settles nothing and instead names the run that will. When you later run that disentangler,
 name the levers it separated in the new verdict's `resolves_confounded`. That is what closes the debt and
-releases the levers back to the planner.
+releases the levers.
 
 Confounding is a property of the design, orthogonal to the verdict, as `kill_tier` is. It grades the claims
 separately:
@@ -377,7 +387,7 @@ implementation errors degrade performance, so bugs masquerade as "this approach 
 unexamined negative kills a branch permanently. A claimed invalidation ("the scoreboard is tainted", "the
 metric is broken") gets this check before the campaign reprioritizes or forks on it; the false alarm is the
 symmetric failure mode. **A verified kill of the metric itself is what opens a metric epoch**
-(`roles/worker.md` §Metric epochs): a `semantics` revision needs a REFUTED or EVIDENCE_AGAINST tier
+(`roles/REFERENCE.md` §Metric epochs): a `semantics` revision needs a REFUTED or EVIDENCE_AGAINST tier
 against the old metric, and an `easier` revision — one under which the current best would score better,
 the goalpost-moving shape — needs REFUTED. The verdict artifact is what the epoch entry cites;
 INCONCLUSIVE never opens one.
@@ -399,11 +409,11 @@ itself still grades whether the *claim as stated* is CONFIRMED):
   exact symmetry cancellation). Prunes the branch.
 - **EVIDENCE_AGAINST** — a clean negative experiment with the implementation verified sound, but a single
   instantiation cannot establish that no implementation works. Deprioritizes: the branch is shelved with
-  its evidence and is revivable by the planner. Independent EVIDENCE_AGAINST entries may accumulate toward
+  its evidence and is revivable. Independent EVIDENCE_AGAINST entries may accumulate toward
   a prune, recorded with the entries cited.
 - **INCONCLUSIVE** — cause not attributed; the implementation, not the idea, may be at fault. Does not
-  steer and never graduates. Queue a fix-and-rerun unit instead; the promotion hook denies an
-  INCONCLUSIVE kill.
+  steer and never graduates. Name a fix-and-rerun in the verdict's `follow_up` instead; the promotion
+  hook denies an INCONCLUSIVE kill.
 
 ### Adversarial prompt to give the spawned agent
 Fill every `<…>` from Step 0. Omit the bracketed CODE/FORWARD block if code is not a lever. Choose the
@@ -425,14 +435,13 @@ reproduce mode by run cost.
 > examples, test edge/degenerate/extreme inputs, randomize inputs, search for counterexamples. A crash is a
 > code bug to fix and report, not a refutation of the idea. Surface load-bearing assumptions; if the result
 > stands only under a dubious or unverified premise, that is a QUESTIONABLE ASSUMPTION.
-> 1. **Reproduce (in the mode you were given).** RE-EXECUTION: re-run `<RUN COMMAND> --config <config path>`
->    (tee to `results/diagnostics/verify_<exp_id>_<UTCstamp>.log 2>&1`), recompute `<METRIC>` from scratch
->    with the FROZEN scorer `<scorer path>`; doesn't reproduce → REFUTED. REVIEW: recompute `<METRIC>` from
->    the saved artifacts and confirm internal consistency, leaning on the code and conclusions checks, and
->    state that you did not rerun. Either way recompute every reported number from a fresh evaluation;
->    convergence is not correctness. A number that doesn't match → REFUTED. Never background the
+> 1. **Reproduce.** Recompute `<METRIC>` from the saved artifacts with the FROZEN scorer `<scorer path>` in
+>    a fresh process and confirm internal consistency; re-run `<RUN COMMAND> --config <config path>` (tee to
+>    `results/diagnostics/verify_<exp_id>_<UTCstamp>.log 2>&1`) where the claim depends on the computation
+>    itself - a search's reach, a stochastic spread. Either way recompute every reported number from a fresh
+>    evaluation; convergence is not correctness. A number that doesn't match → REFUTED. Never background the
 >    reproduction: if it cannot finish in the foreground, write INCONCLUSIVE with the reason rather than
->    no artifact. Record the mode in the verdict.
+>    no artifact. Say in the summary what you re-ran.
 > 2. **Replicate — test, don't assume noise.** Re-run with perturbed params and, for stochastic steps,
 >    different seeds; report spread; apply a paired statistical test. No consistent effect → noise (REFUTED);
 >    consistent trend whose spread overlaps the comparison → INCONCLUSIVE (gather more); clear
@@ -518,8 +527,8 @@ reproduce mode by run cost.
 - [ ] Any disputed verdict escalated to a blinded third party required to run a check neither side ran (§4b), not settled by argument between the claimant and the refuter.
 - [ ] Campaign mode: the correctness suite (`tests/correctness_checks.py`) is green, or explicitly N/A — a red suite blocks promotion.
 - [ ] Campaign mode: the verdict artifact `results/verdicts/<id>.json` written (with a named refuter) — the promotion hook and the loop driver consume it, and the finding cell must cite it.
-- [ ] A kill-claim got the negative-refuter checklist (implementation error / strawman / insufficient search / mechanism) and a `kill_tier` — INCONCLUSIVE kills queue a fix-and-rerun, never graduate.
+- [ ] A kill-claim got the negative-refuter checklist (implementation error / strawman / insufficient search / mechanism) and a `kill_tier` — INCONCLUSIVE kills name a fix-and-rerun in `follow_up`, never graduate.
 - [ ] A kill-claim against the METRIC itself carries the tier a metric epoch needs (REFUTED or EVIDENCE_AGAINST; REFUTED for an easier ruler), and its verdict artifact is what the epoch entry will cite.
 - [ ] Counted the levers that moved. More than one → `confounded_levers` + a `disentangler` recorded; the causal claim graded QUESTIONABLE ASSUMPTION (the empirical one may still promote); a negative kills only the combination — every member INCONCLUSIVE, still untried, checked for masking (one lever helping while another hurts more).
-- [ ] Reproduction mode chosen per the cost tier (threshold from `configs/loop.json` when present); above-threshold verification still ran the cheapest discriminating spot-check — never zero re-execution.
+- [ ] Re-ran what the claim depends on, per the cost tier; an expensive unit still got the cheapest discriminating spot-check — never zero re-execution.
 - [ ] Verdict graded; load-bearing assumption named; disputes recorded append-only (campaign mode).

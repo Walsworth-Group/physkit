@@ -110,7 +110,7 @@ invalidation scope: what re-baselines and what re-verifies.
 
 ## Composition
 
-`campaign-status` triggers this at a resistant plateau (its §4 re-plan) · `roles/planner.md`'s *Getting
+`campaign-status` triggers this at a resistant plateau (its §4 re-plan) · `roles/worker.md`'s *Getting
 Unstuck* block names the trigger conditions · `frame-problem` seeds the inheritance enumeration ·
 `record-decision` stores provenance tags, cleared suspects, and revisit-if triggers ·
 `attribute-mechanism` takes over when the audit surfaces a signature needing a cause ·

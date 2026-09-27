@@ -134,9 +134,9 @@ How much to persist (do not create a document for a small job):
 - **Trivial / short:** keep the steps in your head or a scratch list and do them.
 - **General session, non-trivial:** a maintained checklist (steps, status, which were checked). It
   graduates into a campaign if the work grows into one.
-- **Campaign:** the decomposition becomes the opening units in `results/queue.json` (each with its
-  rationale — how it serves the goal) and the JOURNAL NEXT pointer. `new-campaign` owns that seeding;
-  `frame-problem` feeds it.
+- **Campaign:** the decomposition becomes the opening `results/JOURNAL.md` — the **NEXT:** pointer and
+  §What to try next and why, each step with its rationale (how it serves the goal). `new-campaign` owns
+  that seeding; `frame-problem` feeds it.
 
 ---
 
@@ -151,7 +151,7 @@ step order that buries risk. Then execute the steps, running each planned check 
 For anything beyond a quick question, write the frame to a durable **framing artifact** (template:
 `assets/framing_template.md`) so it survives the session and seeds what comes next. Its content graduates:
 the inventory to `PROJECT.md` §Standing constraints, the goal to `campaign.md` and the steps
-to the queue + JOURNAL NEXT in a campaign, the
+to the JOURNAL (NEXT + What to try next and why) in a campaign, the
 verification plan to the verification gate. Keep one artifact, and update it as the frame changes.
 
 ## Composition & boundaries

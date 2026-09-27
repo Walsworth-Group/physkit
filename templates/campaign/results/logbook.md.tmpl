@@ -21,8 +21,9 @@ Rules — nobody reads this file; the runner writes it and `--show <exp>` prints
 - Entry format: a `## <exp_id> - <label> - <UTC>` header, then one bold-labelled field per line as a
   bullet. The runner fills `- **Hypothesis**`, `- **Predicted**`, `- **Levers**`, `- **Change**`,
   `- **Result**`, `- **Expected vs found**`, `- **Artifacts**`, and `- **Verification**` (`pending`, then
-  `self-checked …` after `--self-check`, then `<VERDICT>/<mode> (<verdict file>)` when a verdict lands -
-  a line a verifier or you wrote by hand is never overwritten). The agent completes `- **Analysis**` and
+  `self-checked …` after the record's self-check, `self-verified` / `self-refuted` after an owed
+  self-verify, then `<VERDICT>/<peer|verifier> (<verdict file>)` when an independent verdict lands - a
+  line a verifier or you wrote by hand is never overwritten). The agent completes `- **Analysis**` and
   `- **NEXT**` through `--record` (which also takes `--ledger-note` and `--finding` for the ledger's
   cells); `- **Excluded data**`, `- **Disputes & responses**`, `- **Status**` are edited by a verifier
   or the user only when there is something to say. Each field is one bullet line; `--record` collapses

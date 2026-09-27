@@ -80,7 +80,9 @@ ABS_PATH = re.compile(r"(?:[A-Za-z]:[\\/])|(?:\\\\[A-Za-z0-9_.$-]+\\)")
 CAMPAIGN_REQUIRED_GLOBS = [
     ("campaign definition", "campaign.md"),
     ("worker role", "roles/worker.md"),
-    ("planner role", "roles/planner.md"),
+    ("verifier role", "roles/verifier.md"),
+    ("capstone role", "roles/capstone.md"),
+    ("role reference", "roles/REFERENCE.md"),
     ("front door + setup status", "README.md"),
     ("scoreboard ledger", "results*/scoreboard.tsv"),
     ("logbook", "results*/logbook.md"),
@@ -95,7 +97,6 @@ CAMPAIGN_REQUIRED_GLOBS = [
     ("loop heartbeat hook", "scripts/loop_heartbeat.py"),
     ("hook settings", ".claude/settings.json"),
     ("loop knobs", "configs*/loop.json"),
-    ("unit queue", "results*/queue.json"),
     ("predictions dir", "predictions"),
     ("verdicts dir", "results*/verdicts"),
 ]
@@ -207,10 +208,10 @@ def _local_copy_error(rel: str, doc: str) -> str:
 
     A campaign-level PROJECT_ORIENTATION.md is usually the pre-merge campaign file that DISSOLVED,
     not a copy - telling someone "never copy" invites deleting it, which loses the goal and task
-    content the migration moves into campaign.md and the queue. Name the actual fix."""
+    content the migration moves into campaign.md and the JOURNAL. Name the actual fix."""
     if doc == "PROJECT_ORIENTATION.md":
         return (f"campaign-level {rel} - this file dissolved in the one-background-document merge; "
-                "migrate its content (goal -> campaign.md, tasks -> the queue + JOURNAL NEXT, field "
+                "migrate its content (goal -> campaign.md, tasks -> the JOURNAL's What to try next + NEXT, field "
                 "positioning -> the project overview) per the kit's docs/MIGRATING.md, then "
                 "delete it. Do not delete it unmigrated.")
     return (f"campaign carries a LOCAL copy of the project background (must reference the project "
@@ -276,9 +277,9 @@ def project_root_of(campaign: Path) -> Path | None:
 # agree, so a mode added on one side and not the other fails the suite instead of drifting.
 PREDICTION_MODES = ("range", "direction", "none")
 NOISE_MODELS = ("stochastic", "deterministic")
-VERIFICATION_MODES = ("per-block", "promotion-only")
-VERIFY_PRESETS = ("minimal", "light", "moderate", "intensive")
-VERIFY_ROWS = ("invariants", "machinery", "gates", "self_check", "review", "re_execution", "capstone")
+VERIFY_PRESETS = ("none", "minimal", "light", "heavy", "intensive")
+VERIFY_ROWS = ("invariants", "machinery", "gates", "self_check", "self_verify", "independent", "capstone")
+VERIFY_PRESET_RENAMED = {"moderate": "heavy"}
 METRIC_REVISION_MODES = ("cautious", "autonomous")
 AGENT_BACKENDS = ("auto", "claude", "codex", "custom")
 VERIFY_STRATEGIES = ("auto", "legacy-nested", "driver-direct")
@@ -296,8 +297,7 @@ def check_loop_files(root: Path, errors: list[str]) -> None:
         try:
             cfg = json.loads(text or "")
             for name, keys in (("worker.iteration_timeout_hours", ("worker", "iteration_timeout_hours")),
-                               ("planner.cadence_units", ("planner", "cadence_units")),
-                               ("plateau.wall_clock_hours", ("plateau", "wall_clock_hours"))):
+                               ):
                 node = cfg
                 try:
                     for k in keys:
@@ -323,19 +323,15 @@ def check_loop_files(root: Path, errors: list[str]) -> None:
             preset = verify_block.get("preset")
             if preset is not None:
                 p = str(preset).strip().lower()
-                if p not in VERIFY_PRESETS:
+                if p in VERIFY_PRESET_RENAMED:
+                    errors.append(f"loop.json verify.preset {p!r} was renamed {VERIFY_PRESET_RENAMED[p]!r} "
+                                  " - set the new name")
+                elif p not in VERIFY_PRESETS:
                     errors.append(f"loop.json verify.preset is {p!r}; expected one of "
                                   + " | ".join(VERIFY_PRESETS) + " (docs/reference/verification-presets.md)")
-            else:
-                # An older loop.json: the previous kit's campaign.verification is still read.
-                vmode = str(camp.get("verification") or "per-block").strip().lower()
-                if vmode not in VERIFICATION_MODES:
-                    errors.append(f"loop.json campaign.verification is {vmode!r}; expected one of "
-                                  + " | ".join(VERIFICATION_MODES) + " (or set verify.preset)")
-                if vmode == "promotion-only" and not str(camp.get("verification_reason") or "").strip():
-                    errors.append("loop.json sets campaign.verification='promotion-only' with an empty "
-                                  "campaign.verification_reason - record why per-block verification is "
-                                  "not affordable or applicable here, or set verify.preset instead.")
+            if camp.get("verification"):
+                errors.append(f"loop.json campaign.verification={camp.get('verification')!r} is retired - set "
+                              "verify.preset (" + " | ".join(VERIFY_PRESETS) + ") and delete the old key")
             rmode = str(camp.get("metric_revision") or "cautious").strip().lower()
             if rmode not in METRIC_REVISION_MODES:
                 errors.append(f"loop.json campaign.metric_revision is {rmode!r}; expected one of "
@@ -350,7 +346,7 @@ def check_loop_files(root: Path, errors: list[str]) -> None:
             verify_strategy = verify_cfg.get("strategy", "auto") if isinstance(verify_cfg, dict) else None
             if not isinstance(verify_strategy, str) or verify_strategy.strip().lower() not in VERIFY_STRATEGIES:
                 errors.append("loop.json verify.strategy must be " + " | ".join(VERIFY_STRATEGIES))
-            for role in ("worker", "planner"):
+            for role in ("worker", "verifier"):
                 role_cfg = cfg.get(role) or {}
                 if "codex_model" in role_cfg and not isinstance(role_cfg["codex_model"], str):
                     errors.append(f"loop.json {role}.codex_model must be a string")
@@ -366,13 +362,9 @@ def check_loop_files(root: Path, errors: list[str]) -> None:
                                       + " | ".join(allowed))
         except Exception as exc:
             errors.append(f"loop.json does not parse as JSON ({exc})")
-    queue_files = list(root.glob("results*/queue.json"))
-    if queue_files:
-        try:
-            q = json.loads(_read_text(queue_files[0]) or "")
-            assert isinstance(q.get("next"), list) and isinstance(q.get("shelved"), list)
-        except Exception as exc:
-            errors.append(f"queue.json does not parse as a queue ledger ({exc})")
+    if list(root.glob("results*/queue.json")):
+        print("note: results/queue.json is the retired queue: the driver no longer reads it - run "
+              "upgrade_campaign.py --retire-queue to archive it and move its open ideas into the JOURNAL")
 
 
 def check_prediction_subjects(root: Path, errors: list[str]) -> None:
@@ -587,6 +579,32 @@ def check_metric_epochs(root: Path, errors: list[str]) -> None:
         errors.append(f"loop.json campaign.metric_version {mv!r} points at a ROLLED-BACK epoch")
 
 
+LANDMINE_HEADING = "known landmines"
+
+
+def check_landmine_sources(root: Path, errors: list[str]) -> None:
+    """Every row of campaign.md §Known landmines names its source in the fourth column (the user, a
+    ledger id, a sibling campaign's verdict). A landmine nobody can source is a guess, and a guessed
+    landmine steers a campaign away from a path nobody tested - the failure that motivated the rule
+    (the brief trim; MIGRATING has the story). A campaign scaffolded before the source column (a three-column table) is frozen that
+    way by design and is not checked."""
+    text = _md_section_text(root / "campaign.md", LANDMINE_HEADING)
+    rows = [L for L in (text or "").splitlines() if L.startswith("|")]
+    if len(rows) < 2:
+        return
+    header = [c.strip().lower() for c in rows[0].strip().strip("|").split("|")]
+    if len(header) < 4 or "source" not in header[-1]:
+        return                                   # pre-source-column campaign
+    for line in rows[2:]:
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if not any(cells) or cells[0].startswith("<"):
+            continue                             # the template's example row
+        if len(cells) < 4 or not cells[3] or cells[3].startswith("<"):
+            errors.append(f"campaign.md §Known landmines: the row '{cells[0][:60]}' names no source. A "
+                          "landmine without a source is a guess: source it (the user, a ledger id, a "
+                          "verdict) or move it to the JOURNAL marked [setup inference].")
+
+
 def validate_campaign(root: Path) -> list[str]:
     errors: list[str] = []
 
@@ -652,12 +670,13 @@ def validate_campaign(root: Path) -> list[str]:
     # (README's §Setup status is a static pointer to --preflight, the authoritative setup check; the
     # CLAUDE.md routing-table check below already verifies the section exists for the row that names it.)
 
-    # 1d. The loop driver's config + queue ledger parse and carry the keys the driver dereferences.
+    # 1d. The loop driver's config parses and carries the keys the driver dereferences.
     check_loop_files(root, errors)
     check_metric_epochs(root, errors)
     check_contract_checks(root, errors)
     check_hook_wiring(root, errors)
     check_routing_table(root, errors)
+    check_landmine_sources(root, errors)
 
     # 2. No leftover tokens / un-stripped templates anywhere in the tree.
     scan_leftovers(sorted(root.rglob("*")), root, errors)
@@ -793,7 +812,7 @@ def main() -> int:
             print(f"REFUSING TO VALIDATE - {root}\n")
             print(f"  This campaign predates the PR-9 restructure: it has {old} and no campaign.md.")
             print("  That is a layout difference, not a defect, and this validator only knows the")
-            print("  current one (campaign.md + roles/worker.md + roles/planner.md). Checking it")
+            print("  current one (campaign.md + roles/worker.md). Checking it")
             print("  anyway would report every required path as missing and read as damage.\n")
             print("  Migrate with kit/docs/MIGRATING.md, or validate it with the kit version that")
             print("  scaffolded it. Do NOT edit this tree to satisfy this check.")

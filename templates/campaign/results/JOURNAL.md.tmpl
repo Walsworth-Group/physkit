@@ -3,8 +3,8 @@
 This file is what the next worker reads first: the state of the campaign's thinking, kept current by
 the worker at the end of every unit and delivered whole into every spawned prompt. It is bounded by
 construction — bring it up to date, do not append to it: edit what your unit changed and leave the rest
-as it was. Keep it under ~120 lines; the driver clips it at its cap with a loud marker and archives every
-version to `results/journal_archive/`, so nothing written here is ever lost by an edit. The record itself
+as it was. Keep it brief — every spawn pays for it — but there is no cap and nothing is cut; the driver
+archives every version to `results/journal_archive/`, so nothing written here is ever lost. The record itself
 lives elsewhere and is never copied here: the numbers and the one-line timeline in `results/scoreboard.tsv`
 (one row per experiment — `what`, expected vs found, label, an optional `note`, a `finding` where a
 verdict settled something), the narrative of each experiment in `results/logbook.md` (its entry, written
@@ -23,13 +23,15 @@ re-judge it in its own context.
   change your mind)
 
 ## What to try next and why
-- (ranked; the reasoning, not just the experiment, so the next worker can re-rank; what to stop doing)
+- (ranked; the reasoning, not just the experiment, so the next worker can re-rank; what to stop doing.
+  An item the setup wrote is marked `[setup inference]`: untested, yours to keep or drop)
 
 ## Traps and tooling
 - (pitfalls hit, gotchas in the code or the data, things that wasted time — the "do not repeat" list)
 
 ## Open questions
-- (what you could not settle, what you are unsure you handled right, notes from the user acknowledged)
+- (what you could not settle, what you are unsure you handled right, notes from the user acknowledged;
+  the setup's `[setup inference]` items until a unit tests them)
 
 ## Anything else
 - (whatever else the next worker should know; unstructured on purpose)

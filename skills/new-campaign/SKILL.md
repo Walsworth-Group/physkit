@@ -239,7 +239,7 @@ control, or training or fitting purely on real experimental data). If there is o
 
    Finally, set `{{METRIC_VERSION}}` / `{{DATA_VERSION}}` (default `v1` / `v1`). The runner stamps them
    onto every scoreboard row and result, and they are bumped whenever the FROZEN scorer or the evaluation
-   data changes — a `metric_version` bump is a metric epoch (`roles/worker.md` §Metric epochs). Say in one
+   data changes — a `metric_version` bump is a metric epoch (`roles/REFERENCE.md` §Metric epochs). Say in one
    sentence that `campaign.metric_revision` ships `cautious`: a revision the loop wants raises
    `ESCALATE.md` and waits; the user moves that dial, never the loop.
 
@@ -330,7 +330,7 @@ control, or training or fitting purely on real experimental data). If there is o
    - **If the projection is a material fraction of free space (say over 25%), stop and design the retention
      plan with the user** before scaffolding: which bulk artifacts are kept, and which are dropped and
      regenerated on demand from the snapshot and seed. Fill it into `roles/worker.md`
-     (`{{RETENTION_PLAN}}`, in §Retention plan). The permanent record — scoreboard row, result JSON,
+     (`{{RETENTION_PLAN}}`, in `roles/REFERENCE.md` §Retention; the reasoning goes to `campaign.md` §Decision record's retention entry). The permanent record — scoreboard row, result JSON,
      figure, snapshot, narrative, verdicts — is never part of that trade: it is small by construction, and
      dropping any of it un-saves the result. Anything not deterministically regenerable (hardware
      measurements, external services, unrecorded seeds) is likewise never droppable.
@@ -338,17 +338,15 @@ control, or training or fitting purely on real experimental data). If there is o
      constraint here" is what stops the next agent from re-litigating it.
 
    **From the same unit-cost assessment, derive the supervisor loop knobs** (`configs/loop.json`, which the
-   driver reads; PLACEHOLDERS §Loop configuration): planner cadence *k*, plateau threshold *m*
-   (dual-denominated: units and wall-clock, whichever trips first), the outstanding-units cap (default
-   1: one agent proposal ahead of a planner review), and the iteration timeout (greater than the Extended cap). Also record `campaign.reproducible`
+   driver reads; PLACEHOLDERS §Loop configuration): the unit's wall-clock and disk cost, and the
+   iteration timeout (greater than the Extended cap). Also record `campaign.reproducible`
    (whether one unit can be independently re-executed from its config alone: seeded, not a one-shot
-   measurement, not hardware-in-the-loop). There is no verification threshold to set: the runner decides
-   re-execution per unit from its measured solve time against the iteration timeout and that flag, and
-   records the decision in each `results/checks_<NN>.json`. The harness-specific planner/worker model
-   and effort selections are topic 9. **The cadence inverts with unit cost:** expensive units
-   mean planning often, with a small *k*, since the planner is nearly free next to a day-long solve and a
-   wasted solve is the real cost; cheap units mean planning in strides, with a large *k*, which keeps
-   planner overhead a small fraction of loop compute. Propose the values with their reasoning; the user
+   measurement, not hardware-in-the-loop) — a fact a verifier reads when it chooses how to refute, not a
+   trigger. There is no verification threshold to set: the preset (8b) decides each result's one check,
+   and the runner records it in each `results/checks_<NN>.json`. There is no planner cadence, plateau
+   threshold or outstanding-units cap to set: the planner and its queue are retired, and the
+   worker chooses each unit from the JOURNAL. The harness-specific worker/verifier model
+   and effort selections are topic 9. Propose the values with their reasoning; the user
    confirms them with the spec.
 8b. **Autonomy and verification — one step, two choices.** Both are the user's decisions about how far to
    trust the loop on THIS problem, so ask them together and record both in `configs/loop.json`.
@@ -357,24 +355,25 @@ control, or training or fitting purely on real experimental data). If there is o
      metric epoch without stopping (`autonomous`) — or must it stop and ask (`cautious`, the default)?"
    - **Verification preset** (`verify.preset`, `{{VERIFICATION_PRESET}}`): "How hard is this problem, and
      how much of the budget should go to checking? Choose by how likely a plausible-looking result is
-     wrong here." Then present the four presets **verbatim** from the plugin's
-     `docs/reference/verification-presets.md` — the *summary* and *when to choose it* fields of `minimal`
-     · `light` (the default) · `moderate` · `intensive`. Do not paraphrase them: that file is the single
-     description, and the driver prints the same table at preflight. Record the choice, and one line on
-     why, in the campaign spec.
+     wrong here." Then present the five presets **verbatim** from the plugin's
+     `docs/reference/verification-presets.md` — the *Summary* and *Choose it when* lines of `none` ·
+     `minimal` (the default) · `light` · `heavy` · `intensive`. Do not paraphrase them: that file is the
+     single description, and the driver prints the same table at preflight. Record the choice, and one
+     line on why, in the campaign spec.
 9. **Active harness, role models/effort, environment & version control.** Ask which harness will launch
    this campaign first: **Claude Code**, **Codex**, or **switchable**. If switchable, also ask which one
    launches first. This choice does not prune the dual-compatible scaffold; it sets
    `{{AGENT_BACKEND}}`, decides which role settings to ask for, chooses the Step 4 preflight, and tailors
    the handoff. A later switch uses `--backend` after stopping the current supervisor.
 
-   For each harness the user plans to use, ask for the planner and worker model and effort independently.
+   For each harness the user plans to use, ask for the worker and verifier model and effort
+   independently (the `verifier` pair also runs the end-of-loop claim audit).
    Explain that blank means inherit that harness's configured default, which is the least maintenance but
    is not a reproducible pin. Claude uses `model` + `claude_effort`; Claude effort may be `low`, `medium`,
    `high`, `xhigh`, or `max`, subject to the selected model and Claude Code version. Codex
    uses `codex_model` + `codex_reasoning_effort`; Codex effort may be `minimal`, `low`, `medium`, `high`,
    or `xhigh`. The direct Codex verifier follows the worker's Codex pair; the established Claude nested
-   verifier follows the planner's Claude pair. Fill the unused harness's fields with empty strings when
+   verifier follows the `verifier` block's Claude pair. Fill the unused harness's fields with empty strings when
    the user chose only one. Seed sensible model defaults for the selected harness, but let the user confirm
    them because model tiers shift with every release; leave effort blank unless the user chooses it.
 
@@ -424,6 +423,9 @@ any, and the values you will use for the key
 placeholders. Cite the source for any value pulled from a document, paper, or dataset, with its provenance
 tag (PINNED / REPORTED / INFERRED / RECALLED) from the Step 0.6 ledger, and call out every load-bearing
 fact still at INFERRED or RECALLED as an open question for the user to resolve before the baseline run.
+The same rule binds every steering statement the spec proposes - a landmine, an artifact to guard
+against, a range, a direction: each carries its source or is marked as your own inference, and an
+inference never enters `campaign.md` (Step 3).
 Show the spec to the user and get explicit sign-off or corrections. This is the checkpoint that keeps the
 build aligned with the original intent.
 
@@ -433,14 +435,16 @@ the target directory and fill it from the spec,
 obeying `PLACEHOLDERS.md`. **The copy is what creates the tree: take the whole directory, not a hand-picked
 subset.** The bullets below say what to fill; they are not the file list. Files the copy brings that no
 bullet dwells on must still survive the fill. Five are checked by the Step 4 validator:
-**`roles/worker.md` + `roles/planner.md`** (the two role files `campaign.md` delegates procedure to),
+**`roles/worker.md`** (the worker's contract - every instruction it acts on; `roles/verifier.md` and `roles/capstone.md` are the other two spawned roles' contracts, `roles/REFERENCE.md` the reference the worker's contract points at and no spawn reads whole),
 **`configs/_template.json`** (the per-experiment config template), **`scripts/frozen_core.py`** (the
 FROZEN-core file list and content hash that `run_campaign.py` stamps and `guard_promotion.py` recomputes
 at promotion), **`tests/correctness_checks.py`** (the standing suite), and **`README.md`** (the
 cold-reader front door; its §Setup status points at preflight). **`configs/RECOMMENDED.json`**
 (the current-best pointer) is not validator-checked, but the promotion rule writes to it, so keep it too.
-- **Fill the two role files** (`roles/worker.md`, `roles/planner.md`) from the spec like every other
-  template. The loop's per-unit procedure and the planner's strategy live there, not in `campaign.md`.
+- **Fill the four role files** (`roles/worker.md`, `roles/verifier.md`, `roles/capstone.md`, `roles/REFERENCE.md`)
+  from the spec like every other template. The loop's per-unit procedure lives in the worker's
+  contract, not in `campaign.md`; the runner's own prompt is one opening line, so a rule that is not in
+  the role file does not reach the agent.
 - **Resolve every `{{PLACEHOLDER}}`** clearly, explicitly, and concisely, specific enough to act on
   without the interview that produced it. Where the user deferred a value, write an explicit TODO noting the deferral,
   never a silent guess.
@@ -493,10 +497,10 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   and its block message routes toward launching the driver; it stands down for driver-spawned
   supervisor-mode workers, whose per-unit end-of-turn is earned, and for any attended session while the
   driver's `results/.driver_alive` sentinel is fresh. Also generate **`scripts/guard_promotion.py`**, the
-  PreToolUse hook that denies an unverified promotion write — a `configs/RECOMMENDED.json` update or a
-  scoreboard edit introducing a `CONFIRMED`/`NEW BEST` token without a subject-matched promotable verdict
-  artifact (`results/verdicts/<id>.json`, written by `verify`; CONFIRMED with a named refuter; an
-  INCONCLUSIVE kill is denied), and — in a legacy project that still carries one — a project-ledger
+  PreToolUse hook that denies a mislabelled promotion write — a `configs/RECOMMENDED.json` update or a
+  scoreboard edit introducing a `CONFIRMED`/`NEW BEST` token that does not carry the promoted result's
+  label exactly as its `results/checks_<NN>.json` holds it, or that promotes a result a check refuted —
+  and — in a legacy project that still carries one — a project-ledger
   (`../../DISCOVERIES.md`) entry that does not cite its source verdict by path (fail-closed; new
   projects have no such ledger because verified findings remain in their source campaigns). Fill **`{{PYTHON_CMD}}`** with the python
   invocation detected in Step 0.5 (`py -3` on Windows, `python3` on macOS/Linux) so both harness hook commands run
@@ -518,20 +522,17 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   mirroring exp 000 until the first promotion. Create the artifact-gate directories **`predictions/`** (the
   runner's spend gate refuses any solve without `predictions/<exp_name>.json`) and **`results/verdicts/`**.
 
-  Seed **`results/queue.json`** with exp 000 as the first unit, then the user's topic-12 to-try ideas as
-  proposed units with rationales, attributed to the user. **Every unit references one concrete runnable
-  config path** — the driver validates a unit by that config's `exp_name` save-set. An idea spanning
-  several solves becomes several units, or one unit whose single config encodes the pre-registered sweep;
-  never a prose meta-unit with no config behind it. Related cheap units may share a `"block": "<id>"`
-  and a `"hypothesis"` — the driver verifies a block once, when its last unit lands, so verification
-  cost follows unit cost; an expensive unit stands alone (a block of one needs no field):
-  `{"next": [{"config": "...", "rationale": "...", "proposed_by": "user", "declined": []}, ...],
-  "shelved": [], "accepted_units": 0, "last_accept_utc": null, "units_since_planner": 0,
-  "pending_verification": []}`.
+  Seed no queue: there is none. The user's topic-12 to-try ideas go into the opening
+  `results/JOURNAL.md` §What to try next and why — ranked, attributed to the user, and phrased as
+  **questions, never as a candidate named as the expected answer**: a setup-written first instinct is the
+  one thing in the tree that carries no evidence, and a campaign has run twenty units on one. Write "does
+  <lever> account for <observation>, and what would show it?", not "<lever> is probably it". A later
+  JOURNAL rewrite re-states them from the evidence then on the ledger, never by quoting this opening one.
+  Add no directions of your own.
 
   **Verify the layer is wired** before handoff: `.claude/settings.json` registering `guard_promotion`,
   `.codex/hooks.json` registering the synchronous canonical `apply_patch` adapter,
-  both gate directories present, and `loop.json` and `queue.json` parsing. A tree without them runs with no
+  both gate directories present, and `loop.json` parsing. A tree without them runs with no
   gates at all, and a tree assembled by hand rather than by this skill is the case where that happens;
   `campaign-status` asserts all of it.
 - **Campaign code — filled here, implemented in Step 3.5.** Fill `scripts/metric.py` (the FROZEN scorer
@@ -552,17 +553,28 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   It is green-gated: `run_campaign` records its status before every unit, and the promotion guard reads it.
 - **Author the goal, verification, and engineering content.** The campaign's orienting answers live in
   **`campaign.md`** now: §Mission carries the goal, the decision it serves, and what "done" looks like
-  (`{{DECISION_SERVED}}` / `{{DONE_CRITERIA}}`); §Loosely-held expectations carries the hypotheses the
-  campaign tests; §FROZEN / out of scope carries `{{OUT_OF_SCOPE}}`. The goal-linked task decomposition
-  from `frame-problem` goes into `results/queue.json` as the opening units (with rationales) and the
-  JOURNAL **NEXT** pointer — the queue is the task hierarchy; there is no separate orientation file to
-  keep in sync with it. When the field has them, fill the project doc's optional
+  (`{{DECISION_SERVED}}` / `{{DONE_CRITERIA}}`) - written so it holds under any preset: the label a
+  result earns is the preset's, so "done" never asks for a verification ("a verified primitive") or a
+  pass condition it does not define ("survives the panel"); §FROZEN / out of scope carries
+  `{{OUT_OF_SCOPE}}`. There
+  is no expectations section in the contract: the hypotheses the campaign tests live in the opening
+  JOURNAL's §Live hypotheses, as questions, where the next worker re-judges them from evidence. The goal-linked task decomposition
+  from `frame-problem` goes into `results/JOURNAL.md` — the **NEXT** pointer and §What to try next and
+  why, with the reasoning — which is the campaign's only forward-looking record; there is no separate
+  orientation file to keep in sync with it. When the field has them, fill the project doc's optional
   **"Where this sits in the field"** section (`../../PROJECT.md`): the gap or novelty,
   adjacent work, the threshold ladder and named precedents for the key quantity, and what not to claim.
   Ask the user or draw on the topic-4 literature; skip it if the quantity has no canonical thresholds,
   and never invent them. Fill
   **`campaign.md` §Verification** with the application-specific checks from topic 4b, the gate `verify` and
-  `correctness-suite` consume. Seed **`campaign.md` §Decision record** with the Step 0.6 source-authority
+  `correctness-suite` consume. **Every §Verification line and every §Known landmines row names its
+  source** (the user, a derivation, a reference, a prior campaign's ledger id or verdict); the landmine
+  table's fourth column is that source, and the validator refuses a row without one. What you merely
+  suspect - a pitfall you would guess at, a direction you expect to fail - goes into the opening JOURNAL
+  (§Open questions or §What to try next and why) marked `[setup inference]`, where the worker who tests
+  it can drop it. It never enters the contract: a contract line cannot be argued with from inside a
+  spawn, and a guessed landmine has steered campaigns away from paths nobody had tested. The contract is
+  the problem's facts and the campaign's constraints, not a strategy - the workers have their own. Seed **`campaign.md` §Decision record** with the Step 0.6 source-authority
   ledger: one ED per load-bearing fact resolved from a source, giving its value, the authoritative artifact
   it is PINNED to, the provenance tag, and the lower-authority sources quarantined and why. An empty section
   is correct only if there was a single source.
@@ -571,7 +583,7 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   templates already link it by literal relative path. Update it in place if this campaign added physics
   or conventions — run-constraining facts into §Standing constraints, depth below. Record the detected compute and the chosen
   environment and setup commands in the README (Environment / Quick-start), note available compute in
-  `campaign.md` §Caps, and register any new docs in the README.
+  `campaign.md` §Targets, and register any new docs in the README.
 - **Project wiring — always, from Step 0.1:**
   1. Reference the canonical data as **`../../data`**; never copy it into the campaign.
   2. **Append the lineage row** — `../../PROJECT.md` §Lineage Campaigns table (old layout:
@@ -591,7 +603,7 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
      `../../DISCOVERIES.md` stays hook-gated). Note this in the handoff so the loop agent knows the path.
 - **Literature (per the topic-11 level).** The ongoing-search rule and the `LITERATURE.md` file are decided
   separately:
-  - *Ongoing-search rule in `roles/planner.md` §Literature search rule:* for **none**, resolve the
+  - *Ongoing-search rule in `LITERATURE.md` §Literature search rule:* for **none**, resolve the
     `[[OPTIONAL — literature search enabled]]` block as delete; for **only-when-needed** and **extensive**,
     keep it and fill `{{LITERATURE_LEVEL}}` with the chosen intensity (search-when-stuck versus
     proactive-and-periodic).
@@ -625,7 +637,8 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   and waits); say so in one sentence at handoff — the user moves the dial, never the loop.
 - Seed `results/scoreboard.tsv` with its header. Leave `results/logbook.md` (append-only full record)
   and `results/JOURNAL.md` (the campaign's working memory — the **NEXT:** line and its sections) with
-  their intros and the first **NEXT** pointer, queueing exp 000. The logbook, scoreboard, and `diagnostics/` logs are append-only and
+  their intros, the first **NEXT** pointer naming exp 000, and §What to try next and why holding the
+  user's ideas under the rule above. The logbook, scoreboard, and `diagnostics/` logs are append-only and
   never read in full, which is what keeps the record complete without bloating the loop's context. If the
   user wants hard separation, the logbook and diagnostics can be redirected to a path outside the campaign
   tree; the default is in-tree for reproducibility.
@@ -644,14 +657,16 @@ fresh session a red preflight. Sub-agents may draft; this session verifies.
    contract), `run_experiment` (the experiment dispatcher), `load_target` (the target/data loader) —
    wiring the topic-5 data paths and the topic-10 existing code. Implement `save_figure()` so it
    actually writes the file, and fill the seams the campaign needs (`campaign_scoreboard_fields` for its
-   scoreboard columns, `baseline_config` for exp 000, `campaign_checks` for checks only it can make).
+   scoreboard columns, `campaign_result_fields` for the evidence behind the number, `baseline_config` for
+   exp 000, `campaign_checks` for checks only it can make; `ZERO_EVALUATION_MODES` if a unit can record
+   no score - a decision-record entry, a procedure - see the seam file's header).
    Helpers and models go in `experiment.py` or sibling modules under `scripts/`; the runner is never
    edited.
 3. **Write `predictions/exp000_baseline.json`** from the topic-3 a-priori range and prediction mode. The
    spend gate requires it before exp 000 can run, and the prediction is interview output — record what
    was co-designed, invent nothing.
 4. **What this session genuinely cannot finish** — a data file only the user can stage, an instrument to
-   connect, a credential — is left as its named preflight failure, queued as an opening
+   connect, a credential — is left as its named preflight failure, written as an opening
    `results/JOURNAL.md` **NEXT** item, and handed over by name in Step 5. Never silently, and never as
    an unimplemented hook: code is always this session's to write.
 
@@ -672,8 +687,18 @@ fresh session a red preflight. Sub-agents may draft; this session verifies.
    naming while the readiness probe (an `emit` of a throwaway unit, then `wait`; the contract's
    silent-wedge mitigation) proves the channel end to end before the campaign starts.
 
-Do **not** run exp 000 here. It is the first queued unit, and the driver runs it under the gates in the
-fresh session (the loop-gate rationale in Step 5).
+6. **Run experiment 000 now** — `python scripts/run_campaign.py --config configs/exp000_baseline.json`,
+   under the same gates every unit runs under. The setup session is the best-placed agent that will ever
+   see this campaign, and the floor is machinery, not direction: a fresh worker that has to establish it
+   spends its first unit on plumbing (photophysics10 spent ~30). Check the gate criteria from topic 3
+   (the expected floor or range; the sanity checks that prove the chain is sound - a known input maps to
+   a known output, the metric collapses on a null input, units come out right); a floor you cannot trust
+   makes every later delta meaningless, so STOP and debug before handing off. Then `--record` it (the
+   analysis names the floor and what the chain validated), fill `campaign.md` §Decision record ED-000
+   (the baseline floor: methods, command, criteria met, the floor), and write the opening
+   `results/JOURNAL.md` from the result: §Where we stand carries the floor with its ledger id; §Live
+   hypotheses and §What to try next and why carry the user's ideas as questions (below). Preflight then
+   shows the exp000 row, and the loop's first worker chooses a real unit.
 
 ## Step 3.7 — the setup audit (before anything is frozen)
 The cheapest verification a campaign can buy is the one that happens before the first unit: a contract
@@ -694,6 +719,12 @@ Leave one line under `## Where we stand` in `results/JOURNAL.md`: `Setup audit: 
 (N seeds); floor …; metric discriminates; recovery ± …; contract checks green`. The validator (Step 4)
 refuses a suite that lacks the four names unless `tests/CORRECTNESS_NA.md` records why; preflight prints their status with
 the rest of the suite.
+
+Then the **steering audit**: read `campaign.md` above §Decision record once more, as the worker will -
+every landmine row, every §Verification line, the a-priori range and its basis, every "held fixed" -
+and for each ask where it came from. Anything you cannot source is deleted or moved to the JOURNAL
+marked `[setup inference]`. A setup agent knows no more than the workers that follow it; what it
+writes into the contract binds them all the same.
 
 ## Step 4 — validate (two deterministic gates)
 Run both gates on the generated tree and fix anything they flag:
@@ -753,23 +784,26 @@ In that fresh session, the sequence is:
 2. **Invoke the harness's `physkit:run-campaign` skill.** That session becomes the loop's cockpit: it runs the driver's
    launch-settings confirmation (a concierge/role mismatch is informational), runs the driver's preflight
    and translates any failure into its fix, launches `--supervise` in the background, narrates
-   progress from the driver log, and relays the user's steering into `results/inbox/`. Experiment 000 —
-   the baseline gate, whose expected floor is in `campaign.md` §Baseline gate — is the first queued unit,
-   run by the driver under the same gates as every other unit. Fallback, if no
+   progress from the driver log, and relays the user's steering into `results/inbox/`. Experiment 000
+   already ran in Step 3.5 (its floor is the exp000 ledger row and `campaign.md` §Decision record
+   ED-000); the loop's first worker chooses a real unit. Fallback, if no
    skill is available: hand over `<python> scripts/run_campaign.py --preflight --backend <harness>`,
    then `--supervise --backend <harness>`,
    writing out the actual python command detected in Step 0.5, e.g. `py -3`, and never the literal
    placeholder.
 
-The driver runs its preflight (agent CLI, loop and queue config, metric self-test; each failure names its
-fix, and `--preflight` runs it standalone), pops units from the seeded `results/queue.json`, spawns a fresh
-worker agent per unit (the frozen spine auto-loads; the driver compiles `campaign.md`, the role file,
-the standing constraints, the JOURNAL and the unit into the prompt — the brief, sized at
-preflight and at every spawn), and enforces the artifact gates. Failures split by kind. An **operational** failure — a worker that dies, hangs, or leaves its unit
-unvalidated — is retried, then shelved with the failure recorded, and the loop continues. The driver
-hard-halts only on **integrity** conditions (`results/ESCALATE.md`, a corrupt or post-planner-empty queue)
-or **systemic** failure (several units failing in a row). Loop knobs live in `configs/loop.json`, which is
-user-owned; `roles/worker.md` §How the loop runs explains the contract.
+The driver runs its preflight (agent CLI, loop config, metric self-test; each failure names its
+fix, and `--preflight` runs it standalone), spawns a fresh
+worker agent per unit with **no unit assigned** (the frozen spine auto-loads; the driver compiles
+`campaign.md`, the role file, the standing constraints, the JOURNAL and the config template into the
+prompt — the brief, sized at preflight and at every spawn), and enforces the artifact gates. The worker
+chooses the one experiment the campaign needs now from the JOURNAL. Failures split by kind. An
+**operational** failure — a worker that dies, hangs, or leaves its unit
+unvalidated — is retried, then counted, and the loop continues. The driver
+hard-halts only on **integrity** conditions (`results/ESCALATE.md`, a corrupt `results/driver_state.json`)
+or **systemic** failure (several units failing in a row), and stops for the user when a worker writes
+`**NEXT:** STOP - <why>` (the claim audit runs first). Loop knobs live in `configs/loop.json`, which is
+user-owned; `roles/worker.md` §Long solves, escalation, and your exit explains the contract.
 
 **Attended work means watching and steering through the cockpit, not executing by hand.** A by-hand
 `--config` run is for debugging a single experiment; it is not a mode for running the loop. The
@@ -798,11 +832,11 @@ re-read, premature stops, and verification decay — the failure record that mot
 - **Imported, relocated, or hand-built trees silently lose the enforcement layer.** A tree not generated by
   this skill — copied in, assembled from frozen inputs, or moved — usually lacks `.claude/settings.json`,
   `scripts/guard_promotion.py`, `scripts/loop_heartbeat.py`, the gate directories (`predictions/`,
-  `results/verdicts/`), `configs/loop.json`, and `results/queue.json`. The promotion gate, the loop gate,
+  `results/verdicts/`), and `configs/loop.json`. The promotion gate, the loop gate,
   and the driver are then all absent, and the doctrine prose in `CLAUDE.md` is decorative. Re-run the Step
   3 enforcement-layer wiring for any such tree, and lift it into a project home per Step 0.1;
   `campaign-status` asserts the whole set.
 - The metric and core physics you scaffold are FROZEN by construction — locked against quiet change; a
-  later revision is a declared metric epoch (`roles/worker.md` §Metric epochs), never an in-place edit.
+  later revision is a declared metric epoch (`roles/REFERENCE.md` §Metric epochs), never an in-place edit.
   Say so to the user, and make the `--selftest` real before exp 000 so a convention or sign slip cannot
   corrupt the whole campaign.

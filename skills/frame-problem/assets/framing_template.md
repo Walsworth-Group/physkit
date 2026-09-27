@@ -2,7 +2,7 @@
 
 > The durable frame for this problem, produced by `frame-problem` once the goal was clear. Update it as
 > understanding changes. In a campaign its parts graduate: inventory → `PROJECT.md`
-> §Standing constraints, goal → `campaign.md`, steps → the queue + JOURNAL NEXT,
+> §Standing constraints, goal → `campaign.md`, steps → the JOURNAL (NEXT + What to try next),
 > verification plan → the verification gate.
 
 **Date:** <YYYY-MM-DD> · **Status:** draft / confirmed-with-user / in-progress

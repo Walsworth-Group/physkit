@@ -96,11 +96,23 @@ run the splitting or correction control before believing it.
   (`configs/loop.json` `verify.preset`; `docs/reference/verification-presets.md`) decides when each row
   runs, and the runner meters everything that fires every unit:
 
-  | row | what it may test | its inputs | when it runs |
+  | row | what it may test | its inputs |
+  |---|---|---|
+  | `invariants` (the default when undeclared) | a cheap property of this run's OUTPUT: conservation, ranges, no NaN/inf, shapes, sum rules | the result |
+  | `machinery` | the code's own fixed-input checks: a known answer, an analytic limit, parity between two methods, a convergence study, synthetic recovery | its own fixtures — never this run's config or result |
+  | `gates` | an expensive per-result gate: a leave-one-out refit, a bootstrap, a held-out score | the experiment (the check takes one argument) |
+
+  | preset | `invariants` | `machinery` | `gates` |
   |---|---|---|---|
-  | `invariants` (the default when undeclared) | a cheap property of this run's OUTPUT: conservation, ranges, no NaN/inf, shapes, sum rules | the result | every unit, under every preset, inside a budget of a tenth of the unit's measured cost (never below thirty seconds) |
-  | `machinery` | the code's own fixed-input checks: a known answer, an analytic limit, parity between two methods, a convergence study, synthetic recovery | its own fixtures — never this run's config or result | at setup, when the code it executed changes, or every unit, by preset; always when the FROZEN core changes |
-  | `gates` | an expensive per-result gate: a leave-one-out refit, a bootstrap, a held-out score | the experiment (the check takes one argument) | after the solve of a promotion candidate, or every unit, by preset |
+  | `none` | off | off | off |
+  | `minimal` | every unit | off | off |
+  | `light` | every unit | once, at setup | a new best (`promotion`) |
+  | `heavy` | every unit | when the code it executed changes | a new best |
+  | `intensive` | every unit | every unit | every unit |
+
+  Whatever the preset, a FROZEN-core change makes every check due. Every-unit checks share a budget of a
+  tenth of the unit's measured cost (never below thirty seconds); a `promotion` gate runs after the solve
+  of a result that is a new best.
 
   Authoring is where a check is judged too slow or too numerous, not cycle forty. An `invariants` check
   runs in seconds and names the failure the runner's own floor would miss. A `machinery` check that reads
@@ -109,7 +121,7 @@ run the splitting or correction control before believing it.
   whatever the preset (still metered). An over-budget every-set is refused at preflight by name; one
   that grows slow mid-campaign is demoted to promotion-time, loudly, never silently skipped. Never
   conclude correctness from the every-set alone for a load-bearing result: that is what the machinery
-  and gates rows, and the independent verifier, are for.
+  and gates rows, and the result's independent check, are for.
 - **The contract checks** are the setup audit's (`new-campaign` Step 3.7), shipped as four `machinery`
   stubs: `baseline_reproduces`, `noise_floor_measured`, `metric_discriminates`, `synthetic_recovery`.
   Green before anything is frozen; the validator refuses a suite without them unless
@@ -128,7 +140,7 @@ run the splitting or correction control before believing it.
   forward model. In a campaign the runner does this: a FROZEN-core change makes every check due, and a
   `machinery` check re-runs whenever the code it executed last time moves (compared as code, so a
   comment is not a change). Do not edit FROZEN code and skip the suite; a change to the scorer is a
-  declared metric epoch (`roles/worker.md` §Metric epochs) — the runner binds the scorer's code to its
+  declared metric epoch (`roles/REFERENCE.md` §Metric epochs) — the runner binds the scorer's code to its
   epoch and refuses an undeclared change — and the epoch stays pending until the user ratifies it.
 - **A red suite blocks trust.** Do not promote a result, write a DISCOVERY, or report a number while a
   relevant check is failing. Fix the code or fix the check, and state which.
@@ -142,7 +154,7 @@ application-specific check, add it. The suite then only grows stronger, and the 
 return. New checks are appended as the work uncovers them. A regression check joins the row matching
 what it tests: an output property → `invariants` (most of them); a bug reproduced on fixed inputs →
 `machinery`; a per-result statistical guard → `gates`. A refuted finding that becomes a check costs one
-verifier once and milliseconds every unit after — the reuse a light preset rests on.
+check once and milliseconds every unit after — the reuse a light preset rests on.
 
 When the bug was a **silent failure whose output imitated the effect under study** (`debug`'s gotcha
 catalog: exit 0, no NaNs, an ordinary convergence metric, and a result that reads like the sought

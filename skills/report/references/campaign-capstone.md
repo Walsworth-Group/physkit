@@ -42,7 +42,8 @@ before concluding it does not exist.
 
 The report centers on one configuration, and it is **`configs/RECOMMENDED.json`**, the campaign's own
 current-best. Read it; do not re-derive it. That file is a gated artifact: a write to it is a promotion,
-and the PreToolUse hook refuses one without the verification its preset requires. Inferring a winner from
+and the PreToolUse hook refuses one that does not carry the result's honest label (`verification_label`),
+or a result a check refuted. Inferring a winner from
 the scoreboard re-decides, by a different rule and with no gate, something the campaign already decided
 under one; a report that names a configuration the campaign never promoted asserts a result nobody
 verified. Route to it via `CLAUDE.md` §Where things live, not by assuming the path.
@@ -53,9 +54,9 @@ verified. Route to it via `CLAUDE.md` §Where things live, not by assuming the p
   to report, not a gap to paper over: the campaign has no current-best. Say so, then infer a candidate
   from the ledger and label it *inferred*, with its basis and its label. Never present an inferred winner
   as the selected configuration.
-- A current-best whose `verified` cell is blank is not a defect under a preset that promotes stamped
-  `unverified`; its label is `unverified` (or `self-checked`), printed as such. A blank cell under a
-  preset that required a verdict is the defect `campaign-status` flags.
+- The pointer follows the true best at once, so a current-best labelled `unverified`, `self-checked` or
+  `self-verified` is not a defect: its label is printed as such. A `verification_label` that differs from
+  its `results/checks_<NN>.json` `label` is the defect `campaign-status` flags.
 - A higher raw score that fails the overfit flag is not the winner, and saying so is part of an honest
   report.
 
@@ -65,18 +66,19 @@ selected configuration in depth, the contenders summarized.
 
 ## Run the claim audit first
 
-Before the evidence ledger, read the latest `results/verdicts/audit_<NN>.json` or run `claim-audit` at the
-level the campaign's preset names (`configs/loop.json` `verify.preset`: `panel` under `intensive`,
-`default` otherwise; no preset turns the capstone off). It is claim-directed: it enumerates what this
-report will export, ranks by load-bearing weight and label weakness, and spends its budget top-down. Its
-inherited-assumptions check seeds the assumptions register.
+Before the evidence ledger, read the latest `results/verdicts/audit_<NN>.json` or run `claim-audit` (the
+driver runs it at the end of the loop under every preset but `none`; a `none` campaign that will share
+its report runs it here). It is claim-directed: it enumerates what this report will export, ranks by
+load-bearing weight and label weakness, spends its budget top-down, and re-checks the final best once.
+Its inherited-assumptions check seeds the assumptions register.
 
 ## The labels the report prints
 
 Every exported claim carries its label (`results/checks_<NN>.json` `label`: `unverified` ·
-`self-checked` · `<verdict>/review` · `<verdict>/re-execution`; and, from the audit's artifact,
-`label_after`, which may be `<verdict>/audit`), and the report prints it. A shareable report needs the
-current-best's label to be independent: a CONFIRMED verdict, or the claim audit's label. A headline the
+`self-checked` · `self-verified` · `self-refuted` · `<VERDICT>/peer` · `<VERDICT>/verifier`, an old
+`/review` or `/re-execution` read as `/verifier`; and, from the audit's artifact, `label_after`, which
+may be `<VERDICT>/audit`), and the report prints it. A shareable report needs the current-best's label
+to be independent: a CONFIRMED peer or verifier verdict, or the claim audit's label. A headline the
 audit downgraded is reported as downgraded, never as the best; it stays in `RECOMMENDED.json` with its
 downgraded label printed beside it (promote-and-label, never a silent swap). Every other exported claim
 prints its label too, `unaudited` included. While the current-best's label is non-independent and no

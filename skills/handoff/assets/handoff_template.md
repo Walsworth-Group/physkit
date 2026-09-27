@@ -6,10 +6,10 @@
 ## 1. Vision & goal
 - **End goal:** <what the work must achieve, concretely>
 - **The decision it drives / why it matters:** <one paragraph>
-- Full goal: `campaign.md` §Mission · task queue: `results/queue.json`
+- Full goal: `campaign.md` §Mission · what to try next: `results/JOURNAL.md`
 
 ## 2. Current state (incl. in-flight reasoning)
-- **Current best / result:** <value + where it lives (config/snapshot)> · **verification:** <CONFIRMED / PROVISIONAL / unverified> · **metric epoch:** <metric_version · standing; any pending epoch awaiting ratification>
+- **Current best / result:** <value + where it lives (config/snapshot)> · **verification:** <its label: in a campaign the checks artifact's (e.g. self-verified, CONFIRMED/peer); else CONFIRMED / PROVISIONAL / unverified> · **metric epoch:** <metric_version · standing; any pending epoch awaiting ratification>
 - **Done:** <the settled pieces>
 - **In-flight, and why:** <the hypothesis being tested, why, what was expected, what had just been learned>
 - **Open threads:** <live questions>
@@ -32,7 +32,7 @@ python scripts/run_campaign.py --preflight   # names the metric epoch + its stan
 1. <next step> · *serves the goal by …* · <enough detail to act on>
 2. <…>
 3. <…>
-Kept in sync with the JOURNAL NEXT pointer and `results/queue.json`.
+Kept in sync with the JOURNAL's **NEXT:** line and §What to try next and why.
 
 ---
 <!-- On the next handoff: copy this to archive/handoff_<this date>.md, then write a fresh dated file. -->

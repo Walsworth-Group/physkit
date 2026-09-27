@@ -49,19 +49,16 @@ action on the existing one-line `**Disputes & responses**` field, semicolon-deli
 never adding nested bullets; set `**Status**` to `refuted` for REFUTED, `open` for INCONCLUSIVE, otherwise
 the verdict token. Leave every other field in that logbook entry, including `**NEXT**`, byte-identical;
 write no `results/JOURNAL.md` line - the driver stamps the verdict into the ledger's `verified` cell,
-and the logbook entry is the verifier's only narrative surface. Whenever this verification
-proposes a follow-up through `results/queue_drop/` - including every REFUTED or INCONCLUSIVE - in that
-entry's `**Disputes & responses**` text write the literal label `Follow-up: queued`, then one space,
-then that proposal's exact `config` path as Markdown inline code. Make this a standalone clause
-starting at the field beginning or
-immediately after a period or semicolon; end it immediately after the inline-code path.
-After the path, allow only an optional period/semicolon before any other text; add or update exactly
-one such clause per subject, never duplicate it, and preserve every other logbook line."""
+and the logbook entry is the verifier's only narrative surface. There is no queue: whenever a verdict
+is REFUTED or INCONCLUSIVE, name the control or the fix-and-rerun in that verdict JSON's `follow_up`
+field - one line, concrete, citing `results/verdicts/<exp_id>.json` - and the driver relays it to the
+next worker as a note; the worker decides. Propose no config and edit no queue file. Preserve every
+other logbook line."""
     if subjects is not None:
         exact = "\n".join(
             f"- Experiment {json.dumps(stem)}: write exactly "
             f"`results/verdicts/.codex-pending/{nonce}/{eid}.json`; set JSON `\"exp_id\"` "
-            f"exactly to {json.dumps(eid)}; cite the published verdict in the queue drop and the logbook exactly as "
+            f"exactly to {json.dumps(eid)}; cite the published verdict in the `follow_up` field and the logbook exactly as "
             f"`results/verdicts/{eid}.json`. In `results/logbook.md`, anchor the edit to the exact "
             f"section-header prefix `## {eid} - {stem} -`; its field labels repeat in other entries, "
             "so never use an unanchored field-only or global replacement."
@@ -148,9 +145,12 @@ def _evidence_problem(root: Path, entry: dict, exp_id_for) -> str:
         return "scoreboard is unreadable or lacks exp_id"
     return ""
 def validate_verdict(root: Path, entry: dict, expected_refuter: str,
-                     worker_thread_ids: set[str], exp_id_for) -> str:
+                     worker_thread_ids: set[str], exp_id_for, label: str = "") -> str:
     stem, eid = str(entry.get("exp", "")), exp_id_for(str(entry.get("exp", "")))
-    expected_label = f"verifier[block {entry['block']}]" if entry.get("block") else f"verifier[{stem}]"
+    # The spawn's label names the group's first unit (the driver services one unit per spawn; a
+    # caller that passes a larger group names it after its first entry) - every verdict in the group
+    # must come from that session.
+    expected_label = label or f"verifier[{stem}]"
     path = _verdict_path(root, eid, expected_refuter)
     payload = _json(path)
     if not eid or not isinstance(payload, dict):
@@ -198,7 +198,7 @@ def _finalize(root: Path, entries: list[dict], nonce: str, thread_id: str, label
     workers = _worker_ids(root, entries)
     if not thread_id or thread_id in workers or not _trusted_verifier(root, thread_id, label):
         return "successful turn lacks a distinct, recorded Codex verifier thread"
-    problems = [validate_verdict(root, entry, nonce, workers, exp_id_for) for entry in entries]
+    problems = [validate_verdict(root, entry, nonce, workers, exp_id_for, label) for entry in entries]
     if any(problems):
         return " | ".join(problem for problem in problems if problem)
     for entry in entries:
@@ -211,7 +211,7 @@ def _finalize(root: Path, entries: list[dict], nonce: str, thread_id: str, label
         temporary = path.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         os.replace(temporary, path)
-        if problem := validate_verdict(root, entry, thread_id, workers, exp_id_for):
+        if problem := validate_verdict(root, entry, thread_id, workers, exp_id_for, label):
             return problem
         source.unlink(missing_ok=True)
     return ""
@@ -228,13 +228,13 @@ def service(root: Path, groups: list[list[dict]], k: dict, model: str, vfail: in
     for group in groups:
         entries = group
         workers = _worker_ids(root, entries)
+        label_text = entries[0]["exp"]                # one spawn per unit; no blocks without a queue
+        spawn_label = f"verifier[{label_text}]"
         due = [entry for entry in entries
                if (stored := str((_json(root / "results" / "verdicts" /
                                         f"{exp_id_for(entry['exp'])}.json") or {}).get("refuter", ""))).startswith("driver-nonce-")
-               or validate_verdict(root, entry, stored, workers, exp_id_for)]
+               or validate_verdict(root, entry, stored, workers, exp_id_for, spawn_label)]
         exps = [entry["exp"] for entry in due]
-        label_text = ("block " + str(group[0].get("block"))
-                      if group[0].get("block") else entries[0]["exp"])
         problem = ""
         if due:
             log(f"[supervise] verification due for {label_text}: {', '.join(exps)}")
@@ -242,7 +242,6 @@ def service(root: Path, groups: list[list[dict]], k: dict, model: str, vfail: in
             mode = mode_line(group) if mode_line else ""
             legacy = build_prompt("verifier", exps=", ".join(exps), hypothesis=str(hypothesis or ""),
                                   **({"mode": mode} if mode else {}))
-            spawn_label = f"verifier[{label_text}]"
             retries = int(k.get("verifier_retries", k.get("planner_retries", 1)))
             for attempt in range(1 + retries):
                 if attempt and problem:
@@ -254,8 +253,8 @@ def service(root: Path, groups: list[list[dict]], k: dict, model: str, vfail: in
                 (root / "results" / "verdicts" / ".codex-pending" / nonce).mkdir(parents=True, exist_ok=True)
                 subjects = [(str(entry["exp"]), exp_id_for(str(entry["exp"]))) for entry in due]
                 prompt = direct_prompt(legacy, nonce, subjects)
-                probe = lambda es=due, n=nonce: all(not validate_verdict(
-                    root, entry, n, _worker_ids(root, es), exp_id_for) for entry in es)
+                probe = lambda es=due, n=nonce, sl=spawn_label: all(not validate_verdict(
+                    root, entry, n, _worker_ids(root, es), exp_id_for, sl) for entry in es)
                 try:
                     status, thread_id = spawn(prompt, model, spawn_label, k, probe)
                     problem = (f"status={status}" if status != "ok" else

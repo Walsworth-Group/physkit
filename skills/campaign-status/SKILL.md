@@ -7,7 +7,7 @@ description: >-
 
 # campaign-status — the operator's checkpoint
 
-A running campaign drifts. The JOURNAL falls behind, an unverified result becomes the current best, one lever
+A running campaign drifts. The JOURNAL falls behind, a current best's owed check never lands, one lever
 is over-mined while an orthogonal one sits untried, and a plateau goes unnamed. This skill is the periodic step
 back: it reports where the campaign stands, fixes hygiene, checks the JOURNAL is bounded and current, and
 re-points the loop at the most promising orthogonal directions.
@@ -34,8 +34,8 @@ directory of invocation and from how far back the user asks to step.
 At a project root, step back over the whole investigation, not one loop:
 1. **Read the lineage** — `PROJECT.md` §Lineage (old layout: `LINEAGE.md`), the index of every campaign
    and session. Report, per campaign: its status
-   (active / superseded / archived(forked) / done), the headline result, whether its current-best is
-   independently verified, and its verified findings. Flag any `active` row whose result is blank or stale.
+   (active / superseded / archived(forked) / done), the headline result, its current-best's verification
+   label, and its verified findings. Flag any `active` row whose result is blank or stale.
 2. **Cross-campaign FROZEN/MUTABLE consistency.** For each coupled pair, taken from each campaign's
    *Relationship to sibling campaigns* block (route to it via that campaign's own `CLAUDE.md` — siblings
    may not share a layout), confirm the declarations are mutually consistent. What campaign
@@ -68,9 +68,9 @@ At a project root, step back over the whole investigation, not one loop:
 
 ## When to invoke
 - Every N experiments (the checkpoint cadence, a step of the campaign definition's Experiment Loop).
-- When the driver reports the JOURNAL over its cap — a `preflight WARN: brief[worker]` line, or
-  `(TRUNCATED)` in a per-spawn `brief[…]` line, means the JOURNAL is being delivered clipped at 12 KB
-  with a loud marker.
+- When the driver reports the JOURNAL large — a `preflight WARN: results/JOURNAL.md is … KB` line, or
+  `(LARGE)` on the JOURNAL in a per-spawn `brief[…]` line. Nothing is cut: it is delivered whole, and
+  every spawn pays for it.
 - On demand: "where do we stand?", "is the campaign healthy?", "run a checkpoint".
 - **Not only on a count.** Reflection is the campaign's error-correction step. Do not let it wait for the
   experiment counter. Reflect also after a surprising result, at a plateau, before any "we're done / at the
@@ -84,8 +84,8 @@ the primary metric and direction, the guardrail, the baseline/floor, the levers,
 table means the campaign predates it: read `docs/charter*.md` directly.* The checkpoint procedure it
 points to is this skill; the per-unit iteration contract is in `roles/worker.md`. (The JOURNAL check
 is step 3 of this skill; it no longer has a separate protocol file.)
-Also read `campaign.md` §Mission (goal, the decision served, done-criteria), §Loosely-held
-expectations, and §Verification. The checkpoint re-checks orientation against these, not
+Also read `campaign.md` §Mission (goal, the decision served, done-criteria) and §Verification, and the
+JOURNAL's §Live hypotheses (the campaign's expectations live there now, as questions). The checkpoint re-checks orientation against these, not
 only against the metric. *(A pre-merge campaign keeps these in `docs/PROJECT_ORIENTATION.md` <!-- lint-ok: intentional pre-consolidation path --> and
 `docs/VERIFICATION_PLAN.md` — lint-ok: names the retired layout on purpose.)*
 
@@ -98,9 +98,10 @@ imported/hand-built scaffold, and preflight is the one source that cannot be sta
 ## Procedure
 
 ### 0.5 Orientation re-check
-Against `campaign.md` §Mission and §Loosely-held expectations: is the goal still the right goal? Have the
-loosely-held expectations shifted on the evidence? Update them when they have; an updated expectation is
-success, not drift. Are the queued units (`results/queue.json`) and the JOURNAL NEXT still serving the
+Against `campaign.md` §Mission and the JOURNAL's §Live hypotheses: is the goal still the right goal?
+Have the hypotheses shifted on the evidence? A shifted hypothesis is success, not drift - and one that
+still reads like the opening JOURNAL's wording after many units is the warning sign (a setup-written
+guess cited as settled). Are the JOURNAL's **NEXT:** line and §What to try next and why still serving the
 goal? Has a discovery unblocked a shelved direction that should re-open? Realignment is the purpose of a
 checkpoint: the metric can climb while the campaign wanders off its goal.
 
@@ -115,7 +116,9 @@ From `results/scoreboard.tsv` (its `finding` cells included) and `results/JOURNA
 - **Current best vs references.** State the current-best primary metric and its margin over the
   baseline (exp 000) and over the trivial/degenerate references. A trivial reference beating the current
   best is a red alert. A non-physical trivial winner indicates a metric or units problem, not a target.
-  Note whether the current best is independently verified (CONFIRMED) or still PROVISIONAL/unverified.
+  Name the current best's label (`RECOMMENDED.json` `verification_label`) and whether it is independent
+  (`<VERDICT>/peer` · `/verifier` · `/audit`) or not yet; a new best awaiting its survival check
+  legitimately carries a non-independent one.
 - **Trend.** Is the primary still climbing, or has it plateaued (little gain over the last ~N
   experiments)? Is the guardrail also stuck (capacity- or data-limited) or still moving
   (generalization-limited)?
@@ -158,9 +161,10 @@ Flag anything wrong; do not silently fix it.
     whether every change the runner listed under `changes` was considered (`changes_unconsidered`
     empty). A campaign whose workers never record a self-check is one whose lightest label is
     `unverified` on every row; a self-check that ignores what the unit changed is decoration.
-  - the **`label`** on each artifact (`unverified` · `self-checked` · `<verdict>/review` ·
-    `<verdict>/re-execution`) is what every exported claim carries: tally them, and name any promoted
-    row whose label is below what its preset requires.
+  - the **`label`** on each artifact (`unverified` · `self-checked` · `self-verified` · `self-refuted` ·
+    `<VERDICT>/peer` · `<VERDICT>/verifier` · `<VERDICT>/audit`; an old `/review` or `/re-execution`
+    reads as `/verifier`) is what every exported claim carries: tally them, and name any result whose
+    `verification.owed` check never landed (a survived best still unchecked, an owed self-verify absent).
   Do not fix a flag by editing the checks file — it is the runner's output, not a worksheet.
 - **What the promotion guard denied.** `results/guard_denials.log` holds one line per denial (utc, the
   reason). Report the count and the reasons: it is the evidence for whether the hook earns its keep
@@ -190,14 +194,17 @@ Flag anything wrong; do not silently fix it.
     line (`metric epoch <version> opened …`), whose evidence is its `campaign.metric_epochs` entry.
     The `finding` cells are not
     hook-gated — this audit is their enforcement, so an uncited finding is a loud flag, not a note;
-  - `configs/loop.json` `verify.preset` is one of `minimal` · `light` · `moderate` · `intensive` (the
-    driver's preflight line prints the table it resolves to, and every `checks_<NN>.json` stamps the
-    preset it ran under — report a mid-campaign change of preset as a fact about the record, with the
-    units on each side). An older file without `verify.preset` is read through its
-    `campaign.verification` (`per-block`, or `promotion-only` with a recorded reason); say so;
-  - `results/queue.json` `pending_verification` is not accumulating: entries there are accepted
-    experiments the driver has not yet gotten verified, so a growing backlog means verification is
-    failing while science continues — read the driver log's `verifier[...]` lines and flag loudly;
+  - `configs/loop.json` `verify.preset` is one of `none` · `minimal` · `light` · `heavy` · `intensive`
+    (`docs/reference/verification-presets.md`; the driver's preflight line prints the table it resolves
+    to, and every `checks_<NN>.json` stamps the preset it ran under — report a mid-campaign change of
+    preset as a fact about the record, with the units on each side). A leftover `campaign.verification`
+    key, or the old name `moderate`, is refused at preflight: the loop cannot run until it is fixed;
+  - `results/driver_state.json` holds the owed independent checks, and none is accumulating:
+    `awaiting_survival` (new bests whose check waits for the next unit — normally one at most),
+    `peer_due` (peer checks the next worker owes first; one that stays across spawns means workers are
+    not writing them) and `pending_verification` (verifier checks the driver owes; a growing backlog
+    means verification is failing while science continues — read the driver log's `verifier[...]`
+    lines). Flag any backlog loudly;
   - `configs/loop.json` parses, when the campaign runs supervisor mode;
   - supervised runs left their decision trace: each `--supervise` launch has a
     `results/diagnostics/supervise_*.log`, and a run with no driver log was launched outside the driver.
@@ -217,27 +224,28 @@ Flag anything wrong; do not silently fix it.
   restarting into the same stall. `SENTINEL` / `STOP_REQUEST` lines are normal history. Cross-check any
   archived `exhausted` request in `results/stop_requests/` against the levers list: a direction declared
   finished while an untried lever existed is a finding for the review.
-- **The current-best is independently verified.** If a config is acting as current-best or a DISCOVERY
-  without a CONFIRMED `verify` verdict, recommend running `verify` on it now. The hook also guards the
-  scoreboard `verified: CONFIRMED` / `NEW BEST` mark and `RECOMMENDED.json`: a token-marked promotion needs
-  a recorded CONFIRMED verdict. A current-best asserted without those tokens can still slip past, and a
-  current-best or DISCOVERY-backed row whose `verified` column is blank is a hygiene failure to surface.
-  The current-best also carries its metric epoch: its `metric_version` is the campaign's current one, and
-  that epoch is not rolled back.
+- **The current-best carries its honest label.** The pointer follows the true best at once, so a current
+  best labelled `unverified` or `self-checked` is legitimate while its check is owed. What is a hygiene
+  failure: the `verification_label` in `RECOMMENDED.json`, or the label on its ledger row, differs from
+  its `results/checks_<NN>.json` `label`; the current best carries a refuted label (`REFUTED/...`,
+  `self-refuted` — the driver should have rolled the pointer back); or its owed check has not landed
+  (see the driver-state bullet above). A DISCOVERY still needs a CONFIRMED independent verdict — if one
+  lacks it, recommend running `verify` on it now. The current-best also carries its metric epoch: its
+  `metric_version` is the campaign's current one, and that epoch is not rolled back.
 - **The load-bearing upstream step is non-degenerate** (promotion check). Whatever transform feeds the
   current-best before the metric sees it — registration, pose fitting, normalization, resampling — validate
   the *transform* on the data it is applied to, not just the score it produces. A degenerate upstream step
   passes the metric and the guardrail while quietly corrupting a subset of inputs: one campaign promoted a
   best whose registration was mis-aligning some frames, and every downstream number looked healthy. Spot-check
   the transform's output against inputs it should map predictably, and flag any input class it silently drops.
-- **The SHELVED pool is reviewed, not forgotten.** Units shelved after two declinations or an
-  EVIDENCE-AGAINST kill sit in `results/queue.json` with their reasons. Confirm each still deserves its
-  shelf; a promotion or frame change since it was shelved is a revival trigger for the planner. Confirm
-  that accumulating EVIDENCE-AGAINST entries against one branch have been consolidated into a prune
-  decision rather than left dangling. `kind: "operational"` entries are a different species: the driver
-  shelved them because a worker failed (their `failures` records say how), not because their science was
-  judged. Confirm the planner revived them or the user pruned them, and treat a pattern in their failure
-  statuses (all timeouts, all spawn errors) as an environment finding, not a science one.
+- **Shelved directions are reviewed, not forgotten.** A direction an EVIDENCE-AGAINST kill shelved
+  should still be named in the JOURNAL (§Where we stand, or §What to try next and why with its reason).
+  Confirm each still deserves its shelf; a promotion or frame change since it was shelved is a reason to
+  re-open it, and the JOURNAL is where you say so. Confirm that accumulating EVIDENCE-AGAINST entries
+  against one branch have been consolidated into a prune decision rather than left dangling. The driver's
+  operational failures (`results/driver_state.json`, and the driver log's spawn lines) are a different
+  species: a worker died, not a hypothesis. Treat a pattern in them (all timeouts, all spawn errors) as
+  an environment finding, not a science one.
 - **The disk runway is still real.** Compare free space on the campaign's volume against
   `configs/loop.json` `unit_cost.typical_disk_mb` and against the size `results/` has reached.
   The estimate was made before any experiment ran; measure the current figure now, as bytes-so-far ÷
@@ -267,8 +275,8 @@ Flag anything wrong; do not silently fix it.
 - **No premature "done / blocked / at-ceiling."** If the JOURNAL, or a ledger `finding`, declares the campaign
   finished, optimal, or blocked on new data, confirm an adversarial attempt to beat it was made:
   an orthogonal lever tried, or a reasoned argument that any further gain is non-physical. An unfalsified
-  "we're done" is a flag to resume, not to accept. Surface it loudly and queue the orthogonal directions
-  (the claim audit asks the same question of a finished campaign as its search-adequacy check).
+  "we're done" is a flag to resume, not to accept. Surface it loudly and put the orthogonal directions
+  under the JOURNAL's §What to try next and why (the claim audit asks the same question of a finished campaign as its search-adequacy check).
   A plateau with the guardrail still moving is generalization-limited, not capacity-limited, and means
   keep going.
 - **Resume anchors reflect the latest session (stale-digest guard).** The source of truth for resuming is
@@ -304,11 +312,12 @@ blocks the checkpoint if it errors. The transcript holds the full conversation a
 `transcripts/` as sensitive. This helper is Claude-specific; on Codex, skip this substep without treating
 the checkpoint as failed. A Codex transcript export is not claimed until a native source is defined.
 
-### 3. Check the JOURNAL is bounded and current
-The JOURNAL is the campaign's working memory, bounded by construction: the worker brings it up to date at
-the end of every unit, editing what changed and leaving the rest. This step confirms that held.
+### 3. Check the JOURNAL is brief and current
+The JOURNAL is the campaign's working memory: the worker rewrites it at the end of every unit, carrying
+forward what did not change. There is no cap and the driver cuts nothing; this step confirms it stayed brief.
 
-1. **Under the cap** (~120 lines). Over it, the fix is an edit in place, not an archive pass: fold what is
+1. **Brief** — the current thinking, not the history. If it has grown (the driver flags it `(LARGE)` past
+   ~24 KB), the fix is an edit in place, not an archive pass: fold what is
    settled into one line under `## Where we stand`, drop what the ledger and the logbook already hold, and
    keep the rest. A settled fact is also its ledger row's `finding` cell, written by the worker through
    `--record <exp> --finding` and citing its verdict — recommend it where a row is missing one.
@@ -346,10 +355,11 @@ suspect's value from scratch rather than confirming the incumbent.
 
 ### 5. Report
 Put a short dated checkpoint note in the JOURNAL (best metric, trend, top issues, next directions) under
-`## Anything else` or wherever it belongs, keeping the document under its cap,
-and give the user a concise status: current best and margin over baseline/trivial, verified or not, trend,
-the top 1–3 issues, and the next directions. Surface any hygiene flag loudly. An unverified current-best,
-or a trivial reference beating the field, is worth interrupting for.
+`## Anything else` or wherever it belongs, keeping the document brief,
+and give the user a concise status: current best and margin over baseline/trivial, its label, trend,
+the top 1–3 issues, and the next directions. Surface any hygiene flag loudly. A current-best whose label
+does not match its record, one whose owed check never landed, or a trivial reference beating the field,
+is worth interrupting for.
 
 ## Notes
 - For a large campaign the hygiene scan and the per-lever progress summary can be fanned out to subagents

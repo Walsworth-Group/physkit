@@ -8,7 +8,7 @@ and conflicts only where both sides changed the same lines. Files the old kit di
 Placeholders never need re-answering: where a template line still reads `{{X}}` on both sides, the
 campaign's rendered value wins by construction.
 
-    python <kit>/skills/new-campaign/scripts/upgrade_campaign.py <campaign_dir> --preset light|moderate|intensive|minimal
+    python <kit>/skills/new-campaign/scripts/upgrade_campaign.py <campaign_dir> --preset none|minimal|light|heavy|intensive
         [--base-git <kit repo path>[@<ref>]]       base templates from a kit git checkout (ref defaults to the stamped hash)
         [--base-dir <old kit>/templates/campaign]  base templates from an older plugin version's cache
         [--new-dir <kit>/templates/campaign]       current templates (default: this script's own kit)
@@ -46,7 +46,6 @@ MERGE = [
     ("CLAUDE.md", "CLAUDE.md.tmpl"),
     ("campaign.md", "campaign.md.tmpl"),
     ("roles/worker.md", "roles/worker.md.tmpl"),
-    ("roles/planner.md", "roles/planner.md.tmpl"),
     ("README.md", "README.md.tmpl"),
     (".claude/settings.json", ".claude/settings.json.tmpl"),
 ]
@@ -66,9 +65,16 @@ COPY = [
 # `raise NotImplementedError`).
 CREATE = [
     ("scripts/experiment.py", "scripts/experiment.py.tmpl"),
+    # The contract in the role files (kit >= v0.12.0): the verifier's and the capstone's roles, and the
+    # reference the worker's contract points at. Rendered with the values the upgrade recovers; a
+    # placeholder it cannot recover is left literal and named in the log - the campaign's old
+    # roles/worker.md (backed up beside it) carries the rendered text to copy from.
+    ("roles/verifier.md", "roles/verifier.md.tmpl"),
+    ("roles/capstone.md", "roles/capstone.md.tmpl"),
+    ("roles/REFERENCE.md", "roles/REFERENCE.md.tmpl"),
 ]
 HOOKS = ("validate_method", "run_experiment", "load_target", "guardrail", "save_figure")
-PRESETS = ("minimal", "light", "moderate", "intensive")
+PRESETS = ("none", "minimal", "light", "heavy", "intensive")
 
 
 def stamp_of(campaign: Path) -> tuple[str, str, str] | None:
@@ -368,7 +374,8 @@ def split_runner(campaign: Path, base, new_dir: Path, vals: dict, log: list, dry
     head = render(tmpl[:tmpl.index("def validate_method(")], vals)
     have = set(ours_names)
     seams = tmpl[tmpl.index("# ---- optional seams"):]
-    seam_defs = [d for d in ("residual", "campaign_scoreboard_fields", "campaign_checks", "baseline_config")
+    seam_defs = [d for d in ("residual", "campaign_scoreboard_fields", "campaign_result_fields", "campaign_checks",
+                             "campaign_comparand", "campaign_card_fields", "baseline_config")
                  if d not in have]
     body = "\n\n\n".join(ordered) + "\n"
     text = head + body + ("\n" + seams if seam_defs else "")
@@ -397,7 +404,7 @@ def edit_loop_json(campaign: Path, preset: str, reproducible: bool | None, log: 
         verify["preset"] = preset
     for k in ("verification", "verification_reason"):
         if k in camp:
-            changes.append(f"campaign.{k} removed (superseded by verify.preset; was {camp[k]!r})")
+            changes.append(f"campaign.{k} removed (retired; verify.preset replaces it; was {camp[k]!r})")
             camp.pop(k)
     if reproducible is None:
         reproducible = not (campaign / "configs" / "instrument.json").is_file()
@@ -408,9 +415,25 @@ def edit_loop_json(campaign: Path, preset: str, reproducible: bool | None, log: 
     if "verifier_retries" not in drv:
         drv["verifier_retries"] = int(drv.get("planner_retries", 1))
         changes.append(f"driver.verifier_retries: {drv['verifier_retries']}")
+    if "planner_retries" in drv:
+        drv.pop("planner_retries")
+        changes.append("driver.planner_retries removed (the planner is retired,")
+    # The planner is retired : its model/effort block becomes the verifier's (the verifier and
+    # the capstone were driven by it); the plateau and queue knobs had no reader left.
+    if "verifier" not in cfg and isinstance(cfg.get("planner"), dict):
+        pl = cfg["planner"]
+        cfg["verifier"] = {"_doc": "The independent-check agents the driver spawns (the verifier the preset owes a unit; "
+                                   "the claim-audit capstone at the end). Carried over from the retired planner block.",
+                           **{k: pl[k] for k in ("model", "claude_effort", "codex_model", "codex_reasoning_effort") if k in pl}}
+        changes.append("verifier block created from the planner's model/effort")
+    for block in ("planner", "plateau", "queue"):
+        if block in cfg:
+            cfg.pop(block)
+            changes.append(f"{block} block removed (no reader since")
     if "full_reproduction_threshold_s" in verify:
-        changes.append("verify.full_reproduction_threshold_s kept (honoured as a cap; delete it when the "
-                       "computed rule alone is right)")
+        verify.pop("full_reproduction_threshold_s")
+        changes.append("verify.full_reproduction_threshold_s removed (re-execution is no longer a preset "
+                       "axis; the verifier chooses how to refute)")
     if not changes:
         log.append("configs/loop.json: already current")
         return
@@ -513,6 +536,23 @@ def ledger_columns(campaign: Path, log: list, dry: bool) -> None:
             f.write("".join(out))
 
 
+def _expected_vs_found_from_checks(campaign: Path, exp_id: str) -> str:
+    """The expected-vs-found judgement for one row, read back from results/checks_<NN>.json (its
+    `checks.prediction` entry is the same judgement the runner writes into the logbook line and the
+    ledger cell), rendered the way the runner renders it; "" when the artifact or the entry is absent.
+    (Called by ledger_columns for a row whose new cell is empty; defined since v0.12.0 - the 0.11.1
+    upgrade called it without defining it, a NameError on the first empty cell.)"""
+    try:
+        art = json.loads((campaign / "results" / f"checks_{exp_id}.json").read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return ""
+    pc = (art.get("checks") or {}).get("prediction") if isinstance(art, dict) else None
+    if not isinstance(pc, dict):
+        return ""
+    head = {"pass": "met - ", "fail": "MISSED - ", "unavailable": "no bound - "}.get(str(pc.get("status")), "")
+    return (head + str(pc.get("detail") or "")).strip()
+
+
 def _set_ledger_cell(campaign: Path, exp_id: str, col: str, text: str) -> bool:
     p = campaign / "results" / "scoreboard.tsv"
     with open(p, encoding="utf-8", errors="replace", newline="") as f:
@@ -607,6 +647,73 @@ def journal_restructure(campaign: Path, new_dir: Path, vals: dict, log: list, dr
         j.write_text(body, encoding="utf-8", newline="\n")
 
 
+def retire_queue(campaign: Path, log: list, dry: bool) -> None:
+    """The planner and its queue are retired : results/queue.json is archived to
+    results/queue_archive/, its open `next` entries (and the shelf) are folded into the JOURNAL's
+    'What to try next and why' under a migrated heading - one line each, so the next worker can re-rank
+    or drop them from evidence - and roles/planner.md and results/queue_drop/ move to the archive too.
+    No-op on a campaign without a queue."""
+    res = campaign / "results"
+    q = res / "queue.json"
+    planner = campaign / "roles" / "planner.md"
+    drop = res / "queue_drop"
+    if not (q.is_file() or planner.is_file() or drop.is_dir()):
+        return
+    arch = res / "queue_archive"
+    ideas = []
+    if q.is_file():
+        try:
+            qq = json.loads(q.read_text(encoding="utf-8-sig"))
+        except ValueError as exc:
+            log.append(f"- results/queue.json: not valid JSON ({exc}); archived unread - fold its ideas by hand")
+            qq = {}
+        for u in (qq.get("next") or []) if isinstance(qq, dict) else []:
+            if not isinstance(u, dict):
+                continue
+            cfg = str(u.get("config") or "?")
+            why = str(u.get("hypothesis") or u.get("rationale") or "").strip().replace("\n", " ")
+            ideas.append(f"- {cfg}: {why[:240]}" + ("..." if len(why) > 240 else "")
+                         + (f" (declined: {'; '.join(map(str, u['declined']))[:120]})" if u.get("declined") else ""))
+        shelved = [u for u in ((qq.get("shelved") or []) if isinstance(qq, dict) else []) if isinstance(u, dict)]
+        if shelved:
+            kinds = sorted({str(u.get("kind") or "?") for u in shelved})
+            ideas.append(f"- ({len(shelved)} shelved unit(s) - {', '.join(kinds)} - stay in the archive, "
+                         f"results/queue_archive/queue_{_UTC}.json; revive one only from evidence)")
+    j = res / "JOURNAL.md"
+    folded = 0
+    if ideas and j.is_file():
+        text = j.read_text(encoding="utf-8-sig", errors="replace")
+        head = "## What to try next and why"
+        block = (f"\n\n### migrated from the retired queue ({_dt.date.today().isoformat()}) - re-rank from the evidence, "
+                 "drop what no longer steers; a unit you run leaves this list, its ledger row is its record\n"
+                 + "\n".join(ideas) + "\n")
+        if head in text:
+            i = text.index(head)
+            j_end = text.find("\n## ", i + len(head))
+            j_end = len(text) if j_end < 0 else j_end
+            text = text[:j_end].rstrip("\n") + block + text[j_end:]
+        else:
+            text = text.rstrip("\n") + "\n\n" + head + block
+        folded = len(ideas)
+        if not dry:
+            backup(j)
+            j.write_text(text, encoding="utf-8", newline="\n")
+    log.append(f"- the retired queue: results/queue.json {'archived' if q.is_file() else 'absent'}"
+               + (f", {folded} open idea(s) folded into the JOURNAL's 'What to try next and why' (migrated heading)" if folded else "")
+               + (", roles/planner.md archived" if planner.is_file() else "")
+               + (", results/queue_drop/ archived" if drop.is_dir() else "")
+               + f" -> results/queue_archive/ (the worker chooses its unit; driver_state.json holds the counters)")
+    if dry:
+        return
+    arch.mkdir(parents=True, exist_ok=True)
+    if q.is_file():
+        q.replace(arch / f"queue_{_UTC}.json")
+    if planner.is_file():
+        planner.replace(arch / "planner.md")
+    if drop.is_dir():
+        shutil.move(str(drop), str(arch / f"queue_drop_{_UTC}"))
+
+
 DUAL_MARKER = "<!-- physkit-dual-instructions:v1 -->"   # sync_agent_instructions.MARKER
 
 
@@ -654,20 +761,36 @@ def stamp(campaign: Path, version: str, commit: str, log: list, dry: bool) -> No
 
 
 def main() -> int:
+    for stream in (sys.stdout, sys.stderr):      # a cp1252 console must not crash the log on a superscript
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("campaign", type=Path)
-    ap.add_argument("--preset", required=True, choices=PRESETS,
+    ap.add_argument("--preset", required=False, choices=PRESETS,
                     help="the verification preset for this campaign (an explicit choice, like the interview's; "
-                         "'intensive' keeps the previous per-block spend)")
+                         "docs/reference/verification-presets.md; 'moderate' was renamed 'heavy')")
     ap.add_argument("--base-git", help="<kit repo>[@<ref>]; ref defaults to the hash stamped in campaign.md")
     ap.add_argument("--base-dir", type=Path, help="an older kit's templates/campaign directory (e.g. the previous plugin version's cache)")
     ap.add_argument("--new-dir", type=Path, default=KIT / "templates" / "campaign")
     ap.add_argument("--reproducible", choices=("true", "false"))
+    ap.add_argument("--retire-queue", action="store_true",
+                    help="only archive the retired results/queue.json (+ roles/planner.md, results/queue_drop/) into "
+                         "results/queue_archive/ and fold its open ideas into the JOURNAL, then exit ")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--no-validate", action="store_true")
     args = ap.parse_args()
 
     campaign = args.campaign.resolve()
+    if args.retire_queue:
+        # The one-step form the driver's preflight and the validator point at: no merge, no stamp.
+        log: list = []
+        retire_queue(campaign, log, args.dry_run)
+        print("\n".join(log) if log else "- no retired queue, planner role or drop directory here: nothing to do")
+        return 0
+    if not args.preset:
+        ap.error("--preset is required (the verification preset for this campaign)")
     if not (campaign / "campaign.md").is_file() or not (campaign / "scripts" / "run_campaign.py").is_file():
         sys.exit(f"{campaign} is not a campaign root (no campaign.md / scripts/run_campaign.py)")
     st = stamp_of(campaign)
@@ -699,10 +822,17 @@ def main() -> int:
         dst, srcp = campaign / rel, new_dir / tmpl
         if dst.is_file() or dst in _SPLIT_CREATED or not srcp.is_file():
             continue
-        log.append(f"- {rel}: created from the template (fill its hooks; preflight refuses stubs)")
+        rendered = render(srcp.read_text(encoding="utf-8"), vals)
+        left = sorted(set(re.findall(r"\{\{[A-Z0-9_]+\}\}", rendered)))
+        if rel.startswith("roles/"):
+            log.append(f"- {rel}: created from the template"
+                       + (f"; fill by hand: {', '.join(left)} (the rendered text is in your old roles/worker.md "
+                          "backup beside it)" if left else ""))
+        else:
+            log.append(f"- {rel}: created from the template (fill its hooks; preflight refuses stubs)")
         if not args.dry_run:
             dst.parent.mkdir(parents=True, exist_ok=True)
-            dst.write_text(render(srcp.read_text(encoding="utf-8"), vals), encoding="utf-8", newline="\n")
+            dst.write_text(rendered, encoding="utf-8", newline="\n")
 
     for rel, tmpl in MERGE:
         ours_p = campaign / rel
@@ -774,6 +904,7 @@ def main() -> int:
     # keep a backup and an archive; both are no-ops on a campaign that already has the shapes.
     ledger_columns(campaign, log, args.dry_run)
     journal_restructure(campaign, new_dir, vals, log, args.dry_run)
+    retire_queue(campaign, log, args.dry_run)       # no queue, no planner (no-op without one)
     stamp(campaign, version, commit, log, args.dry_run)
 
     # The instruction twins (CLAUDE.md <-> AGENTS.md) the current runner requires at both roots. A
@@ -800,7 +931,7 @@ def main() -> int:
             "3. python <kit>/skills/new-campaign/scripts/validate_campaign.py <campaign>, then, with the campaign's own "
             "interpreter (the one .claude/settings.json names), scripts/run_campaign.py --preflight. Preflight runs the whole "
             "suite once, timed: an every-set over budget is refused by name - declare the named checks machinery or gates.",
-            "4. Read the new HARD GATE 1 in CLAUDE.md and the presets doc: promotions now follow the label, not the verdict alone."]
+            "4. Read the new HARD GATE 1 in CLAUDE.md and the presets doc: each result gets one check, and the current-best pointer carries its label."]
     text = "\n".join(log) + "\n"
     if not args.dry_run:
         (campaign / "results" / "diagnostics").mkdir(parents=True, exist_ok=True)

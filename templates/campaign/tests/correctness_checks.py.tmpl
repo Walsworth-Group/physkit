@@ -14,12 +14,14 @@ Each check is a function returning one of:
 
 Declare what each check tests with @check(row=...), so the runner can schedule it by cost:
     "invariants"   a cheap property of this run's OUTPUT (conservation, ranges, no NaN, sum rules);
-                   runs every unit under every preset - keep it to seconds. The default when undeclared.
+                   runs every unit under every preset but none - keep it to seconds. The default when
+                   undeclared.
     "machinery"    the code's own fixed-input check (a known answer, an analytic limit, parity between
-                   two methods, a convergence study); reads NO experiment config or result; runs at
-                   setup, when the code it executed changes, or every unit, by preset.
+                   two methods, a convergence study); reads NO experiment config or result; by preset,
+                   off, at setup, when the code it executed changes, or every unit.
     "gates"        an expensive per-result gate (a leave-one-out refit, a bootstrap, a held-out score);
-                   takes one argument - the experiment name - and runs at promotion time or every unit.
+                   takes one argument - the experiment name - and, by preset, is off, runs for a new
+                   best, or runs every unit.
 depends_on= names root-relative files a check reads or shells out to (its code trace cannot see them);
 every="<reason>" pins a check to every unit whatever the preset (it is still metered).
 

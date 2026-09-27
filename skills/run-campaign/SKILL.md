@@ -16,9 +16,9 @@ fresh-context workers, and this session is the cockpit around it — launcher, m
 **Concierge, never executor.** Your write surface, in full: (1) `results/inbox/` notes; (2) the
 launch/stop controls (the `--supervise` process and `results/STOP`); (3) launch-config repairs only
 (`configs/loop.json` knobs, the harness executable override, a missing tool on PATH), because configs are
-user-owned and are not ledgers. Never run a loop unit. Never edit the ledgers (`results/queue.json`,
-the scoreboard incl. its `finding` cells, logbook, journal) or anything FROZEN on your own judgment. Where a repair to
-one of those is needed (a corrupt queue, a resolved ESCALATE), propose the exact edit and apply it only
+user-owned and are not ledgers. Never run a loop unit. Never edit the ledgers (the scoreboard
+incl. its `finding` cells, logbook, journal) or anything FROZEN on your own judgment. Where a repair to
+one of those is needed (a corrupt `results/driver_state.json`, a resolved ESCALATE), propose the exact edit and apply it only
 on the user's explicit go-ahead. The science happens in the driver's workers, and everything you relay
 travels through artifacts, so this session holds no scientific state and is disposable by design. While
 the driver runs, idle cheaply: watch, relay, answer. Manufactured filler work burns agent budget without
@@ -26,7 +26,7 @@ buying the campaign anything. Two metric-epoch writes are the user's decisions r
 their explicit word only: setting a pending epoch's `status` in `configs/loop.json`
 `campaign.metric_epochs` (`ratified` / `rolled-back`), and moving the `campaign.metric_revision` dial
 (`python scripts/run_campaign.py --set-metric-revision <mode>`). You never open an epoch yourself and
-never judge one; `roles/worker.md` §Metric epochs is the loop's procedure, not yours.
+never judge one; `roles/REFERENCE.md` §Metric epochs is the loop's procedure, not yours.
 
 **Where this runs.** A session opened in the campaign root. The campaign's managed instruction file
 (`CLAUDE.md` in Claude, `AGENTS.md` in Codex) and hooks bind only there (`new-campaign` Step 5's
@@ -36,7 +36,7 @@ is the driver's job.
 
 ## When to invoke
 - Right after `new-campaign` finishes — it hands off preflight-green (metric implemented, selftest
-  passing, exp 000 queued as the first unit). This is the handoff's destination.
+  passing, exp 000 run and recorded). This is the handoff's destination.
 - "Start / launch / restart the loop", "resume the campaign."
 - Process questions mid-run: "is it still running?", "what is it doing?", "why did it stop?"
 - "Tell the loop to …" — any steering the user wants relayed without killing the run.
@@ -45,11 +45,13 @@ is the driver's job.
 
 ## Step 0 — learn the campaign
 Read the active harness's instruction twin and follow its **§Where things live** table to the loop contract this
-cockpit operates (`roles/worker.md` §How the loop runs — supervisor mode, and its HARD GATE 5
+cockpit operates (`roles/worker.md` §Long solves, escalation, and your exit, and its HARD GATE 5
 for how the loop ends; no table means the campaign predates it — read `docs/charter*.md` directly), `configs/loop.json`
 (the knobs: timeouts, retries, `driver.*`, user-owned and hot-reloaded by the driver), and the current
-state: `results/queue.json` (`next`, `shelved`; note any `kind: "operational"` entries and their
-`failures`), the newest `results/diagnostics/supervise_*.log` if one exists (how the last run ended),
+state: `results/JOURNAL.md` (the **NEXT:** line and §What to try next and why — the campaign's only
+forward-looking record, and what the next worker chooses its unit from) and
+`results/driver_state.json` (the driver's counters: `accepted_units`, `last_accept_utc`,
+`consecutive_operational_failures`), the newest `results/diagnostics/supervise_*.log` if one exists (how the last run ended),
 and `results/ESCALATE.md` if present. An `ESCALATE.md` means a fork already awaits the user: surface it
 first.
 
@@ -57,7 +59,7 @@ first.
 
 ### 0.5 Confirm launch settings
 Before every stopped-campaign start, restart, or resume, show the user the task's active harness and the
-campaign's selected backend plus the planner and worker model/effort settings in `configs/loop.json`.
+campaign's selected backend plus the worker and verifier model/effort settings in `configs/loop.json`.
 Render a blank setting as **default/inherited**. If this harness exposes trustworthy live concierge model
 or effort metadata in the current session, compare it; otherwise say the live value is unavailable and
 ask the user to confirm it from the app's model/effort picker. Never guess from a stale session-start value
@@ -65,7 +67,7 @@ or edit the app's own setting. A difference is informational, not a preflight fa
 intentionally differ from the concierge.
 
 Offer four choices: keep the campaign settings; copy the concierge model/effort to both roles; choose
-planner and worker separately; or blank the role overrides so they inherit harness defaults. Change only
+worker and verifier separately; or blank the role overrides so they inherit harness defaults. Change only
 the active harness's fields (`model` + `claude_effort`, or `codex_model` +
 `codex_reasoning_effort`), only with the user's explicit approval, and only while no supervisor is running.
 Then run preflight, whose read-only launch-settings line is the final confirmation of what will spawn.
@@ -91,7 +93,7 @@ revise the metric without asking; read that line to the user before launching.
 **A mechanics-class preflight failure** — the metric selftest red, a scorer or hook still a stub, a
 wiring error the first experiment would trip — is handed back as above when the dial is `cautious`. When
 it is `autonomous`, spawn a bounded repair agent instead: a fresh session in the campaign root, told to
-follow `roles/worker.md` §Metric epochs as a `mechanics` fix (declare the epoch, fix, selftest and suite
+follow `roles/REFERENCE.md` §Metric epochs as a `mechanics` fix (declare the epoch, fix, selftest and suite
 green), then re-run preflight; a substantive failure (an unimplemented specification, data only the user
 can stage) still hands back. You launch and narrate; you do not edit the scorer.
 
@@ -106,7 +108,7 @@ Claude reads `model` + `claude_effort`, while Codex reads `codex_model` + `codex
 value inherits that harness's configured default. With `verify.strategy: auto`, Codex uses a fresh
 driver-spawned thread at the worker's Codex model and effort as the refuter and validates its verdict schema,
 evidence subject, and recorded thread identity; Claude keeps its established nested-refuter flow at the
-planner's Claude model and effort. Stop the current supervisor before changing harness; the process-held lock
+`verifier` block's Claude model and effort. Stop the current supervisor before changing harness; the process-held lock
 rejects an overlapping launch.
 This is an OS process you background in your shell, not a background subagent. The worker role's
 never-background-a-solve rule covers solver and agent work losing its heartbeat; the driver is the
@@ -116,7 +118,7 @@ appearing), tell the user the loop is running and where the log lives, then go q
 
 New or migrated campaigns whose runner includes `scripts/supervisor_lock.py` hold
 `results/.supervisor.lock` for the whole supervised run. A second launch refuses before preflight,
-logging, queue access, or spend and prints best-effort owner metadata. The file is persistent diagnostic
+logging, state access, or spend and prints best-effort owner metadata. The file is persistent diagnostic
 metadata: its existence alone does not mean the lock is held, so never delete it to recover or switch.
 Stop the first supervisor and wait for it to exit, then launch the other harness normally. Legacy campaigns
 without that helper have no automatic exclusivity: stop and confirm the current supervisor has exited before
@@ -125,23 +127,29 @@ not proven safe by kernel-lock release; inspect and stop that child before relau
 
 ### 3. Monitor
 On request, or at a periodic check-in, read; never re-derive:
-- the driver log tail: current unit, rendered worker feed, planner triggers, accepted-unit count, the
+- the driver log tail: current unit, rendered worker feed, accepted-unit count, the
   `brief[role]` size line before each spawn (a `(TRUNCATED)` section, or a `preflight WARN: brief` at
-  launch, is the driver reporting the JOURNAL over its cap — relay it), the
-  `verification owed for …` / `no independent check owed …` lines (what the campaign's verification
-  preset asked for each accepted unit, and the depth — review or re-execution — the driver decided from
-  its measured cost), the `verifier[...]` lines that follow, the `suite demotions changed` line when a
-  slow check is metered out of the every-set, and the `capstone` spawn at STOP or an empty queue (the
-  claim audit at the preset's level);
-- `results/queue.json`: `accepted_units`, `last_accept_utc`, what's queued/shelved and why, and
-  `pending_verification` (accepted experiments whose verdicts the driver is still obtaining — a
-  growing list means verification is failing while the loop runs; surface it).
-Report process facts in plain language ("worker on exp007, third unit this run; one unit shelved
-operational overnight, spawn timeout, planner will review"). A `[supervise] campaign.metric_epochs:` or
+  launch, is the driver reporting the JOURNAL over its cap — relay it), the one check each result is
+  owed (`verification owed (preset light): peer (survival) - …` on the unit's record; then
+  `<exp> is a new best: its peer check waits until the next unit does not beat it`, `peer check owed for
+  <exp> (survived <exp>): the next worker runs it first`, `verifier check owed for <exp> (…)`, or
+  `<exp> was beaten by <exp> before its … check - no check of its own`), the `verifier[...]` lines
+  that follow, the `suite demotions changed` line when a slow check is metered out of the every-set, and
+  the `capstone` spawn when the loop ends — a `STOP` file, or a worker's `**NEXT:** STOP - <why>`
+  judgement (the claim audit, which re-checks the final best, under every preset but `none`; then a
+  halt: relay the worker's reason as a stopping decision the user now owns);
+- `results/driver_state.json`: `accepted_units`, `last_accept_utc`, `consecutive_operational_failures`,
+  and the owed checks — `awaiting_survival` (a new best waiting on the next unit), `peer_due` (peer
+  checks the next worker runs first) and `pending_verification` (verifier checks the driver is still
+  obtaining); a list that keeps growing means verification is failing while the loop runs — surface it;
+- `results/inbox/`: notes awaiting the next spawn — the user's, and the driver's own after a REFUTED or
+  INCONCLUSIVE verdict named a follow-up (`verifier_<exp>.md`).
+Report process facts in plain language ("worker on exp007, third unit this run; one unit failed
+operationally overnight, spawn timeout, the loop continued"). A `[supervise] campaign.metric_epochs:` or
 `campaign.metric_version:` line is a metric epoch opening or a ratification — relay it as such, with
 the epoch's kind and direction. You own the progress alarm. CORE requires
 monitoring progress rather than liveness, because a loop can be alive, logging, and doing zero science:
-if `accepted_units` sits flat across real wall-clock (`configs/loop.json` §plateau sets the scale), raise
+if `accepted_units` sits flat across real wall-clock (`configs/loop.json` `unit_cost` sets the scale), raise
 it unprompted, since no other session is watching. For anything about the science (is the best real, has
 progress plateaued for a physics reason, journal hygiene) invoke `campaign-status`. Do not answer
 substance from a process log.
@@ -149,7 +157,7 @@ substance from a process log.
 ### 4. Relay (the inbox)
 A user request for the loop becomes a note in `results/inbox/` (any `.md` filename):
 - Steering, corrections, context, priorities → inbox (create the folder if the campaign lacks it).
-  The driver injects it verbatim into the next worker/planner prompt and archives it; workers must
+  The driver injects it verbatim into the next worker prompt and archives it; workers must
   acknowledge it in the journal. Check that they did, and tell the user when their note has been picked
   up.
 - Write the user's intent, attributed and dated. Do not editorialize. One note per topic.
@@ -158,11 +166,12 @@ A user request for the loop becomes a note in `results/inbox/` (any `.md` filena
   If the user wants the loop stopped, that is Step 6, not a note.
 
 ### 5. Halts
-The driver halts loudly and says why. Classify from the log tail and the queue before proposing anything:
-- **Operational shelvings** (`kind: "operational"`) did not halt the loop. Mention them; the planner
-  handles revival.
+The driver halts loudly and says why. Classify from the log tail and `results/driver_state.json` before
+proposing anything:
+- **Operational failures** did not halt the loop. Mention them with what the log says failed; a unit
+  worth re-running is a note in the inbox, never an edit of yours.
 - **SYSTEMIC halt** (N consecutive operational failures): an environment problem. Check the agent CLI,
-  credentials, disk, and the shelved units' `failures` records; fix, then relaunch on the user's
+  credentials, disk, and what the log says each failed spawn did; fix, then relaunch on the user's
   go-ahead.
 - **Disk-floor halt**: free space fell below this campaign's floor, so the driver stopped before a unit
   could write half a save-set. Report how much is free and what one unit costs (`configs/loop.json`
@@ -176,23 +185,26 @@ The driver halts loudly and says why. Classify from the log tail and the queue b
   bump `campaign.metric_version`, add the `campaign.metric_epochs` entry exactly as proposed with
   `status: "pending"` and `opened_by: "user"`, delete `ESCALATE.md`, and relaunch — the relaunched
   worker enacts the specification and scorer change under the declared epoch *before its first unit*
-  (`roles/worker.md` §Metric epochs says so; the runner binds an epoch's scorer hash on the first
-  experiment, so a unit run first would bind the new epoch to the old scorer) and queues the
-  re-baseline. On a decline: note it in the JOURNAL, delete the file, relaunch. A pending epoch opened in `autonomous` mode reaches you
+  (`roles/REFERENCE.md` §Metric epochs says so; the runner binds an epoch's scorer hash on the first
+  experiment, so a unit run first would bind the new epoch to the old scorer) and lists the
+  re-baseline under the JOURNAL's *What to try next and why*. On a decline: note it in the JOURNAL, delete the file, relaunch. A pending epoch opened in `autonomous` mode reaches you
   the same way, later: `campaign-status` lists pending epochs, and the user ratifies through you.
 - **Integrity halt**: `ESCALATE.md` (surface the fork verbatim; this is the user's decision, not
-  yours), corrupt `queue.json` (diagnose, propose the exact JSON repair, apply it only on the user's
-  go-ahead, and never delete it, since it is the loop's only memory), queue empty after a planner pass
-  (a stopping decision for the user, since the campaign may be done or may need new directions; suggest
-  `campaign-status` for the evidence).
+  yours), or a corrupt `results/driver_state.json` (diagnose, propose the exact JSON repair, apply it only
+  on the user's go-ahead; it holds the driver's counters, never the science).
+- **The worker judged the campaign done**: a JOURNAL whose `**NEXT:**` line reads `STOP - <why>`. The
+  driver ran the claim audit and halted. This is a stopping decision for the user, not a failure —
+  relay the worker's reason and the audit artifact verbatim, and suggest `campaign-status` for the
+  evidence. Relaunching without changing the JOURNAL's NEXT line just re-derives the same STOP.
 - A driver that died with no halt message (crash, reboot): the log just stops, `.driver_alive` goes
-  stale, and the Stop hook re-arms. Relaunch is safe; the unit at the queue head resumes.
+  stale, and the Stop hook re-arms. Relaunch is safe; the next worker picks the campaign up from the
+  JOURNAL.
 
 ### 6. Stop
 Graceful stop: create `results/STOP`. The driver honours it at the campaign level, and the current unit
 finishes and logs first. Confirm the driver exited, then remind the user that deleting the file re-arms
 the loop for the next launch. `Ctrl-C`, or killing the process, is the immediate stop: the current unit
-is killed, it stays at the queue head, and relaunch resumes it. Stopping is the user's call. Never stop
+is killed and unsaved, and the next worker re-chooses from the JOURNAL. Stopping is the user's call. Never stop
 the loop on your own judgment; if you believe it should stop, say so and ask.
 
 ## Notes

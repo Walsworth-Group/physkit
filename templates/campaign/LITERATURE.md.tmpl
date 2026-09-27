@@ -2,9 +2,20 @@
 
 _Last updated: {{DATE}}_
 
-Curated references and the prioritized idea roadmap. Update it after each literature search; see the
-"Literature search rule" in `roles/planner.md`. Literature ideas are suggestions. They do not override the
-agent's own hypotheses unless it is stuck.
+Curated references and the prioritized idea roadmap. It is a **human and setup reference**: it is never
+compiled into a spawn, and no worker reads it to choose a unit. You read it at setup and at review, and
+what you want tried goes into `results/JOURNAL.md` §What to try next and why — where the next worker
+looks. A worker opens it only to cite a source. Literature ideas are suggestions; they do not override
+the evidence on the ledger.
+
+[[OPTIONAL — literature search enabled (the user opted in to literature search):
+**Literature search rule.** Intensity: {{LITERATURE_LEVEL}}. Run a web literature search (6–10 queries
+covering the current bottleneck, the closest published analogues, and any new techniques since the last
+search), then update this file (add or supersede sections, re-rank the Priority Roadmap, update the
+date) and carry anything worth running into the JOURNAL's §What to try next and why. When to search
+depends on the intensity: *only-when-needed* → when the campaign is stuck; *extensive* → also at the
+start of a new direction and periodically.
+]]
 
 > Sourcing: prefer each paper's arXiv version. Read the `ar5iv.org/abs/<id>` HTML or LaTeX source for
 > clean equations; avoid publisher PDFs. When only a PDF exists, convert it with a

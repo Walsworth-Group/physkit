@@ -14,11 +14,35 @@ Called every experiment (working stubs below; make them real):
   save_figure(label, prediction, target, residual) -> Path
 Optional seams (define one to extend the record; omit it and the runner uses its default):
   residual(prediction, target)                        what save_figure's residual panel shows (None = none)
-  campaign_scoreboard_fields(cfg, diags, score) -> dict   extra scoreboard columns (levers, diagnostics, run numerics)
-  campaign_checks(exp_id, label, score, diags, cfg) -> dict   name -> {"status": "pass"|"fail"|"unavailable", "detail": ...}
+  campaign_scoreboard_fields(cfg, diags, score, prediction=None) -> dict
+                                                      extra scoreboard columns (levers, diagnostics, run
+                                                      numerics); `prediction` is run_experiment's payload
+  campaign_result_fields(cfg, prediction, diags, score) -> dict
+                                                      extra keys of results/result_<NN>.json - the evidence
+                                                      behind the number (fitted parameters, per-condition
+                                                      splits, a census); the card's comparisons and
+                                                      verification read them there. JSON-serialisable values
+  campaign_checks(exp_id, label, score, diags, cfg, prediction=None) -> dict
+                                                      name -> {"status": "pass"|"fail"|"unavailable", "detail": ...}
   campaign_card_fields(result, checks) -> dict        extra lines of the result card (name -> value): the
                                                       campaign's own comparison numbers the analysis needs
   baseline_config() -> dict                           the exp 000 config that `--baseline` runs
+Optional constants:
+  ZERO_EVALUATION_MODES = {"ledger"}                  config `mode` values that record NO score - a unit whose
+                                                      deliverable is a decision-record entry, a documented
+                                                      procedure, a corrected threshold. The prediction gate
+                                                      then asks for {"predicted": {"deliverable": "..."}}, the
+                                                      primary metric is null on disk (never 0), every numeric
+                                                      check reports `unavailable`, and the row is never a
+                                                      comparand. run_experiment still runs (its payload is the
+                                                      record; give the mode its own record gate there) and
+                                                      save_figure still owes a figure (a card, not a plot).
+                                                      validate_method must refuse the mode to any config that
+                                                      fits, scores or spends: a real experiment wearing the
+                                                      mode's name would skip the save-set.
+  A payload key `comparand: false` marks a SCORED row that is not a model's score (a measured noise floor,
+  a calibration) so it never becomes the incumbent; campaign_comparand(result) -> bool is the same rule
+  for rows recorded before the flag existed (read from results/result_<NN>.json).
 Helpers this campaign needs (a forward model, a fitter, a data reader) live here or in sibling modules
 you add to scripts/; the per-experiment snapshot copies the whole directory, so every run stays
 reproducible after later edits.
@@ -102,20 +126,40 @@ def residual(prediction, target):
     return None
 
 
-def campaign_scoreboard_fields(cfg: dict, diags: dict, score: float) -> dict:
+def campaign_scoreboard_fields(cfg: dict, diags: dict, score: float, prediction=None) -> dict:
     """Extra scoreboard columns for this campaign - the lever values, the guardrail numbers, run numerics
     (epochs, iterations, wall_clock, n_free_params, seed, n_reps). Keys become columns; add them AFTER the
-    lever columns and BEFORE `notes` in results/scoreboard.tsv's header, and never rename one
-    mid-campaign. TODO(campaign): fill from cfg + diags."""
+    lever columns and BEFORE `note` in results/scoreboard.tsv's header, and never rename one
+    mid-campaign. `prediction` is run_experiment's payload (a column computed from the fit reads it
+    here, never from disk); `score` is None for a zero-evaluation unit - leave its numeric cells BLANK,
+    never 0. TODO(campaign): fill from cfg + diags + prediction."""
     return {}
 
 
-def campaign_checks(exp_id: str, label: str, score: float, diags: dict, cfg: dict) -> dict:
+def campaign_result_fields(cfg: dict, prediction, diags: dict, score: float) -> dict:
+    """Extra keys of results/result_<NN>.json - the evidence behind the number: the fitted parameters,
+    per-condition splits, a census, whatever a reader needs to re-derive the score without re-running.
+    The card's comparisons print every numeric one against the incumbent, and verification reads them
+    there. JSON-serialisable values; keys never shadow the kit's. TODO(campaign): the payload keys worth
+    keeping (not the raw arrays - they are re-derivable from the config and the snapshot)."""
+    return {}
+
+
+def campaign_checks(exp_id: str, label: str, score: float, diags: dict, cfg: dict, prediction=None) -> dict:
     """This campaign's own mechanical checks, merged into results/checks_<NN>.json beside the kit's:
     {name: {"status": "pass"|"fail"|"unavailable", "detail": "...", "needs": "..."}}. A `fail` is a flag
-    the worker answers by name. TODO(campaign): the checks only this campaign can make (a deliverable
-    present, a conservation sum, a fit that converged)."""
+    the worker answers by name; `prediction` is run_experiment's payload (a zero-evaluation unit's
+    deliverable is re-verified on disk from it). TODO(campaign): the checks only this campaign can make
+    (a deliverable present, a conservation sum, a fit that converged)."""
     return {}
+
+
+def campaign_comparand(result: dict) -> bool:
+    """May this recorded row (results/result_<NN>.json) become the incumbent? The runner already excludes a
+    zero-evaluation unit and a row whose payload said `comparand: false`; this is the campaign's own rule
+    for rows recorded before that flag existed (a floor row with no fitted parameters, say). True = a
+    model's score."""
+    return True
 
 
 def campaign_card_fields(result: dict, checks: dict) -> dict:

@@ -150,7 +150,7 @@ your-project/
   README.md             the front door — a very short "where to find things" map for someone new
   PROJECT.md            THE overview (a living doc, edited by tier): §Mission — the goal and
                         project-wide invariants · §Standing constraints — delivered into every
-                        spawned worker/planner prompt, every cycle · the system, instrument, and
+                        spawned agent's prompt, every cycle · the system, instrument, and
                         equations depth · §Updates from discoveries — verified findings, each citing
                         its campaign's verdict · §Durable decisions · §Lineage — every campaign and
                         session, what it changed, what it found
@@ -169,11 +169,11 @@ your-project/
     campaign.md           THE campaign definition and the ONE human sign-off surface — mission +
                           done-criteria + expectations, metric, levers, FROZEN, §Known landmines, caps,
                           §Verification (this campaign's own checks), promotion, and the append-only
-                          §Decision record tail. Both roles re-read it every cycle; its header stamps
+                          §Decision record tail. Every spawn carries it; its header stamps
                           the physkit version the campaign runs under
     roles/
-      worker.md           the per-experiment procedure: the loop, the iteration contract, the save-set
-      planner.md          strategy: getting unstuck, reopening shelved directions
+      worker.md           the per-experiment procedure: choosing the unit, the loop, the iteration
+                          contract, getting unstuck, the save-set
     configs/
       _template.json      copy this per experiment
       exp000_*.json …     one config per experiment   ·   RECOMMENDED.json  the current-best config
@@ -181,8 +181,8 @@ your-project/
                           prediction mode, noise model, comparability tags, metric_revision (who
                           may revise the FROZEN metric: cautious asks you first; autonomous enacts a
                           verified revision as a pending epoch for you to ratify), and verify.preset
-                          (how much verification the campaign buys, and of what kind: minimal · light
-                          · moderate · intensive — docs/reference/verification-presets.md). A campaign that has
+                          (how much verification the campaign buys, and of what kind: none · minimal
+                          · light · heavy · intensive — docs/reference/verification-presets.md). A campaign that has
                           revised its metric also carries metric_epochs here — one entry per
                           metric_version with its evidence and standing; a scorer change no epoch
                           declares refuses to run
@@ -197,18 +197,21 @@ your-project/
       result_<NN>.json    what one experiment produced   ·   checks_<NN>.json  its mechanical checks,
                           each pass / fail / unavailable, what an unavailable one would need, what the
                           experiment changed, the worker's self-check, and its verification label
-      verdicts/           independent-verification verdicts + audit_<NN>.json (the claim audit)   ·
+      verdicts/           independent check verdicts (peer, verifier) + audit_<NN>.json (the claim audit) ·
                           correctness_state.json  the standing suite's per-check status — the
                           promotion gate reads both
-      queue.json          the loop's worklist — the driver pops a unit at a time, the planner refills it
+      driver_state.json     the driver's own counters (accepted units, owed independent checks) — no
+                          agent reads or writes it; the worklist is the JOURNAL
+      inbox/              notes relayed verbatim into the next spawn: yours, and the driver's own
+                          after a verdict named a follow-up
       snapshots/ images/ data/ diagnostics/    per-experiment artifacts
     scripts/
       metric.py           the FROZEN scorer (+ --selftest)   ·   run_campaign.py  the experiment runner
-      guard_promotion.py    the shared hook policy that blocks an unverified, subject-mismatched promotion
+      guard_promotion.py    the shared hook policy that blocks a mislabelled or refuted promotion
       guard_promotion_codex.py  the Codex apply_patch adapter for that unchanged policy
       loop_heartbeat.py     the Stop hook guarding attended sessions (stands down while the driver runs)
     tests/                correctness_checks.py — the standing checks, each declaring its row (invariants
-                          every unit · machinery on setup / code change · gates at promotion), plus the
+                          · machinery · gates, each run when the preset says), plus the
                           setup audit's four contract checks; green before a result is trusted
     .claude/settings.json   Claude hook wiring   ·   .codex/hooks.json  Codex promotion-hook wiring
     LITERATURE.md         only if you enabled literature search or provided sources
@@ -218,8 +221,8 @@ your-project/
 
 Scaffolding hands off launch-ready: the metric is implemented and `python scripts/metric.py --selftest`
 passes (the scorer is frozen, with sign and convention bugs caught before they can corrupt the
-campaign), the experiment hooks are wired, and experiment 000 — the baseline gate, which also validates
-the data and scoring pipeline — is queued as the loop's first unit. Confirm at any time with:
+campaign), the experiment hooks are wired, and experiment 000 — the baseline, which also validates the
+data and scoring pipeline — has run and set the floor. Confirm at any time with:
 
 ```
 python scripts/run_campaign.py --preflight --backend codex   # from Codex
@@ -236,8 +239,10 @@ preflight names them again until they are fixed.
 
 ## 4. Launch the loop
 
-The campaign runs in supervisor mode: a deterministic driver pops one experiment unit at a time from
-`results/queue.json` and spawns a fresh agent per unit. Every worker re-reads the doctrine and the
+The campaign runs in supervisor mode: a deterministic driver spawns a fresh agent per unit, with no
+unit assigned. The worker chooses the one experiment the campaign needs now from `results/JOURNAL.md`
+(its **NEXT:** line and *What to try next and why*) and the ledger's last rows, runs it, and exits —
+there is no queue and no planner. Every worker re-reads the doctrine and the
 campaign definition by construction, context does not accumulate across experiments, and the gates
 are enforced in code. Your session supervises; the driver runs the experiments.
 
@@ -271,14 +276,14 @@ and stays in the session as the loop's concierge:
 
 - Watch. Ask what the loop is doing; it narrates from the driver's live log
   (`results/diagnostics/supervise_*.log`): current unit, worker activity, accepted-unit count,
-  planner passes.
+  verification passes.
 - Steer without stopping. A request such as "stop exploring lever X" is dropped in `results/inbox/`,
-  the driver hands it verbatim to the next worker or planner, and the worker must acknowledge in the
+  the driver hands it verbatim to the next worker, and the worker must acknowledge in the
   journal what it changed.
-- Triage. If the driver halts, the concierge reads the log and the queue, explains the cause in plain
-  language, and proposes the fix. The driver hard-halts only on integrity conditions or several
-  failures in a row; a single misbehaving worker has its unit shelved, with reasons recorded, while
-  the loop continues.
+- Triage. If the driver halts, the concierge reads the log and `results/driver_state.json`, explains the
+  cause in plain language, and proposes the fix. The driver hard-halts only on integrity conditions or
+  several failures in a row; a single misbehaving worker's unit is counted as an operational failure
+  while the loop continues.
 
 Why `--dangerously-skip-permissions`: the loop runs unattended and makes many edits, runs, and file
 writes. Without it you would have to approve each one and the loop would stall. Run it from the campaign's
@@ -290,7 +295,7 @@ ID. If Windows resolves `codex` to an inaccessible app alias, preflight asks for
 in `AUTORESEARCH_CODEX_EXE`. In `configs/loop.json`, each role's Claude launch reads `model` +
 `claude_effort`, while its Codex launch reads `codex_model` + `codex_reasoning_effort`. Leave any field
 blank to inherit that harness's configured default. Codex's direct verifier follows the worker Codex pair;
-Claude's established nested verifier follows the planner Claude pair.
+Claude's established nested verifier follows the `verifier` block's Claude pair.
 
 Why not chat the loop into running in this session? A single growing context degrades the loop in
 four ways: the campaign definition is eventually pushed out of the window; agents stop re-reading
@@ -310,18 +315,19 @@ Ask the concierge to stop the loop, or do it directly from any terminal:
   New-Item -ItemType File "results/STOP"
   ```
 - `Ctrl-C` the driver, or ask the concierge to kill it, for an immediate stop. The current unit is
-  killed and stays at the head of the queue, so a relaunch resumes at that unit.
+  killed and saves nothing, and the next worker re-chooses from the JOURNAL.
 
 The loop can also stop on its own. A worker that hits a fork needing your decision writes
-`results/ESCALATE.md` and the driver halts and reports it; a campaign out of proposed directions
-halts as an explicit stopping decision. Every stop leaves a record in `results/loop_stops.log` and
+`results/ESCALATE.md` and the driver halts and reports it; a worker that judges the campaign's question
+answered, or no unit worth running, writes `**NEXT:** STOP - <why>` in the JOURNAL, and the driver runs
+the end-of-loop claim audit and halts — an explicit stopping decision, with its reason, for you. Every stop leaves a record in `results/loop_stops.log` and
 the driver log, so why a campaign ended is always answerable from the ledger.
 
 What to expect while it runs. Every experiment is logged to `results/scoreboard.tsv`, with a
 narrative in `results/logbook.md` and the campaign's working memory kept current in `results/JOURNAL.md`.
-A basic figure is saved for every experiment, and more for notable ones. Promising findings are
-independently verified before being promoted, and a settled conclusion is written into its ledger row's
-verdict-cited `finding` cell. The ledger and logbook are the full record, readable at any time.
+A basic figure is saved for every experiment, and more for notable ones. The current best is promoted at
+once with a label saying how it was checked, and each result gets the one check its verification preset
+owes it; a settled conclusion is written into its ledger row's verdict-cited `finding` cell. The ledger and logbook are the full record, readable at any time.
 `/physkit:campaign-status` answers where the campaign stands; the concierge answers what the loop is
 doing now.
 
@@ -336,12 +342,12 @@ doing now.
   or not from the campaign folder. Restart it as in §4.
 - The launch fails or nothing happens → run `python scripts/run_campaign.py --preflight --backend <active harness>`, which the
   concierge does automatically. Every problem it finds is printed with its fix: a missing agent CLI,
-  an unfilled loop knob, a corrupt queue, an unimplemented metric.
+  an unfilled loop knob, a corrupt `results/driver_state.json`, an unimplemented metric.
 - The driver halted overnight → read the tail of the newest `results/diagnostics/supervise_*.log`, or
-  ask the concierge why the loop stopped. Single-unit failures don't halt the loop; they are shelved
-  in `results/queue.json` with reasons. A halt means an integrity condition (ESCALATE, corrupt queue,
-  out of directions) or several failures in a row, indicating an environment problem: CLI,
-  credentials, or disk.
+  ask the concierge why the loop stopped. Single-unit failures don't halt the loop; they are counted
+  in `results/driver_state.json` and the log says what failed. A halt means an integrity condition
+  (ESCALATE, a corrupt `driver_state.json`), a worker's `NEXT: STOP` judgement, or several failures in a
+  row, indicating an environment problem: CLI, credentials, or disk.
 - The loop won't stop → create `results/STOP` (graceful) or `Ctrl-C` the driver (immediate). To
   disable the Stop-hook heartbeat for a debugging session, set `AUTORESEARCH_LOOP_HEARTBEAT=off`.
 - You want to change something the agent froze, such as the metric or the core physics → the metric is

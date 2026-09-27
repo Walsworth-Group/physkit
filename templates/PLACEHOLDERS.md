@@ -42,6 +42,11 @@ filled by that skill and documented by it, not here.
   the deferral noted, rather than a silent guess.
 - Keep fills clear, explicit, and concise, and specific enough to act on without the interview that
   produced them.
+- **Steering carries its source.** A fill that steers a worker - a landmine, an artifact to guard
+  against, a range, a check - names where it came from (the user, a derivation, a reference, a prior
+  campaign's ledger id or verdict). A fill you can only reason your way to is not written into
+  `campaign.md`; it goes into the opening `results/JOURNAL.md` marked `[setup inference]`, where the
+  worker who tests it can drop it. A contract line cannot be argued with from inside a spawn.
 
 ---
 
@@ -68,7 +73,7 @@ filled by that skill and documented by it, not here.
 | `{{FROZEN_SCORER_PATH}}` | Path to the FROZEN file that computes the metric. |
 | `{{METRIC_HARD_BOUNDS}}` | Mathematical bounds (e.g. "≤ 1 by construction; ∈ [−∞, 1]"). |
 | `{{PLAUSIBILITY_BOUNDS}}` | The same bounds as a Python literal for `scripts/metric.py`: `(low, high)` with `None` on an unbounded side (`(None, 1.0)` for the example above), or `None` if this campaign encodes none. **A literal, not prose**: a fallback string here is a syntax error in FROZEN core. Encode only what is true by construction; the range you expect is the a-priori prediction and lives in `predictions/`. |
-| `{{METRIC_PLAUSIBLE_RANGE}}` | The a-priori plausible range, with basis. |
+| `{{METRIC_PLAUSIBLE_RANGE}}` | The a-priori range, with its basis - a bound, the measured floor, a published value; never an expectation. |
 | `{{BASELINE_DESCRIPTION}}` | What exp 000 is and its expected value. |
 | `{{BASELINE_VALUE}}` | The baseline metric value (the floor). |
 | `{{BASELINE_COMMAND}}` | Command to run exp 000. |
@@ -86,9 +91,8 @@ filled by that skill and documented by it, not here.
 | `{{GUARDRAIL_CHECK}}` | The concrete guardrail check run at loop step 5. |
 | `{{DIAGNOSTIC_METRICS}}` | Co-tracked diagnostic quantities. |
 | `{{SECONDARY_METRICS}}` | Metrics evaluated alongside the primary at step 4. |
-| `{{CHEAP_SUBGROUP}}` | The near-trivial subgroup whose improvement is cheap. |
 | `{{PRIMARY_REPORT_RULE}}` | How to report the primary (e.g. always with the subgroup split). |
-| `{{GENERALIZATION_AXIS}}` | The axis a real win must generalize across (frames/conditions/…). |
+| `{{GENERALIZATION_AXIS}}` | campaign.md §Verification: the axis a promoted finding must generalize across (frames/conditions/…), with its source. |
 
 ### Loop & run
 | Placeholder | Meaning |
@@ -99,7 +103,7 @@ filled by that skill and documented by it, not here.
 | `{{IMPLEMENT_VERB}}` | What "IMPLEMENT" means here, as an action phrase only (e.g. "modify the decoder/loss"). The config path is already in the boilerplate; do not repeat it. |
 | `{{SANITY_STEP}}` | Name of the loop sanity/guardrail step (e.g. "SANITY"). |
 | `{{EVAL_WRITER}}` | The script/function that writes the evaluation output. |
-| `{{VALIDATION_CHAIN}}` | The pipeline chain exp 000 validates end-to-end. |
+| `{{VALIDATION_CHAIN}}` | The pipeline chain exp 000 validates end-to-end (named in the decision record's baseline entry). |
 | `{{ARTIFACT_LIST}}` | What artifacts each run saves (step 8 summary). |
 | `{{CHECKPOINT_EVERY}}` | Checkpoint cadence N. |
 | `{{COST_UNIT}}` | Unit of run cost (epochs, iterations, seconds, solves). |
@@ -123,30 +127,19 @@ filled by that skill and documented by it, not here.
 | `{{VERIFY_SKILL}}` | The verify skill to invoke (e.g. `/physkit:verify`). |
 | `{{PHYSKIT_VERSION}}` | The kit-version pin, `vX.Y.Z (<ref>, YYYY-MM-DD)`: version from the active harness manifest under the PhysKit package root (`.codex-plugin/plugin.json` on Codex or `.claude-plugin/plugin.json` on Claude; require equality when both exist), `<ref>` from `git -C "<resolved PhysKit package root>" rev-parse --short HEAD` where that root is a Git checkout (omit otherwise), plus the scaffold date. Appears in `campaign.md`'s header and atop `results/logbook.md` — the campaign's doctrine and tooling provenance (every release is tagged, so the pin recovers the whole kit). A record: never updated to a newer version. |
 | `{{VERIFY_EXTRA_CHECKS}}` | Archetype-specific extra checks the verifier must do, as a clause fragment appended to "checks for metric contamination" (e.g. ", recomputes the ceilings, and checks the ceiling-vs-gap trap"). Do not repeat "metric contamination". |
-| `{{SYSTEMATIC_AXIS_NOTE}}` | A standalone sentence on the dominant systematic-error axis for this campaign. It follows "…find and fix the cause)."; do not repeat that phrase. |
-| `{{OVERFIT_MODE}}` | The campaign's characteristic overfit mode (e.g. "sim-to-real / val overfit"). |
-| `{{DECISION_EXAMPLES}}` | Example decisions that are "hypotheses, not givens". |
-| `{{MODEL_NOUNS}}` | The model components parsimony applies to (forward, decoder, …). |
-| `{{UNITS_EXAMPLE_LINE}}` | One concrete units/scale example sentence. |
-| `{{APRIORI_BOUND_NOTES}}` | How to compute the a-priori bound for this metric. |
-| `{{PHYSICAL_BOUNDS_NOTES}}` | The physical bounds/scales of key quantities. |
+| `{{APRIORI_BOUND_NOTES}}` | campaign.md §The ONE metric: the source the a-priori range is argued from (how the bound is computed, or the reference it is taken from). |
+| `{{PHYSICAL_BOUNDS_NOTES}}` | campaign.md §The ONE metric: the physical bounds/scales of key quantities. |
 | `{{SIM_GAP_NOTE}}` | The sim-to-experiment gap specific to this campaign. |
-| `{{TIEBREAK_COSTS}}` | The costs used to break ties between tied options. |
-| `{{UNIT}}` | The per-unit over which distributions are compared (frame, sample, …). |
 
 ### Levers, FROZEN & code
 | Placeholder | Meaning |
 |---|---|
 | `{{LEVER_SUMMARY}}` | One-line summary of the levers (Mission line). |
 | `{{LEVERS_LIST}}` | The full categorized list of levers. |
-| `{{LEVER_CATEGORIES}}` | The orthogonal lever families, named. |
 | `{{LEVER_COLUMNS}}` | The lever columns in the scoreboard (tab-separated). |
 | `{{FROZEN_LIST}}` | What is FROZEN besides the scorer. |
 | `{{READONLY_LIST}}` | Read-only files (use, don't edit). |
 | `{{MUTABLE_LIST}}` | Mutable files: `scripts/experiment.py` (the campaign's hooks and helpers) and the campaign modules it imports — never `scripts/run_campaign.py`, the kit's machinery. |
-| `{{STRUCTURAL_LEVERS}}` | The biggest structural levers to escalate to when stuck. |
-| `{{STUCK_N}}` | How many flat experiments before "stuck". |
-| `{{REANCHOR_DOCS}}` | Docs to re-read when stuck / at a checkpoint. |
 | `{{DATA_CHOICE_WARNING}}` | (optional) Warning that a data/distribution choice must be held fixed. |
 | `{{DATA_DISTRIBUTION}}` | (optional) The distribution that changes if the data choice moves. |
 | `{{CODE_SNAPSHOT_RULE}}` | (optional) The code-snapshot rule when code under test is mutable. |
@@ -166,9 +159,9 @@ filled by that skill and documented by it, not here.
 ### Protocol stubs
 | Placeholder | Meaning |
 |---|---|
-| `{{BASELINE_METHODS}}` | The baseline method(s) for exp 000. |
-| `{{GATE_CRITERIA}}` | The pass/fail criteria for the baseline gate. |
-| `{{FLOOR_RECORD_RULE}}` | How the floor is recorded. |
+| `{{BASELINE_METHODS}}` | The baseline method(s) for exp 000 (the decision record's ED-000 entry; exp 000 runs at setup). |
+| `{{GATE_CRITERIA}}` | The criteria exp 000 met before handoff (the sanity checks that prove the chain is sound). |
+| `{{FLOOR_RECORD_RULE}}` | Where the floor is recorded (the exp000 ledger row; the JOURNAL's §Where we stand). |
 | `{{PER_EXP_ARTIFACTS}}` | The always-saved per-experiment artifacts. |
 | `{{FIGURE_SPEC}}` | The standard per-experiment figure, panel by panel. |
 | `{{PROMOTED_BEST_ARTIFACTS}}` | The heavier artifacts saved on promotion. |
@@ -269,7 +262,7 @@ contract. There is no separate planning doc: `campaign.md` is drafted, user-edit
 | `{{PARITY_METHOD}}` | campaign.md §Verification: the independent / mechanism-diverse method used for parity checks. |
 | `{{VALIDATION_DATA}}` | campaign.md §Verification: the held-out / independent data used to validate (calibration is not validation). |
 | `{{APP_CHECK_1}}` / `{{APP_CHECK_2}}` | campaign.md §Verification: the field-standard, application-specific checks generic doctrine cannot supply. |
-| `{{KNOWN_ARTIFACTS}}` | campaign.md §Verification: known artifacts / failure modes to guard against (see alias note). |
+| `{{KNOWN_ARTIFACTS}}` | campaign.md §Verification: known artifacts / failure modes to guard against, each with its source (see alias note); a suspected one goes to the JOURNAL as `[setup inference]`. |
 
 ### Campaign properties (configs/loop.json `"campaign"` — what kind of campaign this is)
 Two setup-time declarations that every mechanical check branches on, plus their numeric companions. Both
@@ -293,10 +286,7 @@ and a deterministic one mislabelled stochastic is held to a spread test it can n
 > here breaks the parse, the same hazard `{{UNIT_COST_DISK_MB}}` carries. Write `null` when unknown.
 
 ### Loop configuration (configs/loop.json — supervisor mode)
-Set from the campaign's unit cost during the interview. The cadence inverts with cost: expensive units
-mean planning often, with a small k; cheap units mean planning in strides, with a large k, which keeps
-planner overhead a small fraction of loop compute. The plateau threshold is dual-denominated, in units and
-in wall-clock, whichever trips first.
+Set from the campaign's unit cost during the interview.
 
 | Placeholder | Meaning |
 |---|---|
@@ -304,25 +294,21 @@ in wall-clock, whichever trips first.
 | `{{UNIT_COST_S}}` | Typical wall-clock seconds for one unit (number, order-of-magnitude is fine). |
 | `{{UNIT_COST_DISK_MB}}` | Megabytes one unit adds to `results/` (number; save-set + snapshot + bulk artifacts). Derived from the artifact plan, not asked. Arms the driver's disk floor (refuses to launch / halts below ~3 units of headroom); `0` disables it. Human-readable twin: `{{DISK_PER_EXP}}`. |
 | `{{AGENT_BACKEND}}` | Harness that will launch first: `claude` or `codex`. A switchable campaign still records its first launcher here; `--backend` overrides it later. |
-| `{{PLANNER_CADENCE_K}}` | Spawn the planner every k accepted units. |
-| `{{PLANNER_MODEL}}` | Claude model for the planner agent (judgment role — heavier tier); blank inherits Claude Code's configured default. |
-| `{{PLANNER_CLAUDE_EFFORT}}` | Claude planner effort: blank (inherit), `low`, `medium`, `high`, `xhigh`, or `max`; support is model/version dependent. |
-| `{{PLANNER_CODEX_MODEL}}` | Codex model for the planner agent; blank inherits Codex's configured default. |
-| `{{PLANNER_CODEX_REASONING_EFFORT}}` | Codex planner reasoning effort: blank (inherit), `minimal`, `low`, `medium`, `high`, or `xhigh`. |
-| `{{PLATEAU_M_UNITS}}` | Plateau trigger: no accepted result in m units. |
-| `{{PLATEAU_M_HOURS}}` | Plateau trigger: no accepted result in this much wall-clock (whichever trips first). |
-| `{{MAX_OUTSTANDING_UNITS}}` | Max AGENT proposals queued ahead of a planner review; the rest wait on the `capped` shelf. Default `1` (one proposal at a time - the setting a colleague needed to get anywhere); raise it only when the problem rewards breadth and the planner reviews often. |
+| `{{VERIFIER_MODEL}}` | Claude model for the verifier and the end-of-loop claim audit (judgment roles — heavier tier); blank inherits Claude Code's configured default. |
+| `{{VERIFIER_CLAUDE_EFFORT}}` | Claude verifier/capstone effort: blank (inherit), `low`, `medium`, `high`, `xhigh`, or `max`; support is model/version dependent. |
+| `{{VERIFIER_CODEX_MODEL}}` | Codex model for the verifier and the claim audit; blank inherits Codex's configured default. |
+| `{{VERIFIER_CODEX_REASONING_EFFORT}}` | Codex verifier/capstone reasoning effort: blank (inherit), `minimal`, `low`, `medium`, `high`, or `xhigh`. |
 | `{{WORKER_MODEL}}` | Claude model for iteration workers (lightest that reliably does the task); blank inherits Claude Code's configured default. |
 | `{{WORKER_CLAUDE_EFFORT}}` | Claude worker effort: blank (inherit), `low`, `medium`, `high`, `xhigh`, or `max`; support is model/version dependent. |
 | `{{WORKER_CODEX_MODEL}}` | Codex model for iteration workers; blank inherits Codex's configured default. |
 | `{{WORKER_CODEX_REASONING_EFFORT}}` | Codex worker reasoning effort: blank (inherit), `minimal`, `low`, `medium`, `high`, or `xhigh`. The direct Codex verifier follows the worker pair. |
-| `{{ITERATION_TIMEOUT_HOURS}}` | Hard wall-clock cap on one worker iteration (> the Extended-tier run cap). Also the yardstick for verification depth: a unit whose measured solve time is within a quarter of this cap (and whose campaign is `reproducible`) is re-executed by the verifier; the rest are reviewed from the frozen record. |
-| `{{VERIFICATION_PRESET}}` | The campaign's verification preset — `minimal` · `light` (the default) · `moderate` · `intensive` — the one user-facing choice of how much verification the campaign buys and of what kind (new-campaign topic 8b; the descriptions are `docs/reference/verification-presets.md`, presented verbatim). Rendered into `configs/loop.json` `verify.preset` only; never embedded in prose. |
+| `{{ITERATION_TIMEOUT_HOURS}}` | Hard wall-clock cap on one worker iteration (> the Extended-tier run cap). |
+| `{{VERIFICATION_PRESET}}` | The campaign's verification preset — `none` · `minimal` (the default) · `light` · `heavy` · `intensive` — the one user-facing choice of how much verification the campaign buys and of what kind (new-campaign topic 8b; the descriptions are `docs/reference/verification-presets.md`, presented verbatim). Rendered into `configs/loop.json` `verify.preset` only; never embedded in prose. |
 | `{{METRIC_REVISION}}` | The metric-revision dial — `cautious` (the default: a metric revision raises ESCALATE and waits) or `autonomous` (the loop may enact a verified revision as a pending epoch and continue). Asked in the same interview step as the preset (topic 8b). Rendered into `configs/loop.json` `campaign.metric_revision`. |
 
 > **Alias note (near-synonyms across docs).** A few tokens name the same quantity in different docs; fill
 > them consistently. The a-priori bound appears as `{{APRIORI_BOUND}}` (PROJECT.md §Standing constraints),
-> `{{APRIORI_BOUND_NOTES}}` (campaign.md), and `{{METRIC_PLAUSIBLE_RANGE}}` (campaign.md §The ONE metric).
+> `{{APRIORI_BOUND_NOTES}}` and `{{METRIC_PLAUSIBLE_RANGE}}` (both campaign.md §The ONE metric).
 > The metric's hard bounds appear as `{{METRIC_HARD_BOUNDS}}` (campaign.md) and `{{PLAUSIBILITY_BOUNDS}}`
 > (the executable form of those same bounds, in the FROZEN scorer): fill both from one answer, and if you
 > change one, change both. The domain gotchas appear as `{{KNOWN_ARTIFACTS}}` (campaign.md §Verification —
