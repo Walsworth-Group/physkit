@@ -11,6 +11,19 @@ Turn a fuzzy research goal into a running, rigorous, documented campaign. The de
 that encodes the campaign's intent so the loop-running agent cannot drift from it: a FROZEN metric, an
 experiment loop, levers, guardrails, logging, verification, and reporting.
 
+**Every problem is its own; the templates are a starting point, not a form.** They encode what has worked
+across many campaigns: take them as inspiration and shape them to this problem. Reword, restructure, drop a
+section that does not serve it, or change the procedure where a different one would work better. Only three
+things are fixed:
+- **What code reads**, marked `[[KEEP — …]]` in the templates (the JSON configs are machine config
+  throughout: change values, not keys). Keep the marked element and delete the tag. The kit's machinery (`run_campaign.py`, the gates, the verification presets) is never edited
+  per campaign; a method that needs it to behave differently is proposed to the user, not built.
+- **The frozen integrity core**: the honesty and verification rules and the FROZEN metric.
+- **Nothing new that binds workers enters without the user's yes.** You know no more about this problem than
+  the workers who follow you, and a rule, constraint, or procedure written into the scaffold steers every
+  one of them and cannot be argued with from inside a spawn. Propose each by name (Step 2); what you only
+  suspect goes to the JOURNAL marked `[setup inference]` (Step 3).
+
 **Stance for the interview** (from `docs/PRINCIPLES.md` §1):
 - **Fill from sources first; ask only when unsure. Never ask what you can check.** Before asking anything,
   harvest every answer you can definitively obtain from what is already available: the conversation so far,
@@ -194,9 +207,8 @@ control, or training or fitting purely on real experimental data). If there is o
    (`model-selection`) each have a dedicated operational skill.
 3. **The metric — build it together (the most important topic).** Co-design the single FROZEN primary: its
    name, direction (higher or lower is better), precise definition and units, the FROZEN scorer it lives
-   in, hard bounds, and the **a-priori plausible range**, which encodes the predict-before-running
-   discipline. Then the baseline (exp 000) value and method, any theoretical ceilings, the guardrail
-   (necessary but not sufficient), and diagnostics. Pin down what feeds the metric and what is FROZEN.
+   in, and its **plausible range** (below). Then the baseline (exp 000) value and method, any theoretical
+   ceilings, the guardrail (necessary but not sufficient), and diagnostics. Pin down what feeds the metric and what is FROZEN.
 
    **Measure the baseline and the floor here; never freeze a published number.** The prior work's
    delivered pipeline or number this campaign will freeze and build on is the load-bearing unknown the
@@ -207,23 +219,21 @@ control, or training or fitting purely on real experimental data). If there is o
    mission says it should — each as a contract check in the suite. If a number genuinely cannot be
    measured here, say so plainly in the campaign spec as an open risk rather than silently trusting it.
 
-   Capture the hard bounds in both forms while you have the answer: the prose (`{{METRIC_HARD_BOUNDS}}`)
-   and the Python literal the FROZEN scorer enforces (`{{PLAUSIBILITY_BOUNDS}}`, e.g.
-   `(None, 1.0)` for a metric that cannot exceed 1, or `None` if this campaign has none). Press for what is
-   true by construction: a correlation cannot exceed 1, a variance cannot be negative. Do not let the
-   plausible range be entered here. That is the a-priori prediction, it belongs in `predictions/`, and
-   encoding it as a hard bound turns a mathematical impossibility into a disappointing-result alarm that
-   fires forever.
+   **Propose the plausible range and get it signed off.** Once the metric is agreed, propose the range a
+   correct pipeline cannot leave. A good baseline is the perfect score at one end and a TRIVIAL
+   predictor's score (all zeros, the mean, a constant) on the evaluation data at the other — e.g. RMSE in
+   [0, RMSE of all-zeros vs the ground-truth test images]; suggest something else if it suits the problem
+   better (an RMSE floor at the measurement noise, below which a score points at leakage), with its basis.
+   Compute the trivial end when the data is in hand, never guess it (if it is not yet staged, compute it
+   in Step 3 before the scorer freezes, and re-present). Present it for the user's sign-off, saying what it
+   does: a result outside it is flagged for extra scrutiny as a possible implementation error. It is a
+   cheap bug check, not a prediction of how well anything will do, so keep it to what no correct pipeline
+   produces. Capture it in both forms: the prose with its basis (`{{METRIC_PLAUSIBLE_RANGE}}`,
+   `{{APRIORI_BOUND_NOTES}}`) and the literal the FROZEN scorer enforces (`{{PLAUSIBILITY_BOUNDS}}`, e.g.
+   `(0.0, 0.84)`, or `None` if the user declines one).
 
-   **Then ask the two questions that decide what every mechanical check means.** Both are campaign-wide,
-   both are written into `configs/loop.json` `campaign`, and neither has a safe default:
-   - **Can this campaign honestly bound its answer in advance?** → `{{PREDICTION_MODE}}`. Use `range` if a
-     defensible numeric `[low, high]` exists; that is the default and the strongest control. Use
-     `direction` if the honest claim is only which way the metric should move versus a named prior
-     experiment. Use `none` if neither is honest — exploratory discovery, a first-of-kind measurement, a
-     search over an unknown landscape — which requires a recorded `{{PREDICTION_MODE_REASON}}`. Offer
-     `direction` explicitly rather than letting the answer collapse to `none`: a fabricated range is a fake
-     control, and so is a mode chosen because it asks less. Do not infer this from the archetype; ask it.
+   **Then ask the question that decides what the comparison checks mean.** It is campaign-wide, written
+   into `configs/loop.json` `campaign`, and has no safe default:
    - **Does re-running one experiment reproduce the metric exactly?** → `{{NOISE_MODEL}}`. This is a
      question about the pipeline, not the physics, and it is answered by running one thing twice rather
      than from intuition: an analytic solve with no RNG is `deterministic`; anything with sampling,
@@ -234,7 +244,7 @@ control, or training or fitting purely on real experimental data). If there is o
      number is not. **Write `null`, never a TODO string:** both are JSON numbers, and prose there breaks
      the parse.
 
-   Getting either wrong is silent and expensive: a stochastic campaign mislabelled deterministic promotes
+   Getting it wrong is silent and expensive: a stochastic campaign mislabelled deterministic promotes
    noise, and a deterministic one mislabelled stochastic is held to a spread test it can never satisfy.
 
    Finally, set `{{METRIC_VERSION}}` / `{{DATA_VERSION}}` (default `v1` / `v1`). The runner stamps them
@@ -416,7 +426,7 @@ control, or training or fitting purely on real experimental data). If there is o
 
 ## Step 2 — write the campaign spec and get sign-off (anti-drift checkpoint)
 Before generating anything, write a concise **campaign spec**: the archetype(s) that apply, the FROZEN
-metric with bounds and a-priori range, baseline, guardrail and diagnostics, levers,
+metric with its signed-off plausible range, baseline, guardrail and diagnostics, levers,
 FROZEN/READ-ONLY/MUTABLE, constraints, caps and whether tiering applies, the data plan, the detected
 compute, first-launch harness and role model/effort settings, chosen environment, the multi-stage plan if
 any, and the values you will use for the key
@@ -426,6 +436,9 @@ fact still at INFERRED or RECALLED as an open question for the user to resolve b
 The same rule binds every steering statement the spec proposes - a landmine, an artifact to guard
 against, a range, a direction: each carries its source or is marked as your own inference, and an
 inference never enters `campaign.md` (Step 3).
+End the spec with **the adaptations**: how this scaffold departs from the templates - sections dropped or
+restructured, procedure changed - one line each with its reason; and, asked one by one, every rule or
+constraint on workers the templates do not already carry.
 Show the spec to the user and get explicit sign-off or corrections. This is the checkpoint that keeps the
 build aligned with the original intent.
 
@@ -434,7 +447,8 @@ Copy the linked PhysKit package directory [`../../templates/campaign/`](../../te
 the target directory and fill it from the spec,
 obeying `PLACEHOLDERS.md`. **The copy is what creates the tree: take the whole directory, not a hand-picked
 subset.** The bullets below say what to fill; they are not the file list. Files the copy brings that no
-bullet dwells on must still survive the fill. Five are checked by the Step 4 validator:
+bullet dwells on survive the fill unless the signed-off adaptations drop them. Five are checked by the Step 4
+validator:
 **`roles/worker.md`** (the worker's contract - every instruction it acts on; `roles/verifier.md` and `roles/capstone.md` are the other two spawned roles' contracts, `roles/REFERENCE.md` the reference the worker's contract points at and no spawn reads whole),
 **`configs/_template.json`** (the per-experiment config template), **`scripts/frozen_core.py`** (the
 FROZEN-core file list and content hash that `run_campaign.py` stamps and `guard_promotion.py` recomputes
@@ -454,6 +468,10 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   Metric, Decision/promotion, and Before-accepting sections, so keep or delete them together. For a
   fixed-data campaign, delete `campaign.md` §Dataset / inputs entirely, leaving in its place the READ-ONLY
   note its `[[OPTIONAL]]` marker quotes.
+- **Resolve every `[[KEEP — … ]]` tag:** keep what it marks - the heading, key, column or line its consumer
+  reads, spelled exactly - and delete the tag. The text around it is yours to shape.
+- **Apply the signed-off adaptations.** Rewording to fit the problem needs no sign-off; a dropped section, a
+  changed procedure, or a new rule the user did not see in Step 2 does not enter the scaffold.
 - **Setup state is mechanical, not a ledger.** `README.md` §Setup status ships as a static pointer:
   `--preflight` is the authoritative answer to "is this runnable?" (it refuses to launch and names each
   missing item with its fix — and Step 4 requires it green before handoff), and the downstream gates
@@ -514,13 +532,12 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   atomic co-mutation could otherwise invalidate the verdict, correctness state, or frozen core after the
   guard inspected their pre-patch state.
 
-  Generate **`configs/loop.json`**: its `campaign` block from topic 3 (prediction mode, noise model, the
+  Generate **`configs/loop.json`**: its `campaign` block from topic 3 (noise model, the
   resolution knob, the version tags), its loop knobs from topic 8, and its initial backend plus role
   model/effort settings from topic 9. Fill **`configs/_template.json`**,
   the do-not-run per-experiment config every unit is copied from, with its input paths, lever fields, and
   run and cost fields from topics 5–8. Fill **`configs/RECOMMENDED.json`**, the current-best pointer,
-  mirroring exp 000 until the first promotion. Create the artifact-gate directories **`predictions/`** (the
-  runner's spend gate refuses any solve without `predictions/<exp_name>.json`) and **`results/verdicts/`**.
+  mirroring exp 000 until the first promotion. Create the artifact-gate directory **`results/verdicts/`**.
 
   Seed no queue: there is none. The user's topic-12 to-try ideas go into the opening
   `results/JOURNAL.md` §What to try next and why — ranked, attributed to the user, and phrased as
@@ -649,7 +666,8 @@ conventions, the topic-10 code to reuse. No later agent will ever be better posi
 code, so write it now; deferring it "for the loop" hands the work to a colder context and guarantees the
 fresh session a red preflight. Sub-agents may draft; this session verifies.
 1. **Implement `scripts/metric.py` for real** — the topic-3 co-designed FROZEN scorer, not a
-   `NotImplementedError` stub — and run `python scripts/metric.py --selftest` until green. The selftest
+   `NotImplementedError` stub, with the signed-off `PLAUSIBILITY_BOUNDS` (its trivial end computed now if
+   topic 3 could not) — and run `python scripts/metric.py --selftest` until green. The selftest
    exists to catch sign and convention bugs before they can corrupt the campaign; an unimplemented
    scorer defers exactly those bugs. The scorer is FROZEN from here on: locked against quiet change — a
    later revision is a declared metric epoch, never an in-place edit.
@@ -659,18 +677,16 @@ fresh session a red preflight. Sub-agents may draft; this session verifies.
    actually writes the file, and fill the seams the campaign needs (`campaign_scoreboard_fields` for its
    scoreboard columns, `campaign_result_fields` for the evidence behind the number, `baseline_config` for
    exp 000, `campaign_checks` for checks only it can make; `ZERO_EVALUATION_MODES` if a unit can record
-   no score - a decision-record entry, a procedure - see the seam file's header).
+   no score - a decision-record entry, a procedure - whose configs then name a `_deliverable`; see the
+   seam file's header).
    Helpers and models go in `experiment.py` or sibling modules under `scripts/`; the runner is never
    edited.
-3. **Write `predictions/exp000_baseline.json`** from the topic-3 a-priori range and prediction mode. The
-   spend gate requires it before exp 000 can run, and the prediction is interview output — record what
-   was co-designed, invent nothing.
-4. **What this session genuinely cannot finish** — a data file only the user can stage, an instrument to
+3. **What this session genuinely cannot finish** — a data file only the user can stage, an instrument to
    connect, a credential — is left as its named preflight failure, written as an opening
    `results/JOURNAL.md` **NEXT** item, and handed over by name in Step 5. Never silently, and never as
    an unimplemented hook: code is always this session's to write.
 
-5. **Hardware campaigns (archetype E): wire the hooks to the shipped machinery, never re-implement
+4. **Hardware campaigns (archetype E): wire the hooks to the shipped machinery, never re-implement
    it.** Write `configs/instrument.json` per the linked
    [`../../docs/reference/instrument-contract.md`](../../docs/reference/instrument-contract.md)
    (experiment types, `required_keys` vs `defaults`, range tables, cost model, serializer, the two
@@ -687,7 +703,7 @@ fresh session a red preflight. Sub-agents may draft; this session verifies.
    naming while the readiness probe (an `emit` of a throwaway unit, then `wait`; the contract's
    silent-wedge mitigation) proves the channel end to end before the campaign starts.
 
-6. **Run experiment 000 now** — `python scripts/run_campaign.py --config configs/exp000_baseline.json`,
+5. **Run experiment 000 now** — `python scripts/run_campaign.py --config configs/exp000_baseline.json`,
    under the same gates every unit runs under. The setup session is the best-placed agent that will ever
    see this campaign, and the floor is machinery, not direction: a fresh worker that has to establish it
    spends its first unit on plumbing (photophysics10 spent ~30). Check the gate criteria from topic 3
@@ -721,9 +737,9 @@ refuses a suite that lacks the four names unless `tests/CORRECTNESS_NA.md` recor
 the rest of the suite.
 
 Then the **steering audit**: read `campaign.md` above §Decision record once more, as the worker will -
-every landmine row, every §Verification line, the a-priori range and its basis, every "held fixed" -
-and for each ask where it came from. Anything you cannot source is deleted or moved to the JOURNAL
-marked `[setup inference]`. A setup agent knows no more than the workers that follow it; what it
+every landmine row, every §Verification line, the plausible range and its basis, every "held fixed" -
+and every line you added to any file the templates did not carry; for each ask where it came from. Anything
+you cannot source, or the user did not sign off, is deleted or moved to the JOURNAL marked `[setup inference]`. A setup agent knows no more than the workers that follow it; what it
 writes into the contract binds them all the same.
 
 ## Step 4 — validate (two deterministic gates)
@@ -734,7 +750,7 @@ python "<resolved path to this skill>/scripts/validate_campaign.py" <target_dir>
 ```
 Resolve the executable path from the linked [`scripts/validate_campaign.py`](scripts/validate_campaign.py);
 the shell's current directory is not the resource base.
-It fails if any literal `{{…}}`, dangling `[[OPTIONAL`, or stray `[PROPOSED]` remains, or if a required
+It fails if any literal `{{…}}`, dangling `[[OPTIONAL`, stray `[PROPOSED]`, or `[[KEEP` tag remains, or if a required
 file is missing.
 2. The driver's own launch check, from the campaign root, with the Step 0.5 python and the first-launch
    harness selected in topic 9:
@@ -831,8 +847,8 @@ re-read, premature stops, and verification decay — the failure record that mot
   ask.
 - **Imported, relocated, or hand-built trees silently lose the enforcement layer.** A tree not generated by
   this skill — copied in, assembled from frozen inputs, or moved — usually lacks `.claude/settings.json`,
-  `scripts/guard_promotion.py`, `scripts/loop_heartbeat.py`, the gate directories (`predictions/`,
-  `results/verdicts/`), and `configs/loop.json`. The promotion gate, the loop gate,
+  `scripts/guard_promotion.py`, `scripts/loop_heartbeat.py`, the gate directory (`results/verdicts/`), and
+  `configs/loop.json`. The promotion gate, the loop gate,
   and the driver are then all absent, and the doctrine prose in `CLAUDE.md` is decorative. Re-run the Step
   3 enforcement-layer wiring for any such tree, and lift it into a project home per Step 0.1;
   `campaign-status` asserts the whole set.

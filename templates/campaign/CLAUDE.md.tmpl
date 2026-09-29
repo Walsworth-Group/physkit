@@ -1,4 +1,5 @@
 <!-- physkit-dual-instructions:v1 -->
+[[KEEP — read by sync_agent_instructions.py: the marker stays line 1, exactly; AGENTS.md is this file's byte copy]]
 # Campaign doctrine — {{CAMPAIGN_TITLE}} (always-on)
 
 This is your map. The driver compiles the brief; orient from it, never the tree; the project's
@@ -7,6 +8,7 @@ This is your map. The driver compiles the brief; orient from it, never the tree;
 ---
 
 ## The integrity core (frozen)
+[[KEEP — the frozen integrity core: never reworded, weakened or dropped]]
 - Assume you are wrong until independently proven right. A number that converged, looks clean, or matches
   the expected value is suspect, not confirmed; convergence is not correctness. The burden of proof is on
   the positive result.
@@ -49,6 +51,7 @@ first experiment binds the scorer's code to its epoch, and a change to it that n
 to run.
 
 ### HARD GATES (each enforced in code; the text is the rule, the mechanism is named)
+[[KEEP — the runner and the promotion guard cite these gates by number: keep the numbering]]
 1. **No promotion without its verification label.** Promotion means updating the current-best
    (`RECOMMENDED.json`), marking a scoreboard row `verified: CONFIRMED` / `NEW BEST`, or recording a
    system-level finding in `../../PROJECT.md` §Updates from discoveries (citing the verdict artifact by
@@ -57,7 +60,9 @@ to run.
    `verify.preset`), never lowered by a worker: each result gets at most one check, the strongest its
    preset owes it, and its label says which ran. The current-best pointer follows the true best at once
    with that label; the PreToolUse hook blocks a promotion write carrying any other label or promoting a
-   refuted result, and a finding recorded upward needs a CONFIRMED independent verdict in
+   refuted result. A gate outcome a worker disputes is not set aside by judgement: it is CONTESTED
+   (`--record` `contest`), the driver's independent verifier decides it, the hook blocks the pointer while
+   it is pending, and the recorded outcome stands unless the verdict is REFUTED. A finding recorded upward needs a CONFIRMED independent verdict in
    `results/verdicts/`. A PROVISIONAL /
    QUESTIONABLE / INCONCLUSIVE finding does not graduate. A settled finding is its ledger row's `finding`
    cell (`--record <exp> --finding "..."`), citing its verdict by name; a claim with no verdict citation is
@@ -84,6 +89,7 @@ to run.
    way out; it is a report that the loop is producing nothing — diagnose it.
 
 ## Where things live — the reads the brief does not already carry
+[[KEEP — read by validate_campaign.py and the skills: this heading, and a table whose last cell is a path (plus an optional §heading) that resolves]]
 
 Everything else is in the brief. Skills route through this table rather than a hardcoded path; correct a
 row this campaign does not match before the first experiment — a row naming a file you do not have is
@@ -93,7 +99,7 @@ worse than no row, because an agent will trust it.
 |---|---|
 | One old logbook entry (`--show <exp>`) | `results/logbook.md` |
 | The change record behind a unit (`--diff <exp>`) | `scripts/run_campaign.py` |
-| The knobs — prediction mode, noise model, verify preset, metric epochs, loop settings | `configs/loop.json` |
+| The knobs — noise model, verify preset, metric epochs, loop settings | `configs/loop.json` |
 | REFERENCE — metric epochs, verification presets, the reproducibility bundle | `roles/REFERENCE.md` (by section, when the contract names it) |
 | Decision record — the append-only "why"s (on disk; omitted from the brief) | `campaign.md` §Decision record |
 | Project overview — physics, conventions, instrument, durable decisions, below the constraints the brief already carries | `../../PROJECT.md` §Standing constraints |

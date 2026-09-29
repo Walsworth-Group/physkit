@@ -16,13 +16,12 @@ The layout is probed by where "## Standing constraints" lives; the project backg
 by campaigns and never copied, under either layout.
 
 Campaign validation fails (exit 1) on anything new-campaign left unresolved:
-  * a literal {{PLACEHOLDER}} token, a dangling [[OPTIONAL … block, a stray [PROPOSED] tag,
+  * a literal {{PLACEHOLDER}} token, a dangling [[OPTIONAL … block, a stray [PROPOSED] or [[KEEP tag,
   * an un-stripped .tmpl file,
   * a missing required file (campaign.md, the role files, README, the ledgers, config template, the
     code stubs),
-  * an illegal campaign property in configs/loop.json "campaign" - an out-of-enum prediction_mode /
-    noise_model, or prediction_mode 'none' with no recorded reason (mirrors the runner's preflight),
-  * an existing prediction JSON whose `exp_name` does not exactly match its filename stem,
+  * an illegal campaign property in configs/loop.json "campaign" - an out-of-enum noise_model (mirrors
+    the runner's preflight),
   * no project home above the campaign, or no "## Standing constraints" section in the project's
     PROJECT.md (new layout) or PROJECT_ORIENTATION.md (old layout) - the section the driver
     delivers (a pre-merge project - one still carrying shared/PHYSICS.md - is named as such, with
@@ -46,7 +45,7 @@ Project-tree validation fails (exit 1) if the project home is malformed:
     leftover shared/ (its artifacts belong in purpose-named project dirs). A legacy imported
     DISCOVERIES.md is tolerated: it is an append-only historical ledger, still hook-gated, that
     PROJECT.md does not duplicate,
-  * a leftover {{PLACEHOLDER}}/[[OPTIONAL/[PROPOSED] in a project-root or shared/ doc,
+  * a leftover {{PLACEHOLDER}}/[[OPTIONAL/[PROPOSED]/[[KEEP in a project-root or shared/ doc,
   * a campaign in campaigns/ (or campaigns/_archive/) NOT indexed in the lineage (PROJECT.md
     "## Lineage" in the new layout; LINEAGE.md in the old),
   * a campaign carrying a LOCAL copy of the project background (docs/PROJECT_ORIENTATION.md, or a
@@ -71,7 +70,7 @@ TEXT_EXT = {".md", ".py", ".json", ".tsv", ".txt", ".cfg", ".ini", ".yaml", ".ym
 # Kit placeholders are UPPER_SNAKE (start with a letter/underscore). Matching only those avoids
 # false positives on legitimate LaTeX (\frac{{a}}, x_{{ij}}) and Python f-string ({{...}}) braces.
 PLACEHOLDER = re.compile(r"\{\{[A-Z_][A-Z0-9_]*\}\}")
-LEAK_LITERALS = ("[[OPTIONAL", "[PROPOSED]")
+LEAK_LITERALS = ("[[OPTIONAL", "[PROPOSED]", "[[KEEP")
 DUAL_INSTRUCTION_MARKER = "<!-- physkit-dual-instructions:v1 -->"
 # Windows drive-letter (C:\ or C:/) or UNC (\\server) absolute paths — the realistic portability breaker
 # for this Windows/shared-drive project. Applied to CONFIG files only (not prose, which has legit examples).
@@ -97,7 +96,6 @@ CAMPAIGN_REQUIRED_GLOBS = [
     ("loop heartbeat hook", "scripts/loop_heartbeat.py"),
     ("hook settings", ".claude/settings.json"),
     ("loop knobs", "configs*/loop.json"),
-    ("predictions dir", "predictions"),
     ("verdicts dir", "results*/verdicts"),
 ]
 
@@ -181,7 +179,7 @@ def project_layout(root: Path) -> str:
 
 
 def scan_leftovers(paths, base: Path, errors: list[str]) -> None:
-    """Flag leftover placeholders / OPTIONAL blocks / PROPOSED tags / un-stripped .tmpl in `paths`."""
+    """Flag leftover placeholders / OPTIONAL blocks / PROPOSED and KEEP tags / un-stripped .tmpl in `paths`."""
     for path in paths:
         if not path.is_file():
             continue
@@ -270,12 +268,11 @@ def project_root_of(campaign: Path) -> Path | None:
     return cand if (cand / "PROJECT.md").is_file() else None
 
 
-# The campaign-property enums. An intentional twin of run_campaign.py.tmpl's PREDICTION_MODES /
-# NOISE_MODELS: the validator must run against a scaffolded tree without importing that campaign's
-# runner, which would pull in numpy, metric and frozen_core just to read two strings. The twin is checked
+# The campaign-property enums. An intentional twin of run_campaign.py.tmpl's NOISE_MODELS: the
+# validator must run against a scaffolded tree without importing that campaign's runner, which would pull
+# in numpy, metric and frozen_core just to read a few strings. The twin is checked
 # rather than trusted: tier0_static.py asserts the two lists
 # agree, so a mode added on one side and not the other fails the suite instead of drifting.
-PREDICTION_MODES = ("range", "direction", "none")
 NOISE_MODELS = ("stochastic", "deterministic")
 VERIFY_PRESETS = ("none", "minimal", "light", "heavy", "intensive")
 VERIFY_ROWS = ("invariants", "machinery", "gates", "self_check", "self_verify", "independent", "capstone")
@@ -306,19 +303,10 @@ def check_loop_files(root: Path, errors: list[str]) -> None:
                 except Exception:
                     errors.append(f"loop.json is missing the numeric key the driver requires: {name}")
             camp = cfg.get("campaign") or {}
-            mode = str(camp.get("prediction_mode") or "range").strip().lower()
             noise = str(camp.get("noise_model") or "stochastic").strip().lower()
-            if mode not in PREDICTION_MODES:
-                errors.append(f"loop.json campaign.prediction_mode is {mode!r}; expected one of "
-                              + " | ".join(PREDICTION_MODES))
             if noise not in NOISE_MODELS:
                 errors.append(f"loop.json campaign.noise_model is {noise!r}; expected one of "
                               + " | ".join(NOISE_MODELS))
-            if mode == "none" and not str(camp.get("prediction_mode_reason") or "").strip():
-                errors.append("loop.json sets campaign.prediction_mode='none' with an empty "
-                              "campaign.prediction_mode_reason - record why this campaign cannot "
-                              "honestly bound its answer. Running unbounded is a legitimate choice; "
-                              "making it without a recorded reason leaves the control unowned.")
             verify_block = cfg.get("verify") if isinstance(cfg.get("verify"), dict) else {}
             preset = verify_block.get("preset")
             if preset is not None:
@@ -365,23 +353,11 @@ def check_loop_files(root: Path, errors: list[str]) -> None:
     if list(root.glob("results*/queue.json")):
         print("note: results/queue.json is the retired queue: the driver no longer reads it - run "
               "upgrade_campaign.py --retire-queue to archive it and move its open ideas into the JOURNAL")
-
-
-def check_prediction_subjects(root: Path, errors: list[str]) -> None:
-    """Existing pre-run evidence must name the subject its filename assigns to it.
-
-    Predictions are created incrementally, so absence is valid here and remains the runner's spend-gate
-    decision. Any prediction that does exist must already satisfy the verifier's immutable subject rule.
-    """
-    for path in sorted((root / "predictions").glob("*.json")):
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8-sig"))
-        except Exception as exc:
-            errors.append(f"{path.relative_to(root)} does not parse as JSON ({exc})")
-            continue
-        actual = str(payload.get("exp_name", "")) if isinstance(payload, dict) else ""
-        if actual != path.stem:
-            errors.append(f"{path.relative_to(root)} has exp_name={actual!r}; expected {path.stem!r}")
+    metric_text = _read_text(root / "scripts" / "metric.py") or ""
+    if re.search(r"^PLAUSIBILITY_BOUNDS\s*=\s*None\b", metric_text, re.M):
+        print("note: scripts/metric.py sets PLAUSIBILITY_BOUNDS = None - no plausible range, so the "
+              "implementation-error check reports 'unavailable' on every result. Set it with the user "
+              "(new-campaign: the perfect score to the trivial-predictor score is a good default).")
 
 
 def check_routing_table(root: Path, errors: list[str]) -> None:
@@ -650,7 +626,6 @@ def validate_campaign(root: Path) -> list[str]:
         if not (root / "scripts" / "guard_promotion_codex.py").is_file():
             errors.append("missing Codex promotion adapter: scripts/guard_promotion_codex.py")
         check_codex_hook_wiring(root, errors)
-        check_prediction_subjects(root, errors)
 
     # 1b. The project home + its background doc. A campaign with no home is a legacy bare tree — lift it
     #     into a project (new-campaign Step 0.1) rather than authoring campaign-local physics/conventions.

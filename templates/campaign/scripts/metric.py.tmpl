@@ -25,36 +25,39 @@ PRIMARY_DIRECTION = "{{PRIMARY_DIRECTION}}"   # "higher" or "lower" — filled a
 HIGHER_IS_BETTER = PRIMARY_DIRECTION.strip().lower().startswith("high")
 
 
-# The hard physical bounds on this metric, in the one form code can act on. This is the same concept
-# campaign.md states in prose as "Hard bounds" -- not a second, independent limit -- so if you change
-# one, change both; a number here that disagrees with the prose is a fork with a gate attached.
+# The PLAUSIBLE RANGE of this metric, in the one form code can act on - fixed ONCE at setup and signed
+# off by the user; campaign.md states it in prose with its basis ("Plausible range"), so if you change
+# one, change both. A sensible default is the perfect score at one end and the score of a trivial
+# predictor (all zeros, the mean, a constant) on the evaluation data at the other: RMSE in [0, RMSE of
+# all-zeros]. Anything that better suits the problem is fine, with its basis recorded.
+#
+# It is a cheap check for IMPLEMENTATION ERRORS, not a prediction of how well anything will do: a score
+# outside it is flagged and draws extra scrutiny (results/checks_<NN>.json `plausible_range`). Keep it
+# to what no correct pipeline should produce; a range drawn around the result you expect flags honest
+# surprises as bugs.
 #
 # `None` on either side means unbounded that way; `None` for the whole tuple means this campaign has not
-# encoded bounds, and the runner reports its plausibility check `unavailable` rather than inventing a
-# verdict. Encode only bounds that are true by construction: a correlation cannot exceed 1, a variance
-# cannot be negative, a probability lives in [0, 1]. Do not encode the range you expect a good result to
-# land in. That is the a-priori prediction, it belongs in predictions/<exp>.json, and conflating the two
-# turns a mathematical impossibility into a disappointing-result alarm.
+# encoded a range, and the runner reports the check `unavailable` rather than inventing a verdict.
 #
-# This file is FROZEN core, so editing these bounds changes the core hash and invalidates the recorded
-# correctness-suite green. That is intended: the bounds are part of what the metric means, so a green
-# certified under different bounds is not evidence about this scorer.
+# This file is FROZEN core, so editing the range changes the core hash and invalidates the recorded
+# correctness-suite green. That is intended: the range is part of what the metric means, so a green
+# certified under a different range is not evidence about this scorer.
 PLAUSIBILITY_BOUNDS = {{PLAUSIBILITY_BOUNDS}}   # (low, high); None on a side = unbounded there
 
 
 def implausible(score: float) -> str:
-    """"" if `score` is physically possible for this metric, else the reason it is not.
+    """"" if `score` is inside this metric's plausible range, else the reason it is not.
 
-    A violation is a bug, not a bad result: the scorer, the data or the pipeline is wrong, and no
-    interpretation of the number is worth making until that is found.
+    A violation is a probable bug, not a bad result: the scorer, the data or the pipeline is likely
+    wrong, and no interpretation of the number is worth making until that is ruled out.
     """
     if not PLAUSIBILITY_BOUNDS:
         return ""
     low, high = PLAUSIBILITY_BOUNDS
     if low is not None and score < low:
-        return f"{score:.6g} is below the hard lower bound {low:g}"
+        return f"{score:.6g} is below the plausible range's lower end {low:g}"
     if high is not None and score > high:
-        return f"{score:.6g} is above the hard upper bound {high:g}"
+        return f"{score:.6g} is above the plausible range's upper end {high:g}"
     return ""
 
 
@@ -104,11 +107,17 @@ def selftest() -> None:
 
     # 1. Perfect prediction is optimal (direction-aware: set by PRIMARY_DIRECTION above).
     s_scrambled = compute_metric(scrambled, target)
-    # Bounds that exclude the scorer's own perfect case are wrong bounds, and they would flag every
-    # experiment forever. Cheapest possible place to catch that: here, before experiment 000.
-    bad = implausible(s_perfect)
-    assert not bad, (f"PLAUSIBILITY_BOUNDS excludes the metric's own perfect case ({bad}). The bounds "
-                     "contradict the scorer; fix whichever is wrong before running anything.")
+    # A range whose WORSE end excludes the scorer's own perfect case contradicts the scorer and would
+    # flag every good experiment forever. Cheapest possible place to catch that: here, before experiment
+    # 000. The BETTER end may exclude it on purpose (e.g. an RMSE floor at the measurement noise: a score
+    # below it points at leakage).
+    if PLAUSIBILITY_BOUNDS:
+        low, high = PLAUSIBILITY_BOUNDS
+        worse_end = low if HIGHER_IS_BETTER else high
+        beyond = worse_end is not None and (s_perfect < worse_end if HIGHER_IS_BETTER else s_perfect > worse_end)
+        assert not beyond, (f"PLAUSIBILITY_BOUNDS' worse end {worse_end:g} excludes the metric's own "
+                            f"perfect case ({s_perfect:g}). The range contradicts the scorer; fix "
+                            "whichever is wrong before running anything.")
     assert _better(s_perfect, s_scrambled), (
         "perfect prediction did not score better than a scrambled one "
         f"(perfect={s_perfect}, scrambled={s_scrambled}) — check the sign/convention"

@@ -9,6 +9,87 @@ Dates are UTC. Each entry cites the run/finding that motivated it (the kit's own
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-09-29
+
+Three changes to how a campaign is set up and judged, shipped together: a worker that disputes a gate
+outcome contests it to an independent verifier (CG-1); the per-experiment prediction is retired for a
+plausible range the user signs off once at setup (PL-1, ADR-0032); and the setup agent may reshape the
+templates, with `[[KEEP]]` tags on what code reads and every new worker-binding rule taken to the user
+(SL-1, ADR-0033). An existing campaign upgrades with `upgrade_campaign.py`; see MIGRATING.
+
+### Changed — the templates are a starting point; what code reads is tagged `[[KEEP]]`; new worker-binding rules need the user's yes (`skills/new-campaign`, `skills/new-project`, `templates/PLACEHOLDERS.md`, the campaign and project templates, `validate_campaign.py`, `upgrade_campaign.py`; ADR-0033)
+
+Niko (2026-09-29): "each problem is unique and may require a specialized approach" - the templates are
+"inspiration and a good starting point", and the setup agent may drop sections or change how the campaign
+works; but it "doesn't know more than the workers do", so any additional constraint or rule goes to the user.
+- **`new-campaign` leads with the stance**: reshape freely; fixed are what code reads, the frozen integrity
+  core, and nothing new binding workers without the user's yes. The kit machinery is proposed, never edited.
+- **The Step 2 spec ends with *the adaptations*** (dropped/restructured sections, changed procedure); each new
+  rule on workers is asked by name; the steering audit covers every line added beyond the templates.
+- **`[[KEEP — <reason>]]` tag lines** mark each element code reads (22, across the campaign and project
+  templates) and the integrity core; the setup agent deletes them; the validator refuses a leftover; the
+  upgrade's render strips them.
+
+### Changed — the per-experiment prediction is retired; the metric's plausible range is set once at setup (`templates/campaign/scripts/run_campaign.py.tmpl`, `metric.py.tmpl`, `codex_verifier.py.tmpl`, `experiment.py.tmpl`, `loop_heartbeat.py.tmpl`, `roles/worker.md.tmpl`, `roles/verifier.md.tmpl`, the campaign `campaign.md`/`CLAUDE.md`/`README.md`/`configs`/`results` templates, `PLACEHOLDERS.md`, `skills/new-campaign` (+ `validate_campaign.py`, `upgrade_campaign.py`), `skills/campaign-status`, `docs/reference/verification-presets.md`, `DOCTRINE_INDEX`, `GETTING_STARTED`, `MIGRATING`; ADR-0032)
+
+Niko (2026-09-28): workers' per-unit a-priori ranges were "frequently wrong ... it does waste time", and
+writing them "might deter agents from testing things they don't understand as well"; the intent was a range
+"defined once at setup" - "a cheap test to flag things that are coded incorrectly, not a test of prediction
+skill". A user re-decision of ADR-0010's prediction half.
+- **Removed:** `predictions/<exp>.json`, the prediction (spend) gate, `campaign.prediction_mode` /
+  `prediction_mode_reason` (a stale key is ignored), the logbook's *Predicted* / *Expected vs found* lines,
+  `checks.prediction`, `predictions/` in the verifier's evidence.
+- **The plausible range** - `metric.PLAUSIBILITY_BOUNDS` (FROZEN; prose twin in `campaign.md`) - is proposed
+  at setup (default: the perfect score to a trivial predictor's score on the evaluation data; the setup agent
+  may suggest a better basis), computed rather than guessed, and presented for the user's sign-off with its
+  consequence. A score outside it is `checks.plausible_range: fail` (was `hard_bounds`): a RED FLAG, a
+  *Plausible range: FLAGGED* logbook line, the ledger's `plausible` cell - never a block. At `minimal` and
+  `light` it is the `out-of-range` self-verify trigger, so those presets self-verify rarely; a contest (CG-1)
+  remains the route to an independent check.
+- **The scorer self-test** refuses only a range whose worse end excludes the perfect case; the better end may
+  exclude it on purpose (a noise floor, below which a score points at leakage).
+- **Zero-evaluation units** name their commitment in the config's `_deliverable`; the deliverable gate
+  refuses without it; `checks.deliverable_named` records it.
+- **Upgrade:** `upgrade_campaign.py` inserts the `plausible` ledger column (an older `expected_vs_found`
+  column is kept as prediction history) and backfills it from `plausible_range` / `hard_bounds`;
+  `validate_campaign.py` notes a scorer with `PLAUSIBILITY_BOUNDS = None`. See MIGRATING.
+
+### Added — a contested gate outcome is decided by an independent verifier, never by the worker (`templates/campaign/scripts/run_campaign.py.tmpl`, `guard_promotion.py.tmpl`, `roles/worker.md.tmpl`, `roles/verifier.md.tmpl`, `roles/REFERENCE.md.tmpl`, the campaign `CLAUDE.md`/`campaign.md`, `docs/reference/verification-presets.md`, `skills/verify`, `claim-audit`, `campaign-status`)
+
+The V_B⁻ level-structure test campaign (`E:\vbtest_f51m_chain`, 2026-09-28, Fable 5.1 medium, preset
+`minimal`): exp017 met every written promotion condition (in-sample −0.0035, held-out gate −0.39 against
+a measured fold noise of 0.004) and exp019 met them nominally, and both were set aside by the worker's
+own judgement, recorded as "refused", with no decision-record entry and no second opinion — the same
+context that produced the doubt confirmed it. The follow-up unit deleted the very edge the folds had
+chosen, and the campaign stopped 0.19 above the answer two earlier campaigns had found. Niko (2026-09-28):
+"if a worker disagrees with a result that is passing a gate, it can call verify rather than promoting.
+but if verify approves it then it goes on the record" — "ideally an independent verification".
+- **The record file's `contest` key** `{claim, disputes: pass|refusal, gate, evidence}`: the objection as a
+  falsifiable charge with the artifacts it rests on (each must exist under the campaign). The runner
+  refuses a doubt without a falsifier, a charge without evidence, a `self_verify` beside it (never twice),
+  and a re-run on a resolved contest. It files `results/contests/<stem>.json`, re-points the checks
+  artifact's `verification.owed` at the verifier (the preset's answer kept as `owed_by_preset`), and
+  writes the logbook's `Disputes & responses` line.
+- **The driver owes the independent check at once, under every preset** (`_route_checks`; a contest
+  supersedes a survivor wait). The verifier VALUES carry a `CONTEST` line (`_check_line`): the claim it
+  grades is the RECORDED OUTCOME, the charge is the first attack, the check is blinded — artifacts only,
+  never the landmine rows or the worker's reasoning. Both verifier paths (Claude nested, Codex
+  driver-direct) carry it.
+- **The recorded outcome stands unless the verdict is REFUTED** (`_contest_resolve`): a contested pass
+  that stands is promoted by the driver with the verdict's label (`_promote_pointer`, which applies the
+  guard's own suite / staleness / epoch bar before writing); an overturned pass is not promoted and carries
+  its refuted label; an overturned refusal returns to the next worker, who decides. Every outcome is an
+  inbox note (`results/inbox/contest_<stem>.md`) with the verifier's summary and follow-up, and the
+  contest file, the checks artifact and the logbook line are closed with it.
+- **The guard refuses a promotion write for a contested experiment while the contest is pending**
+  (`contest_problem`), so neither the filing worker nor the next one moves the pointer ahead of the verdict.
+- **The doctrine, threaded:** the promotion rule (a gate outcome is decided by the gate or by an
+  independent verifier, never by the worker's judgement; a set-aside without a contest is not written as
+  "refused"), HARD GATE 1, the worker role (§Recording a promotion: promote, or contest — never set aside),
+  the verifier role and the verify skill (how a contest is graded), REFERENCE, the presets reference (the
+  second exception to one check per result), `claim-audit` and `campaign-status` (a set-aside without a
+  contest, and an unresolved contest, are defects to name).
+
 ## [0.12.0] - 2026-09-27
 
 Everything since 0.11.1, shipped together because it changes how a campaign runs: the planner and its queue

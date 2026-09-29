@@ -46,8 +46,8 @@ atomically beside it. The scaffold validator checks the file and command, but ca
 The worker executes ONE experiment per spawn, following the numbered loop in
 [`roles/worker.md`](roles/worker.md). There is no queue and no planner: the worker chooses
 the one experiment the campaign needs now from the JOURNAL's `**NEXT:**` line and *What to try next and
-why*, the ledger's last rows and the previous card, then a-priori prediction *first* (the runner refuses
-to spend an evaluation without one), run, evaluate against the frozen metric, complete the ledgers,
+why*, the ledger's last rows and the previous card, then run, evaluate against the frozen metric (a
+score outside its plausible range is flagged as a probable implementation error), complete the ledgers,
 verify before any promotion. Its iteration contract makes every unit cold-resumable — the ledger is the
 loop's only memory, and the JOURNAL it leaves is where direction lives. When it judges the campaign's
 question answered, it writes `**NEXT:** STOP - <why>` and the driver runs the claim audit and halts.
@@ -69,7 +69,6 @@ its **concierge** (the `run-campaign` skill): launch, watch, steer through notes
 | `../../PROJECT.md` | everyone; §Standing constraints is injected into every spawn | background depth, on demand |
 | `results/JOURNAL.md` | the worker | every cycle (the working memory — NEXT, where we stand, hypotheses, what to try next, traps, open questions — is compiled whole into the prompt; the worker brings it up to date every unit) |
 | `results/scoreboard.tsv` · `results/logbook.md` | the runner writes both (the permanent record); the agent's slots and cells go through `--record`, and `--show <exp>` prints one entry | appended every experiment; the ledger's last rows are compiled into the prompt |
-| `predictions/<exp>.json` | the runner's spend gate; written by the worker BEFORE each solve | per experiment |
 | `results/driver_state.json` | the driver's counters (driver is its sole writer); no agent reads or writes it | per unit |
 | `results/inbox/` | notes relayed verbatim into the next spawn: the user's, and the verifier's follow-up after a REFUTED or INCONCLUSIVE verdict | per note |
 | `configs/loop.json` | the driver and its checks | at launch; hot-reloaded |

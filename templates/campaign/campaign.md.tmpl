@@ -10,6 +10,8 @@ statement in it — a landmine, a check to guard against, a range — carries it
 ledger id, a verdict, a literature key); a statement the setup could only guess at is not here but in
 the JOURNAL, marked as the setup's inference, where the worker who tests it may overturn it.
 
+[[KEEP — read by upgrade_campaign.py: the "Scaffolded by physkit <version>" stamp above, verbatim]]
+
 ## Mission
 {{MISSION_STATEMENT}} — by optimizing {{LEVER_SUMMARY}}, maximizing the single FROZEN metric
 `{{PRIMARY_METRIC}}` ({{PRIMARY_DIRECTION}} = better) on {{EVAL_TARGET}}, with
@@ -19,19 +21,19 @@ the ways HARD GATE 5 in `CLAUDE.md` sets out.
 - **Done looks like:** {{DONE_CRITERIA}}
 
 ## The ONE metric (FROZEN — revised only as a declared epoch, never edited in place)
+[[KEEP — read by run_campaign.py: a heading starting "The ONE metric"; its body is all the verifier sees of this file]]
 `{{PRIMARY_METRIC}}` = {{METRIC_DEFINITION}}. {{PRIMARY_DIRECTION}} = better. Computed by
 `{{FROZEN_SCORER_PATH}}` (FROZEN). You change what FEEDS the metric, never how it is computed; a metric
 found wrong is a declared **metric epoch** (`roles/REFERENCE.md` §Metric epochs; the runner refuses to
 spend under a `metric_version` no epoch declares, `configs/loop.json` `campaign.metric_epochs`).
 **Epoch, not fork:** a wrong ruler over valid, re-scorable save-sets is an epoch; tainted artifacts are
 `fork-campaign`, a clean break with a fresh ledger.
-- **Hard bounds:** {{METRIC_HARD_BOUNDS}}.
 - **Physical bounds and scales:** {{PHYSICAL_BOUNDS_NOTES}}. A fitted parameter that runs to a
   non-physical value is a result about the model being wrong, not a free win.
-- **A-priori range, with its basis:** {{METRIC_PLAUSIBLE_RANGE}}. The basis is a source — a bound, the
-  floor, a published value ({{APRIORI_BOUND_NOTES}}) — never an expectation. The prediction each unit
-  writes before it runs is the control (`configs/loop.json` `campaign.prediction_mode`, here
-  `{{PREDICTION_MODE}}`; the spend gate prints the shape it wants).
+- **Plausible range (signed off at setup):** {{METRIC_PLAUSIBLE_RANGE}}. Basis: {{APRIORI_BOUND_NOTES}}.
+  Encoded as `PLAUSIBILITY_BOUNDS` in the FROZEN scorer — change one, change both. A score outside it is
+  FLAGGED as a probable implementation error (scorer, data or pipeline); it is a bug check, not a
+  prediction of how well anything will do.
 - **Baseline (exp 000):** {{BASELINE_DESCRIPTION}} → the floor to beat, measured at setup (§Decision
   record ED-000). Keep the **trivial/degenerate reference** scores (all-zeros / constant / mean / a
   trivial physical state) beside it: a result that loses to a trivial answer is not a win, and a
@@ -99,6 +101,7 @@ grepping the source:
 ]]
 
 ## Known landmines / Do-not-repeat
+[[KEEP — read by run_campaign.py and validate_campaign.py: the heading "## Known landmines" and its four-column table ending in `source`; a worker's landmine record is refused without them]]
 What is KNOWN to go wrong, each row with its source: the user, a unit of this campaign (its ledger id),
 a sibling campaign's record, a verdict. **A row without a source does not ship** — a guessed landmine
 steers a campaign away from a path nobody tested, and it cannot be argued with from inside a spawn.
@@ -163,6 +166,13 @@ the verdict, in `results/checks_<NN>.json`) — (2) does not materially worsen `
 (3) is no less parsimonious without justification, and (4) carries the honest label its checks earned
 — the pointer follows the true best at once, `configs/loop.json` `verify.preset` decides the one check
 each result gets, and a refuted result never promotes. {{PROMOTION_CONFIRM_RULE}}
+**A gate outcome is decided by the gate or by an independent verifier, never by the worker's judgement.**
+A worker that disputes an outcome — a pass it does not believe, a refusal it does not accept — files a
+`contest` in its record (the objection as a falsifiable charge, with the artifacts it rests on); the
+driver spawns an independent verifier for the charge whatever the preset, and the pointer waits. The
+recorded outcome stands unless the verdict is REFUTED; a contested pass that stands is promoted by the
+driver with the verdict's label. A set-aside without a contest is not a gate outcome and is not written
+as "refused".
 [[OPTIONAL — metric has ceilings:
 Distinguish **ceiling moves** (forward/registration/preprocessing raised the bound: real, physical)
 from **gap-to-ceiling moves** (a freer decoder closed the gap, often overfitting; check the guardrail).
@@ -203,6 +213,7 @@ PRIMARY = `{{PRIMARY_METRIC_COL}}`. Append-only, every cell runner-written; neit
 ---
 
 ## Decision record (append-only — record, not contract)
+[[KEEP — read by run_campaign.py: a heading starting "Decision record", which the worker brief leaves out]]
 Campaign-scoped decisions: why each non-obvious choice was made, the alternatives considered, the
 conditions it rests on, and the trigger that would reopen it (`record-decision` writes here; skip the
 obvious). The source-authority ledger from setup seeds the first entries — one per load-bearing fact

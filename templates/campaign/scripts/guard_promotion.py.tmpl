@@ -740,6 +740,40 @@ def verification_gate_problem(root: Path | None, ti) -> tuple:
     return (" | ".join(problems) if problems else None), needs_verdict, (relaxed and not needs_verdict)
 
 
+def contest_problem(root: Path | None, ti) -> str | None:
+    """Deny-reason while the promoted experiment's gate outcome is CONTESTED and undecided, else None.
+
+    A worker that disputes a gate outcome files results/contests/<stem>.json through `--record` and does
+    not decide it: the driver's independent verifier does, and the driver itself moves the pointer when a
+    contested pass stands (the runner's _contest_resolve). Until that verdict lands the pointer waits -
+    a promotion write for the contested experiment, by the worker that filed the contest or the next one,
+    is refused by name. A resolved contest no longer blocks: the label rule above decides."""
+    if root is None:
+        return None
+    cdir = root / "results" / "contests"
+    if not cdir.is_dir():
+        return None
+    ids = {_eid(t) for t in SUBJECT_RE.findall(_written_text(ti))}
+    if not ids:
+        return None
+    for p in sorted(cdir.glob("*.json")):
+        try:
+            c = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(c, dict):
+            continue
+        subjects = {_eid(p.stem), _eid(str(c.get("exp") or "")), _eid(str(c.get("exp_id") or ""))}
+        if not (subjects & ids):
+            continue
+        if str(c.get("status") or "pending") == "pending":
+            return (f"{p.stem}'s gate outcome ({c.get('disputes') or 'pass'}) is CONTESTED and undecided "
+                    f"(results/contests/{p.name}) - the pointer waits for the driver's independent verifier; "
+                    "the recorded outcome stands unless the verdict is REFUTED, and a contested pass that "
+                    "stands is promoted by the driver, not by a worker")
+    return None
+
+
 def scoreboard_promotion(ti) -> bool:
     """True if this write INTRODUCES a `CONFIRMED` / `NEW BEST` token into the scoreboard."""
     if "scoreboard" not in str(ti.get("file_path", "")).lower():
@@ -853,6 +887,10 @@ def main():
         row_reason = promotion_row_problem(root, ti)
         if row_reason:
             _deny("promotion gate: " + row_reason)
+            return
+        contest_reason = contest_problem(root, ti)
+        if contest_reason:
+            _deny("promotion gate: " + contest_reason)
             return
         if gate_reason:
             _deny("promotion gate: " + gate_reason)

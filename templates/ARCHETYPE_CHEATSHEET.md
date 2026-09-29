@@ -245,7 +245,7 @@ These are settled doctrine in the generic `campaign.md` and apply regardless of 
   metric epoch (new `metric_version`, verified, re-baselined).
 - **Exp 000 baseline gate** = the floor + an end-to-end pipeline/convention validation.
 - The **FROZEN / READ-ONLY / Mutable** code tripartition.
-- **A-priori metric bounding** (predict before you run; an out-of-range result is a flag, not a win).
+- **A plausible range for the metric**, set once at setup (a score outside it is a probable implementation error, not a win).
 - **Statistical vs systematic** error separation; **replicate with seeds/perturbations**.
 - **Independent adversarial verification** before any promotion or DISCOVERY.
 - **Minimally-sufficient** model/design; add a parameter only if it generalizes + is motivated +

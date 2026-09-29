@@ -40,7 +40,7 @@ TIER_ORDER = {"spawn": 0, "auto": 1, "named": 2}
 # change wording, this audit fails and one of the two has to move.
 DEFAULT_RULES = [
     # --- worker ---
-    {"name": "prediction-before-spend", "tokens": ["prediction"], "roles": ["worker"],
+    {"name": "a result outside the plausible range is settled first", "tokens": ["plausible range"], "roles": ["worker"],
      "tier": "spawn"},
     {"name": "the worker CHOOSES its unit (no queue)",
      "tokens": ["there is no queue"], "roles": ["worker"], "tier": "spawn"},

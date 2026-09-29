@@ -1,3 +1,4 @@
+# [[KEEP — read by run_campaign.py: the header row (the first non-# line), `exp_id` first; the kit's columns are written by name, so a dropped one loses its value silently; campaign columns are yours]]
 # scoreboard.tsv — the PERMANENT ledger for {{CAMPAIGN_TITLE}}. One row per experiment.
 # RULES: tab-separated; append-only in ROWS. Never delete or rename a column mid-campaign (it breaks
 #   comparability with earlier rows). Keep the PRIMARY column ({{PRIMARY_METRIC_COL}}) position stable.
@@ -5,7 +6,7 @@
 #   run-writer ({{EVAL_WRITER}}) to emit it. exp_id: 000 = baseline gate, 001 = first method, then 002,003,…;
 #   sub-runs 000a/000b; non-config probes prefixed `#`.
 # THE RUNNER WRITES EVERY CELL. The row lands when the experiment records; the NARRATIVE cells are stamped
-#   in place afterwards: `what` (the config's one-line `_comment`) and `expected_vs_found` at record time;
+#   in place afterwards: `what` (the config's one-line `_comment`) and `plausible` (inside / FLAGGED / no range) at record time;
 #   `verified` from the verdict artifact (the driver); `note` (optional, at most 200 chars, for what the
 #   numbers do not show) and `finding` (one line citing its verdict, when a result settles something) through
 #   `python scripts/run_campaign.py --record <exp> [--ledger-note "..."] [--finding "..."]`. Never edit this
@@ -20,4 +21,4 @@
 # `tier` = the run-length tier from campaign.md §{{RUN_NOUN}} Caps (Scout / Confirmation / Extended; `Baseline` for exp 000).
 #   Keep it on EVERY row so scout/confirmation cap-compliance stays machine-auditable — a real campaign lost
 #   its tier tag partway through and cap-compliance became unverifiable.
-exp_id	timestamp	metric_version	data_version	tier	what	{{LEVER_COLUMNS}}	{{PRIMARY_METRIC_COL}}	{{PRIMARY_SPREAD_COL}}	{{GUARDRAIL_COL}}	{{DIAGNOSTIC_COLUMNS}}	{{RUN_COLUMNS}}	expected_vs_found	verified	note	finding
+exp_id	timestamp	metric_version	data_version	tier	what	{{LEVER_COLUMNS}}	{{PRIMARY_METRIC_COL}}	{{PRIMARY_SPREAD_COL}}	{{GUARDRAIL_COL}}	{{DIAGNOSTIC_COLUMNS}}	{{RUN_COLUMNS}}	plausible	verified	note	finding

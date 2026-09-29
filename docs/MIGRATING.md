@@ -14,6 +14,65 @@ versions behind, work upward from the oldest section that matches your tree.
 > `python` is correct on macOS and Linux. Every command in this file works either way with that
 > substitution.
 
+## To reshapeable templates — `[[KEEP]]` tags mark what code reads (kit ≥ v0.12.1, ADR-0033)
+
+Nothing to do for an existing campaign. The templates now carry `[[KEEP — …]]` tag lines that tell a setup
+agent what must survive a reshaped scaffold; `upgrade_campaign.py` strips them when it merges or creates a file
+from a template, and `validate_campaign.py` refuses a leftover one. A hand-copied template section must have
+its tag line deleted.
+
+## To the plausible range — the per-experiment prediction is retired; the range is set once at setup (kit ≥ v0.12.1)
+
+**What changed.** Workers no longer write `predictions/<exp>.json`, and the runner no longer refuses to
+spend without one: the prediction gate, `prediction_mode` / `prediction_mode_reason` (range · direction ·
+none) and the logbook's **Predicted** line are gone. A-priori magnitudes were often wrong, cost time, and
+deterred units the worker did not yet understand. What stays is the check the range was for: the
+metric's **plausible range**, fixed once at setup and signed off by the user, lives in the FROZEN
+`scripts/metric.py` as `PLAUSIBILITY_BOUNDS` (a sensible default: the perfect score at one end, a trivial
+predictor's score on the evaluation data at the other). A score outside it is FLAGGED — a probable
+implementation error in the scorer, the data or the pipeline — recorded, never blocking:
+`results/checks_<NN>.json` `plausible_range` (formerly `hard_bounds`), the logbook's **Plausible range**
+line (formerly **Expected vs found**), the ledger's `plausible` cell (formerly `expected_vs_found`). At
+`minimal` and `light`, the self-verify trigger is now a score outside the plausible range, so it fires
+rarely; the other route to a check is a contest. A zero-evaluation unit's commitment moves into its
+config: `"_deliverable": "<what will exist on disk afterwards that does not now>"`, refused by the
+deliverable gate when absent and recorded as `deliverable_named`. The `--self-check` artifact field
+`apriori` is now `plausible`.
+
+**Procedure.**
+1. Run `upgrade_campaign.py <campaign> --preset <its preset>` to replace the runner and merge the role
+   and contract text.
+2. **Set or confirm the plausible range with the user.** Open `scripts/metric.py`: if `PLAUSIBILITY_BOUNDS`
+   is absent or `None`, the check reports `unavailable` on every unit. Propose a range (compute the trivial
+   end on the evaluation data; do not guess), get the user's sign-off, and state it in `campaign.md` §The
+   ONE metric as one **Plausible range** line with its basis, replacing any **Hard bounds** / **A-priori
+   range** lines. `metric.py` is FROZEN core: the edit changes the core hash and invalidates the recorded
+   correctness-suite green, which is intended. A range written as "true by construction" under the old
+   rule is still valid; widen nothing to fit a result you have already seen.
+3. Give every zero-evaluation unit config (a `mode` in `ZERO_EVALUATION_MODES`) that will still run a
+   `_deliverable`.
+4. Nothing else is required. `predictions/` can stay as history (the runner ignores it);
+   `prediction_mode` / `prediction_mode_reason` in `configs/loop.json` are ignored and may be deleted.
+   Renaming the ledger header `expected_vs_found` → `plausible` is optional: the runner fills both names.
+
+## To contested gate outcomes — a worker's dispute goes to an independent verifier (kit ≥ v0.12.1)
+
+**What changed.** A worker that disagrees with the gate outcome recorded for its own result no longer
+sets it aside: it files a `contest` in the record file (`{claim, disputes: pass|refusal, gate, evidence}`),
+the driver spawns an independent, blinded verifier for the charge under every preset, the promotion guard
+refuses a pointer write while the contest is pending, and the recorded outcome stands unless the verdict
+is REFUTED — a contested pass that stands is promoted by the driver with the verdict's label. The runner,
+the guard and the Codex verifier module carry the machinery; the roles and the contract carry the rule.
+
+**Procedure.** Run `upgrade_campaign.py <campaign> --preset <its preset>`: the runner, the Codex verifier
+and the guard are replaced or merged; `roles/worker.md`, `campaign.md` and `CLAUDE.md` merge the new
+text. Two files the upgrade does not rewrite when present: `roles/verifier.md` and `roles/REFERENCE.md`
+(created only when absent). The contest instructions reach the verifier through its VALUES regardless, so
+nothing breaks; to carry the rule's text too, copy the **A contest** paragraph from the kit's
+`templates/campaign/roles/verifier.md.tmpl` and the contest bullet from `roles/REFERENCE.md.tmpl` §Independent
+verification into the campaign's copies. Nothing in `results/` changes; `results/contests/` is created by
+the first contest.
+
 ## To one check per result — five presets, `heavy`, the survivor check (kit ≥ v0.12.0, ADR-0031)
 
 **What changed.** `verify.preset` is one of `none` · `minimal` (the default) · `light` · `heavy` ·

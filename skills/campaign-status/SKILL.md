@@ -136,8 +136,8 @@ Flag anything wrong; do not silently fix it.
 - **No orphaned result: every row has a written narrative and a graded verdict.** A `result_<NN>.json`
   (or scoreboard row) with no completed `logbook.md` entry and no graded outcome is an
   **orphan**. "Completed" means the Analysis and NEXT slots are non-blank and every failed check is
-  answered by name - never that the entry is long. The runner writes the other lines (Expected vs
-  found, Levers, Verification) and the ledger row; a three-line Analysis that answers its flags is a
+  answered by name - never that the entry is long. The runner writes the other lines (Plausible
+  range, Levers, Verification) and the ledger row; a three-line Analysis that answers its flags is a
   complete entry, a 2,000-word one that answers none is an orphan with prose. Results sitting on disk while their analysis and verdict were deferred are lost at a session
   boundary, and that is a recurring ledger leak. Flag every orphan to be completed now.
 - **Every mechanical check is answered, not just recorded.** Read every `results/checks_<NN>.json`.
@@ -173,22 +173,21 @@ Flag anything wrong; do not silently fix it.
 - **What the driver waited out.** `resource:` lines in the driver log are usage-limit deaths the
   driver relaunched instead of counting as failures; report their number and total wait.
 - **The campaign's declared properties still match what it is doing.** `configs/loop.json` `campaign`
-  records `prediction_mode` and `noise_model`. Both are setup-time decisions, so a change is a real
-  event: compare the current values against the `prediction_mode` / `noise_model` lines stamped in the
-  oldest and newest `results/snapshots/<exp>/manifest.txt`. If they differ mid-campaign, say so plainly
-  and name the experiments on each side — earlier and later rows were judged under different rules, and a
-  ranking across that boundary is not a ranking. Flag `prediction_mode: none` for a campaign whose answer
-  has since become boundable: the mode's honest use is an answer nobody can bound, not one nobody wants
-  to commit to.
+  records `noise_model`, a setup-time decision, so a change is a real event: compare the current value
+  against the `noise_model` line stamped in the oldest and newest `results/snapshots/<exp>/manifest.txt`.
+  If it differs mid-campaign, say so plainly and name the experiments on each side — earlier and later
+  rows were judged under different rules, and a ranking across that boundary is not a ranking.
+- **The plausible range is encoded, and its flags answered.** `scripts/metric.py` sets
+  `PLAUSIBILITY_BOUNDS` (a `None` means every `plausible_range` check reports `unavailable` — say so, and
+  that it is the user's to set). Every `plausible_range: fail` in `results/checks_<NN>.json` (a FLAGGED
+  ledger `plausible` cell) is a probable implementation error: report each, and whether its analysis
+  answered it by name.
 - **The enforcement layer is wired.** Assert all of it, loudly. An imported, hand-built, or relocated tree
   can lose the gates, leaving the doctrine unenforced. Check each:
   - `.claude/settings.json` exists and registers the promotion-guard PreToolUse hook
     (`guard_promotion.py`; `guard_discoveries.py` in a pre-V6 tree — lint-ok: names the retired hook
     on purpose);
   - the registered guard script is present and current (the verdict-artifact version);
-  - `predictions/` exists and every scoreboard row has its `predictions/<exp_name>.json` — report
-    coverage as n/N (the runner's spend gate makes new gaps impossible; a gap means the tree predates the
-    gate or bypassed the runner);
   - `results/verdicts/` exists and **every ledger `finding` cell cites a verdict artifact that resolves**
     (exists, CONFIRMED, named refuter; kill findings carry a graduating tier) — except a metric-epoch
     line (`metric epoch <version> opened …`), whose evidence is its `campaign.metric_epochs` entry.
@@ -231,7 +230,11 @@ Flag anything wrong; do not silently fix it.
   `self-refuted` — the driver should have rolled the pointer back); or its owed check has not landed
   (see the driver-state bullet above). A DISCOVERY still needs a CONFIRMED independent verdict — if one
   lacks it, recommend running `verify` on it now. The current-best also carries its metric epoch: its
-  `metric_version` is the campaign's current one, and that epoch is not rolled back.
+  `metric_version` is the campaign's current one, and that epoch is not rolled back. Two more hygiene
+  failures on this surface: a result whose checks artifact shows every promotion condition met, that never
+  became the pointer and has no `results/contests/<stem>.json` (a gate outcome set aside by judgement —
+  the worker should have contested it, not overruled it); and a contest still `pending` with no
+  `pending_verification` entry behind it (the driver never owed the verifier).
 - **The load-bearing upstream step is non-degenerate** (promotion check). Whatever transform feeds the
   current-best before the metric sees it — registration, pose fitting, normalization, resampling — validate
   the *transform* on the data it is applied to, not just the score it produces. A degenerate upstream step

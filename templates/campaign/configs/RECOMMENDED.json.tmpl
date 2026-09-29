@@ -1,5 +1,5 @@
 {
-  "_comment": "CURRENT-BEST pointer for {{CAMPAIGN_TITLE}}. This is a copy of the current best-performing config (see the scoreboard row it names). It follows the true best at once: update it whenever a result is a new best, carrying the label on its card in verification_label; the driver carries a later label in and rolls the pointer back if a check refutes it. Until the first promotion, it mirrors exp000 (the baseline).",
+  "_comment": "CURRENT-BEST pointer for {{CAMPAIGN_TITLE}}. This is a copy of the current best-performing config (see the scoreboard row it names). It follows the true best at once: update it whenever a result is a new best, carrying the label on its card in verification_label; the driver carries a later label in and rolls the pointer back if a check refutes it. A result whose gate outcome you CONTESTED (--record contest) is the exception: the guard refuses the write while the contest is pending, and the driver moves the pointer itself if the pass stands. Until the first promotion, it mirrors exp000 (the baseline).",
   "verification_label": "unverified",
   "_promoted_from": "exp{{NN}}_{{SLUG}}",
   "_scoreboard_row": "{{PRIMARY_METRIC}} = {{BASELINE_VALUE}} (baseline until first promotion)",

@@ -122,7 +122,6 @@ def _evidence_problem(root: Path, entry: dict, exp_id_for) -> str:
     except (OSError, ValueError):
         return f"config path escapes the campaign: {rel}"
     required = ((config_path, "exp_name"),
-                (root / "predictions" / f"{stem}.json", "exp_name"),
                 (root / "results" / f"result_{eid}.json", "exp_name"),
                 (root / "results" / f"checks_{eid}.json", "exp_name"))
     for path, field in required:

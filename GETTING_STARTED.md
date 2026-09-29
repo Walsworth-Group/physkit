@@ -177,8 +177,8 @@ your-project/
     configs/
       _template.json      copy this per experiment
       exp000_*.json …     one config per experiment   ·   RECOMMENDED.json  the current-best config
-      loop.json           the driver's knobs + the campaign properties every check branches on —
-                          prediction mode, noise model, comparability tags, metric_revision (who
+      loop.json           the driver's knobs + the campaign properties the checks branch on —
+                          noise model, comparability tags, metric_revision (who
                           may revise the FROZEN metric: cautious asks you first; autonomous enacts a
                           verified revision as a pending epoch for you to ratify), and verify.preset
                           (how much verification the campaign buys, and of what kind: none · minimal
@@ -186,8 +186,6 @@ your-project/
                           revised its metric also carries metric_epochs here — one entry per
                           metric_version with its evidence and standing; a scorer change no epoch
                           declares refuses to run
-    predictions/          one per experiment, written BEFORE the solve — the runner refuses to spend
-                          an experiment without it
     results/
       scoreboard.tsv      the numbers and the one-line timeline (one row per experiment; a settled
                           fact is its row's verdict-cited `finding` cell) — every cell runner-written

@@ -15,6 +15,12 @@ filled by that skill and documented by it, not here.
   lines, with the closing `]]` on its own line. See the delete-vs-keep rule below.
 - **`[PROPOSED]`** — an inline tag on a speculative or optional discipline. The setup skill presents these
   to the user to keep or cut; surviving ones lose the tag, and cut ones are deleted.
+- **`[[KEEP — <reason>]]`** — a line marking what must survive the fill: an element code reads (`read by
+  <consumer>: …` - a heading, key, column or line, spelled exactly) or the frozen integrity core. The setup
+  skill keeps the element and deletes the tag line. Everything unmarked is a starting point the setup agent
+  may reshape, or drop with the user's sign-off (new-campaign Step 2). The JSON configs and hook settings
+  carry no tags (JSON has no comments): treat them as machine config - change values, not keys; `_doc`
+  strings are free text.
 - **`.tmpl` suffix** — marks a file that contains placeholders. Stripped on generation
   (`campaign.md.tmpl` → `campaign.md`).
 - **`<NN>`, `<slug>`, `<label>`, `<G>`** in prose or example text are literal illustrative placeholders
@@ -30,9 +36,9 @@ filled by that skill and documented by it, not here.
   guardrail stays in the Decision Metrics section marked `(DEFERRED — wired after <milestone>)`.
 - **Rule of thumb:** part of the universal discipline (metric integrity, verification, FROZEN rules,
   logging) means keep-with-note; a domain feature that is not present means delete the optional block.
-- **Hard requirement:** a generated file containing any literal `{{...}}`, any unresolved `[[OPTIONAL`, or
-  any leftover `[PROPOSED]` the user did not rule on is an error. The setup skill must scan every
-  generated file and fail loudly if one remains.
+- **Hard requirement:** a generated file containing any literal `{{...}}`, any unresolved `[[OPTIONAL`, any
+  leftover `[[KEEP` tag, or any leftover `[PROPOSED]` the user did not rule on is an error. The setup skill
+  must scan every generated file and fail loudly if one remains.
 
 ## Filling guidance
 - Pick the closest archetype from `ARCHETYPE_CHEATSHEET.md` first; it names the typical metric, levers,
@@ -71,9 +77,8 @@ filled by that skill and documented by it, not here.
 | `{{PRIMARY_DIRECTION}}` | "higher" or "lower". |
 | `{{METRIC_DEFINITION}}` | The precise definition (in words + units). |
 | `{{FROZEN_SCORER_PATH}}` | Path to the FROZEN file that computes the metric. |
-| `{{METRIC_HARD_BOUNDS}}` | Mathematical bounds (e.g. "≤ 1 by construction; ∈ [−∞, 1]"). |
-| `{{PLAUSIBILITY_BOUNDS}}` | The same bounds as a Python literal for `scripts/metric.py`: `(low, high)` with `None` on an unbounded side (`(None, 1.0)` for the example above), or `None` if this campaign encodes none. **A literal, not prose**: a fallback string here is a syntax error in FROZEN core. Encode only what is true by construction; the range you expect is the a-priori prediction and lives in `predictions/`. |
-| `{{METRIC_PLAUSIBLE_RANGE}}` | The a-priori range, with its basis - a bound, the measured floor, a published value; never an expectation. |
+| `{{METRIC_PLAUSIBLE_RANGE}}` | The metric's PLAUSIBLE RANGE in prose, signed off by the user at setup (e.g. "RMSE in [0, 0.84 A/m²]: perfect to all-zeros"). A cheap implementation-error check, not a prediction: a score outside it is flagged. Its basis is `{{APRIORI_BOUND_NOTES}}`. |
+| `{{PLAUSIBILITY_BOUNDS}}` | The same range as a Python literal for `scripts/metric.py`: `(low, high)` with `None` on an unbounded side (`(0.0, 0.84)` for the example above), or `None` if this campaign encodes none. **A literal, not prose**: a fallback string here is a syntax error in FROZEN core. |
 | `{{BASELINE_DESCRIPTION}}` | What exp 000 is and its expected value. |
 | `{{BASELINE_VALUE}}` | The baseline metric value (the floor). |
 | `{{BASELINE_COMMAND}}` | Command to run exp 000. |
@@ -127,7 +132,7 @@ filled by that skill and documented by it, not here.
 | `{{VERIFY_SKILL}}` | The verify skill to invoke (e.g. `/physkit:verify`). |
 | `{{PHYSKIT_VERSION}}` | The kit-version pin, `vX.Y.Z (<ref>, YYYY-MM-DD)`: version from the active harness manifest under the PhysKit package root (`.codex-plugin/plugin.json` on Codex or `.claude-plugin/plugin.json` on Claude; require equality when both exist), `<ref>` from `git -C "<resolved PhysKit package root>" rev-parse --short HEAD` where that root is a Git checkout (omit otherwise), plus the scaffold date. Appears in `campaign.md`'s header and atop `results/logbook.md` — the campaign's doctrine and tooling provenance (every release is tagged, so the pin recovers the whole kit). A record: never updated to a newer version. |
 | `{{VERIFY_EXTRA_CHECKS}}` | Archetype-specific extra checks the verifier must do, as a clause fragment appended to "checks for metric contamination" (e.g. ", recomputes the ceilings, and checks the ceiling-vs-gap trap"). Do not repeat "metric contamination". |
-| `{{APRIORI_BOUND_NOTES}}` | campaign.md §The ONE metric: the source the a-priori range is argued from (how the bound is computed, or the reference it is taken from). |
+| `{{APRIORI_BOUND_NOTES}}` | campaign.md §The ONE metric: the basis of the plausible range — how each end was computed (e.g. the trivial predictor's score on the evaluation data) or the reference it is taken from. |
 | `{{PHYSICAL_BOUNDS_NOTES}}` | campaign.md §The ONE metric: the physical bounds/scales of key quantities. |
 | `{{SIM_GAP_NOTE}}` | The sim-to-experiment gap specific to this campaign. |
 
@@ -149,7 +154,7 @@ filled by that skill and documented by it, not here.
 ### Logging & scoreboard
 | Placeholder | Meaning |
 |---|---|
-| `{{SCOREBOARD_COLUMN_LIST}}` | The full scoreboard schema string (in campaign.md), including the runner-written narrative columns `what` · `expected_vs_found` · `verified` · `note` · `finding`. |
+| `{{SCOREBOARD_COLUMN_LIST}}` | The full scoreboard schema string (in campaign.md), including the runner-written narrative columns `what` · `plausible` · `verified` · `note` · `finding`. |
 | `{{PRIMARY_METRIC_COL}}` | The scoreboard column holding the primary metric. |
 | `{{PRIMARY_SPREAD_COL}}` | The column holding the replicate spread. |
 | `{{GUARDRAIL_COL}}` | The column holding the guardrail value. |
@@ -265,17 +270,14 @@ contract. There is no separate planning doc: `campaign.md` is drafted, user-edit
 | `{{KNOWN_ARTIFACTS}}` | campaign.md §Verification: known artifacts / failure modes to guard against, each with its source (see alias note); a suspected one goes to the JOURNAL as `[setup inference]`. |
 
 ### Campaign properties (configs/loop.json `"campaign"` — what kind of campaign this is)
-Two setup-time declarations that every mechanical check branches on, plus their numeric companions. Both
-are decisions rather than defaults to accept quietly: ask them, and record the answer's reason where the
-schema asks for one. `prediction_mode` governs what the runner's SPEND gate accepts as a prediction;
-`noise_model` governs whether a win is judged against a replicate spread or a numerical tolerance. Getting
-either wrong is silent: a stochastic campaign mislabelled deterministic promotes noise,
+A setup-time declaration the comparison checks branch on, plus its numeric companions and the
+comparability tags. It is a decision rather than a default to accept quietly: ask it. `noise_model`
+governs whether a win is judged against a replicate spread or a numerical tolerance. Getting it wrong is
+silent: a stochastic campaign mislabelled deterministic promotes noise,
 and a deterministic one mislabelled stochastic is held to a spread test it can never satisfy.
 
 | Placeholder | Meaning |
 |---|---|
-| `{{PREDICTION_MODE}}` | `range` (default — a falsifiable numeric `[low, high]`, the strongest control) / `direction` (which way versus a named prior experiment, and why: no number, still checkable) / `none` (no bound; requires `{{PREDICTION_MODE_REASON}}`). Never pick `none` to avoid an awkward prediction. A fabricated range is a fake control, and so is a mode chosen for convenience. |
-| `{{PREDICTION_MODE_REASON}}` | Why this campaign cannot honestly bound its answer. **Required and non-empty when `{{PREDICTION_MODE}}` is `none`** (the runner refuses to launch otherwise); empty string in the other modes. |
 | `{{NOISE_MODEL}}` | `stochastic` (default — repeated runs differ, so a win must clear the replicate spread) / `deterministic` (repeated runs are identical, so the test is a numerical tolerance). Decide it by re-running one experiment twice, not from intuition about the method. |
 | `{{NOISE_FLOOR}}` | JSON **number or `null`**: the once-estimated replicate spread for a stochastic campaign (`verify` §Clear the noise floor), re-estimated only when something that could move it changes. `null` means not yet estimated, which makes the noise-floor check report `unavailable` rather than silently pass. |
 | `{{METRIC_TOLERANCE}}` | JSON **number or `null`**: the numerical equality tolerance for a deterministic campaign. `null` means not yet set, and the check reports `unavailable`. |
@@ -307,10 +309,10 @@ Set from the campaign's unit cost during the interview.
 | `{{METRIC_REVISION}}` | The metric-revision dial — `cautious` (the default: a metric revision raises ESCALATE and waits) or `autonomous` (the loop may enact a verified revision as a pending epoch and continue). Asked in the same interview step as the preset (topic 8b). Rendered into `configs/loop.json` `campaign.metric_revision`. |
 
 > **Alias note (near-synonyms across docs).** A few tokens name the same quantity in different docs; fill
-> them consistently. The a-priori bound appears as `{{APRIORI_BOUND}}` (PROJECT.md §Standing constraints),
-> `{{APRIORI_BOUND_NOTES}}` and `{{METRIC_PLAUSIBLE_RANGE}}` (both campaign.md §The ONE metric).
-> The metric's hard bounds appear as `{{METRIC_HARD_BOUNDS}}` (campaign.md) and `{{PLAUSIBILITY_BOUNDS}}`
-> (the executable form of those same bounds, in the FROZEN scorer): fill both from one answer, and if you
-> change one, change both. The domain gotchas appear as `{{KNOWN_ARTIFACTS}}` (campaign.md §Verification —
-> what a *check* must guard against) and `{{KNOWN_GOTCHAS}}` (PROJECT.md §Standing constraints —
+> them consistently. The metric's plausible range appears as `{{METRIC_PLAUSIBLE_RANGE}}` with its basis
+> `{{APRIORI_BOUND_NOTES}}` (campaign.md) and `{{PLAUSIBILITY_BOUNDS}}` (its executable form, in the FROZEN
+> scorer): fill both from one signed-off answer, and if you change one, change both. PROJECT.md's
+> `{{APRIORI_BOUND}}` (the a-priori bound on the physical answer) may inform it but is not the same token.
+> The domain gotchas appear as `{{KNOWN_ARTIFACTS}}` (campaign.md §Verification — what a *check* must
+> guard against) and `{{KNOWN_GOTCHAS}}` (PROJECT.md §Standing constraints —
 > the project-wide symptom → check catalog). The split is intentional; keep the paired values in sync.

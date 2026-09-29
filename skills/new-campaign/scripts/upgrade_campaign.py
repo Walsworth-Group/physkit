@@ -184,7 +184,13 @@ def recover_values(campaign: Path) -> dict:
     return vals
 
 
+# A template's [[KEEP — ...]] tag lines tell a setup agent what code reads; they are deleted at scaffold time,
+# so a campaign never carries them and an upgrade must not merge them in (the validator refuses a leftover).
+KEEP_LINE = re.compile(r"(?m)^(?:# )?\[\[KEEP[^\n]*\]\]\r?\n")
+
+
 def render(text: str, vals: dict) -> str:
+    text = KEEP_LINE.sub("", text)
     return re.sub(r"\{\{([A-Z0-9_]+)\}\}", lambda m: vals.get(m.group(1), m.group(0)), text)
 
 
@@ -479,8 +485,10 @@ JOURNAL_SECTIONS = ("Where we stand", "Live hypotheses", "What to try next and w
 def ledger_columns(campaign: Path, log: list, dry: bool) -> None:
     """results/scoreboard.tsv gains the runner-written narrative columns: `description` -> `what`,
     `notes` -> `note` (an essay in a note cell is trimmed to the cap with a marker - the full text is the
-    logbook entry), `expected_vs_found` before `verified`, `finding` last. Rows are padded; every other
-    byte kept; a backup beside the file. A header that already has the columns is left alone."""
+    logbook entry), `plausible` before `verified`, `finding` last. Rows are padded; every other byte kept;
+    a backup beside the file. A header that already has the columns is left alone. An older
+    `expected_vs_found` column is kept as it is: it holds the retired per-experiment prediction's
+    verdicts, which are history, not plausible-range verdicts."""
     p = campaign / "results" / "scoreboard.tsv"
     if not p.is_file():
         return
@@ -494,10 +502,10 @@ def ledger_columns(campaign: Path, log: list, dry: bool) -> None:
     new_cols = [LEDGER_RENAME.get(c, c) for c in cols]
     renamed = [f"{c} -> {LEDGER_RENAME[c]}" for c in cols if c in LEDGER_RENAME]
     added = []
-    if "expected_vs_found" not in new_cols:
+    if "plausible" not in new_cols:
         at = new_cols.index("verified") if "verified" in new_cols else len(new_cols)
-        new_cols.insert(at, "expected_vs_found")
-        added.append("expected_vs_found")
+        new_cols.insert(at, "plausible")
+        added.append("plausible")
     for c in ("verified", "note", "finding"):
         if c not in new_cols:
             new_cols.append(c)
@@ -522,8 +530,8 @@ def ledger_columns(campaign: Path, log: list, dry: bool) -> None:
             if c == "note" and len(v) > NOTE_CAP:
                 v = v[:NOTE_CAP - 12].rstrip() + " [trimmed]"
                 trimmed += 1
-            if c == "expected_vs_found" and not v.strip():
-                v = _expected_vs_found_from_checks(campaign, cells[0].strip() if cells else "")
+            if c == "plausible" and not v.strip():
+                v = _plausible_from_checks(campaign, cells[0].strip() if cells else "")
             row.append(v)
         out.append("\t".join(row) + end)
     log.append("- results/scoreboard.tsv: narrative columns " + (f"renamed {', '.join(renamed)}; " if renamed else "")
@@ -536,20 +544,21 @@ def ledger_columns(campaign: Path, log: list, dry: bool) -> None:
             f.write("".join(out))
 
 
-def _expected_vs_found_from_checks(campaign: Path, exp_id: str) -> str:
-    """The expected-vs-found judgement for one row, read back from results/checks_<NN>.json (its
-    `checks.prediction` entry is the same judgement the runner writes into the logbook line and the
-    ledger cell), rendered the way the runner renders it; "" when the artifact or the entry is absent.
-    (Called by ledger_columns for a row whose new cell is empty; defined since v0.12.0 - the 0.11.1
-    upgrade called it without defining it, a NameError on the first empty cell.)"""
+def _plausible_from_checks(campaign: Path, exp_id: str) -> str:
+    """The plausible-range judgement for one row, read back from results/checks_<NN>.json (its
+    `checks.plausible_range` entry - `hard_bounds` in an artifact written before the rename - is the same
+    judgement the runner writes into the logbook line and the ledger cell), rendered the way the runner
+    renders it; "" when the artifact or the entry is absent. (Called by ledger_columns for a row whose new
+    cell is empty.)"""
     try:
         art = json.loads((campaign / "results" / f"checks_{exp_id}.json").read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
         return ""
-    pc = (art.get("checks") or {}).get("prediction") if isinstance(art, dict) else None
+    ck = (art.get("checks") or {}) if isinstance(art, dict) else {}
+    pc = ck.get("plausible_range") or ck.get("hard_bounds")
     if not isinstance(pc, dict):
         return ""
-    head = {"pass": "met - ", "fail": "MISSED - ", "unavailable": "no bound - "}.get(str(pc.get("status")), "")
+    head = {"pass": "inside - ", "fail": "FLAGGED - ", "unavailable": "no range - "}.get(str(pc.get("status")), "")
     return (head + str(pc.get("detail") or "")).strip()
 
 

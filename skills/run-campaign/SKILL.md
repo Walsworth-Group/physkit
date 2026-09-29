@@ -143,7 +143,10 @@ On request, or at a periodic check-in, read; never re-derive:
   checks the next worker runs first) and `pending_verification` (verifier checks the driver is still
   obtaining); a list that keeps growing means verification is failing while the loop runs — surface it;
 - `results/inbox/`: notes awaiting the next spawn — the user's, and the driver's own after a REFUTED or
-  INCONCLUSIVE verdict named a follow-up (`verifier_<exp>.md`).
+  INCONCLUSIVE verdict named a follow-up (`verifier_<exp>.md`), or after a worker's contest of its own
+  result's gate outcome was decided (`contest_<exp>.md`: the verdict, whether the driver promoted, the
+  follow-up). A `results/contests/<exp>.json` still `pending` with nothing in `pending_verification`
+  behind it is a fact to surface: the independent check the worker asked for never got owed.
 Report process facts in plain language ("worker on exp007, third unit this run; one unit failed
 operationally overnight, spawn timeout, the loop continued"). A `[supervise] campaign.metric_epochs:` or
 `campaign.metric_version:` line is a metric epoch opening or a ratification — relay it as such, with

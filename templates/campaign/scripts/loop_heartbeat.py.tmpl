@@ -322,7 +322,7 @@ def continuation_reason(exp_id, nxt, threads, blocks, rows_since):
             "supervisor driver is currently running. PREFERRED: hand the loop to the driver — launch it "
             "(/physkit:run-campaign, or `python scripts/run_campaign.py --supervise`) and let it spawn "
             f"fresh-context workers. Otherwise resume at step 1 of the Experiment Loop in roles/worker.md "
-            f"for exp {exp_id}: HYPOTHESIZE & PREDICT (write the expected value and range BEFORE running), "
+            f"for exp {exp_id}: CHOOSE the experiment, "
             "then run/evaluate/log/verify."
         )
     if nxt:

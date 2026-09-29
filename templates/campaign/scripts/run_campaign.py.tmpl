@@ -18,26 +18,23 @@ Every run MUST leave behind, for reproducibility:
        completes Analysis and NEXT afterward; the runner derives every other line)
 The campaign's OWN code - the experiment hooks and the optional seams - is scripts/experiment.py; this
 file is the kit's machinery and is never edited per campaign.
-    ·  results/checks_<NN>.json - the MECHANICAL checks for this experiment (prediction met, change vs
-       the incumbent, comparability, correctness-suite state, save-set), each pass / fail / unavailable
+    ·  results/checks_<NN>.json - the MECHANICAL checks for this experiment (inside the plausible range,
+       change vs the incumbent, comparability, correctness-suite state, save-set), each pass / fail /
+       unavailable
 A result is not "saved" until it has a scoreboard row, a result_<NN>.json, its figure, AND its snapshot.
 
 ARTIFACT GATES (enforced here, in code - hard gates are gates, not reminders):
-  * PREDICTION GATE (spend): a run refuses to start without predictions/<exp_name>.json, written BEFORE
-    the solve. WHAT it must carry is this campaign's prediction_mode (configs/loop.json "campaign"): a
-    falsifiable numeric range, a direction versus a named experiment, or - for a campaign that genuinely
-    cannot bound its answer - none, with a recorded reason. A solve with no written expectation at all is
-    a fishing trip in every mode.
+  * DELIVERABLE GATE (spend, zero-evaluation units only): a unit that records no score refuses to start
+    unless its config names, in `_deliverable`, what will exist on disk afterwards that does not now.
   * SAVE-SET GATE (record): the scoreboard row is appended ONLY after result_<NN>.json, the figure, and
     the snapshot all exist on disk (hard gate 4 as code).
   * MECHANICAL CHECKS (record): after the run, results/checks_<NN>.json records every check the runner
-    can make without an agent. It does not block - it makes what the runner already knew READABLE, which
-    the out-of-range flag previously was not (it was printed and dropped). A check this campaign cannot
-    supply the inputs for is recorded `unavailable` with what it NEEDS, never as a silent pass.
+    can make without an agent. It does not block - it makes what the runner already knew READABLE. The
+    first is the PLAUSIBLE RANGE (metric.PLAUSIBILITY_BOUNDS, fixed once at setup): a score outside it is
+    flagged as a probable implementation error. A check this campaign cannot supply the inputs for is
+    recorded `unavailable` with what it NEEDS, never as a silent pass.
 Gate violations refuse loudly. The PROMOTE-path gates fail closed; the record-path helpers fail open
-(a liveness or logging bug must never lose an experiment) - except the prediction gate, which is fail-
-CLOSED throughout, including on an unreadable file: a spend gate cannot certify a prediction it could
-not read, and proceeding would spend the evaluation the gate exists to protect. Promotion (current-best,
+(a liveness or logging bug must never lose an experiment). Promotion (current-best,
 scoreboard verdict tokens, the project ledger) is gated separately by scripts/guard_promotion.py on
 verdict artifacts in results/verdicts/.
 
@@ -89,8 +86,9 @@ FINDING_CAP = 300       # chars: the ledger's `finding` cell - one line that cit
 JOURNAL_SECTIONS = ("Where we stand", "Live hypotheses", "What to try next and why", "Traps and tooling",
                     "Open questions", "Anything else")   # results/JOURNAL.md: the working memory's parts
 KIT_VERSION = "{{PHYSKIT_VERSION}}"      # the kit this machinery came from (stamped in every snapshot manifest)
-PREDICTIONS = ROOT / "predictions"       # a-priori predictions, one JSON per experiment (spend gate)
 VERDICTS = RESULTS / "verdicts"          # verify-skill verdict artifacts (promotion gate reads these)
+CONTESTS = RESULTS / "contests"          # a worker's dispute of a gate outcome, one JSON per experiment (the guard reads these)
+CONTEST_DISPUTES = ("pass", "refusal")   # what a contest disputes: a gate the result passed, or a gate that refused it
 CORRECTNESS_STATE = RESULTS / "correctness_state.json"
 CHECKS = RESULTS                         # results/checks_<NN>.json - one mechanical verdict per experiment
 # Every campaign lives at <project>/campaigns/<slug>/ (no bare-campaign mode), so the project
@@ -286,7 +284,7 @@ def snapshot_experiment(cfg: dict, config_path: Path | None = None, props: dict 
     # stamping them here makes a mid-campaign flip visible in the frozen record instead of only in a
     # mutable file, which is the same reason core_hash is stamped beside them.
     prop_lines = "".join(f"{k}: {props.get(k)}\n" for k in
-                         ("prediction_mode", "noise_model", "noise_floor", "tolerance",
+                         ("noise_model", "noise_floor", "tolerance",
                           "metric_version", "data_version", "metric_revision") if k in props)
     vr = _verify_rows(_read_json(LOOPCFG, {}) or {})
     prop_lines += f"verify_preset: {vr['preset'] or vr['source']}\n"   # how much verification this ran under
@@ -313,127 +311,26 @@ def snapshot_experiment(cfg: dict, config_path: Path | None = None, props: dict 
     return dst
 
 
-def check_prediction_gate(cfg: dict, props: dict) -> dict:
-    """SPEND GATE: refuse to run without an a-priori prediction written BEFORE the solve.
+def check_deliverable_gate(cfg: dict) -> str | None:
+    """SPEND GATE for a ZERO-EVALUATION unit (its config `mode` is in experiment.py's
+    ZERO_EVALUATION_MODES): refuse to run unless the config names, in `_deliverable`, what will exist on
+    disk afterwards that does not exist now. A unit that records no number still owes a commitment it
+    can be held to; results/checks_<NN>.json records it under `deliverable_named`. A scored unit passes
+    through - its sanity check is the plausible range, judged after the run (check_plausible_range).
 
-    WHAT counts as a prediction is this campaign's `prediction_mode` (configs/loop.json, "campaign"),
-    because not every campaign can honestly bound its answer and a FABRICATED range is a fake control -
-    worse than an honest absence. The FILE is required in every mode; only the bound it must carry changes:
-
-        range      (default)  {"exp_name": "...", "predicted": {"low": <num>, "high": <num>},
-                              "rationale": "<why>"}
-        direction             {"exp_name": "...", "predicted": {"direction": "higher"|"lower"|"unchanged",
-                              "vs": "<exp_name>"|"baseline"}, "rationale": "<why>"}
-        none                  {"exp_name": "...", "rationale": "<why no bound is honest here>"}
-        (zero-evaluation)     {"exp_name": "...", "predicted": {"deliverable": "<what will exist on disk
-                              afterwards that does not exist now>"}, "rationale": "<why>"} - a unit whose
-                              config `mode` is in experiment.py's ZERO_EVALUATION_MODES records no score
-                              and is held to the deliverable it named, in every prediction_mode
-
-    Mode `none` relaxes the BOUND, never the requirement to write something down before spending - a solve
-    with no recorded expectation at all is a fishing trip in every mode (roles/worker.md, loop step 1).
-
-    FAIL-CLOSED, deliberately, and this is the one gate where that is right: every refusal below is a
-    VIOLATION (no file, no rationale, a bound that does not match the declared mode), and an unreadable
-    file is one too - a spend gate cannot certify a prediction it could not read, and proceeding would
-    spend the very evaluation this gate exists to protect. Each arm names its own cause instead of
-    collapsing into one "malformed" message, so a refusal says which rule was broken.
-
-    Whether the result actually MET this prediction is judged after the solve and recorded mechanically in
-    results/checks_<NN>.json - this gate controls SPEND, the checks artifact controls the RECORD.
+    FAIL-CLOSED: a missing or empty `_deliverable` refuses, because the run would spend effort with
+    nothing named to judge it against.
     """
-    mode = props.get("prediction_mode", "range")
-    zero = _zero_evaluation(cfg)
-    p = PREDICTIONS / f"{cfg['exp_name']}.json"
-    shapes = {
-        "range": '{"exp_name": "%s", "predicted": {"low": <num>, "high": <num>}, "rationale": "<why>"}',
-        "direction": ('{"exp_name": "%s", "predicted": {"direction": "higher|lower|unchanged", '
-                      '"vs": "<exp_name>|baseline"}, "rationale": "<why>"}'),
-        "none": '{"exp_name": "%s", "rationale": "<why no bound is honest here>"}',
-        "deliverable": ('{"exp_name": "%s", "predicted": {"deliverable": "<what will exist on disk afterwards '
-                        'that does not exist now>"}, "rationale": "<why>"}'),
-    }
-    shape = shapes["deliverable"] if zero else shapes.get(mode, shapes["range"])
-    if not p.is_file():
-        sys.exit(
-            f"PREDICTION GATE: {p} not found. Write the a-priori prediction BEFORE the run.\n"
-            + (f"  This unit records NO score (mode={cfg.get('mode')!r} is in experiment.py's "
-               "ZERO_EVALUATION_MODES), so the file must name its DELIVERABLE:\n" if zero else
-               f"  This campaign's prediction_mode is '{mode}', so the file must look like:\n")
-            + f"    {shape % cfg['exp_name']}\n"
-            "A solve without a written prediction is a fishing trip (roles/worker.md, loop step 1;\n"
-            "the rule is campaign.md, 'Bound expectations BEFORE you run')."
-        )
-    try:
-        pred = json.loads(p.read_text(encoding="utf-8-sig"))
-    except Exception as exc:
-        sys.exit(f"PREDICTION GATE: {p} could not be read as JSON ({exc}). Repair it - a spend gate "
-                 "cannot certify a prediction it cannot read.")
-    if not isinstance(pred, dict):
-        sys.exit(f"PREDICTION GATE: {p} parsed, but it is a {type(pred).__name__}, not a JSON object. "
-                 "It must be an object carrying at least a \"rationale\".")
-    expected_subject = str(cfg["exp_name"])
-    actual_subject = str(pred.get("exp_name", ""))
-    if actual_subject != expected_subject:
-        sys.exit(f"PREDICTION GATE: {p} has exp_name={actual_subject!r}; expected "
-                 f"{expected_subject!r}. Fix the pre-run artifact; do not relabel it after the solve.")
-    if not str(pred.get("rationale", "")).strip():
-        sys.exit(f"PREDICTION GATE: {p} has no non-empty \"rationale\". Every mode requires one: the "
-                 "reasoning IS the control, and a bound with no basis is a guess wearing a number.")
-    predicted = pred.get("predicted") or {}
-
-    if zero:
-        # A ZERO-EVALUATION unit bounds a DELIVERABLE, not a number. This relaxes the BOUND, never the
-        # requirement to write something down before the run, and it is keyed on the config's mode -
-        # which the campaign's validate_method must refuse to any config that fits, scores or spends.
-        # Demanding a numeric [low, high] from a unit that records no number would force a FABRICATED
-        # range, which this gate's own contract calls worse than none.
-        deliverable = str(predicted.get("deliverable") or "").strip()
-        if not deliverable:
-            sys.exit(f"PREDICTION GATE: {p} is for a ZERO-EVALUATION unit (mode={cfg.get('mode')!r}), so "
-                     "it must carry \"predicted\": {\"deliverable\": \"<what will exist on disk afterwards "
-                     "that does not exist now>\"}. That is the a-priori commitment a unit which records no "
-                     "number can still be held to; results/checks_<NN>.json judges the run against it.")
-        if predicted.get("low") is not None or predicted.get("high") is not None:
-            sys.exit(f"PREDICTION GATE: {p} carries a numeric range on a unit that records no "
-                     "{{PRIMARY_METRIC}}. Remove it: a bound on a number that will never exist is a fake "
-                     "control, and it could only ever be scored against null.")
-        print(f"prediction gate OK [deliverable]: {deliverable[:140]}")
-        return pred
-
-    if mode == "range":
-        try:
-            lo, hi = float(predicted["low"]), float(predicted["high"])
-        except Exception:
-            sys.exit(f"PREDICTION GATE: {p} carries no numeric \"predicted\": {{\"low\": ..., "
-                     f"\"high\": ...}} range, which prediction_mode 'range' requires. Either write one, "
-                     "or - if this campaign genuinely cannot bound the answer - set prediction_mode to "
-                     "'direction' or 'none' in configs/loop.json, with a recorded reason. Do NOT invent a "
-                     "range to satisfy this gate: a fabricated range is a fake control, which is worse "
-                     "than an honest absence.")
-        if not (np.isfinite(lo) and np.isfinite(hi) and lo < hi):
-            sys.exit(f"PREDICTION GATE: {p} is not falsifiable - require finite low < high. An unbounded "
-                     f"or inverted range gates nothing (got low={lo!r}, high={hi!r}).")
-        print(f"prediction gate OK [range]: {{PRIMARY_METRIC}} in [{lo:g}, {hi:g}] - "
-              f"{pred.get('rationale', '')[:100]}")
-    elif mode == "direction":
-        d = str(predicted.get("direction", "")).strip().lower()
-        vs = str(predicted.get("vs", "")).strip()
-        if d not in ("higher", "lower", "unchanged"):
-            sys.exit(f"PREDICTION GATE: {p} needs \"predicted\": {{\"direction\": "
-                     f"\"higher|lower|unchanged\", ...}}, which prediction_mode 'direction' requires "
-                     f"(got {d!r}).")
-        if not vs:
-            sys.exit(f"PREDICTION GATE: {p} needs \"predicted\": {{..., \"vs\": \"<exp_name>\"}} - "
-                     "the experiment this one is predicted to move AGAINST (or \"baseline\"). A "
-                     "direction with no reference point is not checkable, and an uncheckable prediction "
-                     "gates nothing.")
-        print(f"prediction gate OK [direction]: {{PRIMARY_METRIC}} {d} vs {vs} - "
-              f"{pred.get('rationale', '')[:100]}")
-    else:
-        print("prediction gate OK [none]: this campaign records no numeric bound - "
-              f"{pred.get('rationale', '')[:100]}")
-    return pred
+    if not _zero_evaluation(cfg):
+        return None
+    deliverable = str(cfg.get("_deliverable") or "").strip()
+    if not deliverable:
+        sys.exit(f"DELIVERABLE GATE: {cfg['exp_name']} is a ZERO-EVALUATION unit (mode={cfg.get('mode')!r} "
+                 "is in experiment.py's ZERO_EVALUATION_MODES), so its config must carry "
+                 "\"_deliverable\": \"<what will exist on disk afterwards that does not exist now>\". "
+                 "Add it BEFORE the run; a unit that records no number is held to what it named.")
+    print(f"deliverable gate OK: {deliverable[:140]}")
+    return deliverable
 
 
 def exp_id_for(label: str) -> str:
@@ -517,7 +414,7 @@ def _zero_evaluation(cfg: dict) -> bool:
     """Does this unit record NO score? True when the config's `mode` is one the campaign lists in
     experiment.py's ZERO_EVALUATION_MODES - a unit whose deliverable is a decision-record entry, a
     documented procedure, a corrected threshold, not a number. Its primary metric is null on disk
-    (never 0), the prediction gate asks for a deliverable, every numeric check reports `unavailable`,
+    (never 0), the deliverable gate asks its config for a `_deliverable`, every numeric check reports `unavailable`,
     and the row is never a comparand. The campaign's validate_method guards the mode: a real experiment
     wearing its name would skip the save-set, which is the hole this must not open."""
     modes = getattr(_exp(), "ZERO_EVALUATION_MODES", None) or ()
@@ -590,53 +487,40 @@ def append_scoreboard_row(row: dict) -> None:
         f.write("\t".join(str(row[c] if c in row else lowered.get(c.lower(), "")) for c in cols) + "\n")
 
 
-def _expected_vs_found(score: float, apriori: dict | None, props: dict, exp_id: str) -> str:
-    """One judgement, three readers: the checks artifact (`prediction`), the logbook line and the ledger
-    cell all carry this string, computed once from the same inputs so they can never disagree."""
+def _plausible_cell(score, cfg: dict) -> str:
+    """One judgement, three readers: the checks artifact (`plausible_range`, or `deliverable_named` for a
+    zero-evaluation unit), the logbook line and the ledger cell all carry this string, computed once from
+    the same inputs so they can never disagree."""
     try:
-        pc = check_prediction_outcome(score, apriori or {}, props, _prior_results(exp_id))
-        return ({"pass": "met - ", "fail": "MISSED - ", "unavailable": "no bound - "}
-                .get(pc.get("status"), "") + str(pc.get("detail", "")))
+        if score is None:
+            pc = check_deliverable(cfg)
+            tag = {"pass": "named - "}
+        else:
+            pc = check_plausible_range(score)
+            tag = {"pass": "inside - "}
+        tag.update({"fail": "FLAGGED - ", "unavailable": "no range - "})
+        return tag.get(pc.get("status"), "") + str(pc.get("detail", ""))
     except Exception as exc:                        # the narrative must never cost the experiment
         return f"(not computed: {type(exc).__name__}: {exc})"
 
 
 def append_logbook(cfg: dict, exp_id: str, label: str, score: float, diags: dict,
-                   apriori: dict | None = None, expected_vs_found: str | None = None) -> None:
+                   plausible: str | None = None) -> None:
     """Append this experiment's entry to the append-only logbook (results/logbook.md).
 
     The FACTS are filled automatically: metric, guardrail, artifact paths, the hypothesis and the levers
-    from the config, the prediction from the prediction artifact, the expected-vs-found judgement (the
-    SAME one results/checks_<NN>.json records under `prediction`, computed from the same inputs so the
-    two never disagree), and a Verification line that starts `pending` and is raised by the artifacts
-    (the self-check, then the verdict stamp). The agent owes two slots afterward: Analysis and NEXT.
-    Append-only: this never edits or reads the rest of the file.
+    from the config, the plausible-range judgement (the SAME one results/checks_<NN>.json records,
+    computed from the same inputs so the two never disagree), and a Verification line that starts
+    `pending` and is raised by the artifacts (the self-check, then the verdict stamp). The agent owes two
+    slots afterward: Analysis and NEXT. Append-only: this never edits or reads the rest of the file.
     """
-    if apriori:
-        # Mode-aware. A campaign that honestly declined to bound its answer must not have a bound-shaped
-        # "[None, None]" written into its permanent record on its behalf - that is the fabricated-control
-        # failure the modes exist to prevent, reappearing in the narrative instead of the gate.
-        rng = apriori.get("predicted") or {}
-        why = apriori.get("rationale", "")
-        src = f"(predictions/{cfg['exp_name']}.json)"
-        if rng.get("low") is not None and rng.get("high") is not None:
-            predicted_line = f"[{rng.get('low')}, {rng.get('high')}] - {why} {src}"
-        elif rng.get("direction"):
-            predicted_line = f"{rng.get('direction')} than {rng.get('vs', '?')} - {why} {src}"
-        elif rng.get("deliverable"):
-            predicted_line = f"deliverable - {str(rng.get('deliverable'))[:240]} - {why} {src}"
-        else:
-            predicted_line = f"no numeric bound (prediction_mode) - {why} {src}"
-    else:
-        predicted_line = "(missing - the prediction gate should have caught this)"
     props = _campaign_props()
     # The epoch label travels with the narrative too: the row's metric_version is what this result
     # means, and a later reader of the logbook must not have to cross-reference the scoreboard for it.
     mv = str(props.get("metric_version") or "")
-    # One judgement, two readers: the checks artifact for machines, this line for the narrative. The
-    # agent used to write this line by hand from the same two numbers; it is the runner's.
-    if expected_vs_found is None:
-        expected_vs_found = _expected_vs_found(score, apriori, props, exp_id)
+    # One judgement, two readers: the checks artifact for machines, this line for the narrative.
+    if plausible is None:
+        plausible = _plausible_cell(score, cfg)
     shown = "none (a zero-evaluation unit: no score is recorded)" if score is None else f"{score:.4f}"
     levers = cfg.get("_levers")
     levers_line = (", ".join(str(x) for x in levers) if isinstance(levers, list) and levers
@@ -646,12 +530,11 @@ def append_logbook(cfg: dict, exp_id: str, label: str, score: float, diags: dict
     entry = (
         f"\n## {exp_id} - {label} - {_utc_stamp()}\n"
         f"- **Hypothesis**: {cfg.get('_hypothesis', '(set _hypothesis in the config)')}\n"
-        f"- **Predicted**: {predicted_line}\n"
         f"- **Levers**: {levers_line}\n"
         f"- **Change**: {cfg.get('_comment', '')}\n"
         f"- **Result**: {{PRIMARY_METRIC}} = {shown}; {{GUARDRAIL_METRIC}} = {diags}"
         + (f" (metric epoch {mv})" if mv else "") + "\n"
-        f"- **Expected vs found**: {expected_vs_found}\n"
+        f"- **Plausible range**: {plausible}\n"
         f"- **Analysis**: \n"
         f"- **Verification**: pending - label unverified (results/checks_{exp_id}.json)\n"
         f"- **Excluded data**: none\n"
@@ -796,13 +679,13 @@ def _scoreboard_cell(exp_id: str, names: tuple) -> str | None:
 
 # The ledger's narrative columns, in the order the brief shows them; the second name is the older spelling.
 _PROJECTION_COLS = (("exp_id",), ("tier",), ("{{PRIMARY_METRIC}}", "{{PRIMARY_METRIC_COL}}"),
-                    ("what", "description"), ("expected_vs_found",), ("verified",), ("note", "notes"),
+                    ("what", "description"), ("plausible", "expected_vs_found"), ("verified",), ("note", "notes"),
                     ("finding",))
 
 
 def _ledger_projection(n_rows: int) -> tuple[str, int]:
     """The ledger's last n rows as a Markdown table of its NARRATIVE columns - id, tier, the primary
-    metric, what, expected vs found, label, note, finding - every cell clipped at BRIEF_CELL_CAP. This is
+    metric, what, plausible, label, note, finding - every cell clipped at BRIEF_CELL_CAP. This is
     the one-line-per-experiment timeline; the numeric columns stay on disk and a reader who needs them
     opens the row by id. Returns (text, rows dropped)."""
     try:
@@ -878,8 +761,8 @@ def _journal_updated_since(ts: float) -> bool:
 
 # ---- mechanical checks (results/checks_<NN>.json) -----------------------------------------------------
 # Every experiment gets one machine-readable verdict file, written with no agent involved. Its job is to
-# stop the runner discarding what it already knows: an out-of-range score sets a flag in the result JSON
-# and prints a RED FLAG, and without this artifact nothing downstream reads either one.
+# stop the runner discarding what it already knows: a score outside the plausible range prints a RED FLAG,
+# and without this artifact nothing downstream reads it.
 #
 # Three-valued on purpose. `pass` and `fail` are judgements; `unavailable` means this campaign has not
 # supplied what the check needs, and it carries a `needs` string naming what would supply it. A check
@@ -985,66 +868,16 @@ def _incumbent(priors: list[dict], props: dict | None = None) -> dict | None:
     return best
 
 
-def check_prediction_outcome(score: float, apriori: dict, props: dict, priors: list[dict]) -> dict:
-    """Did the result meet the prediction the spend gate accepted? Judged per prediction_mode."""
-    mode = props.get("prediction_mode", "range")
-    pred = (apriori or {}).get("predicted") or {}
-    if score is None:
-        # A ZERO-EVALUATION unit: its a-priori commitment is a DELIVERABLE - what will exist on disk
-        # afterwards - never a number, in every prediction_mode. It is held to having named it before
-        # the run; whether the deliverable is on disk is the campaign's check (campaign_checks
-        # receives the payload). A numeric bound smuggled in could only be scored against null.
-        deliverable = str(pred.get("deliverable") or "").strip()
-        if not deliverable:
-            return _check("fail", "this unit recorded no score and named no a-priori DELIVERABLE - there is "
-                                  "nothing it can be held to (the spend gate should have refused this run)",
-                          needs='predictions/<exp_name>.json with {"predicted": {"deliverable": "..."}}')
-        if pred.get("low") is not None or pred.get("high") is not None:
-            return _check("fail", "the prediction carries a numeric range on a unit that records no score - "
-                                  "a bound that could only be scored against null", predicted=pred)
-        return _check("pass", "deliverable named before the run: " + deliverable[:200],
-                      deliverable=deliverable)
-    if mode == "range":
-        try:
-            lo, hi = float(pred["low"]), float(pred["high"])
-        except (KeyError, TypeError, ValueError):
-            return _check("unavailable", "prediction_mode is 'range' but the prediction artifact carries "
-                                         "no numeric range (the gate should have refused this run)",
-                          needs="a well-formed predictions/<exp_name>.json")
-        inside = lo <= score <= hi
-        return _check("pass" if inside else "fail",
-                      f"{score:.6g} {'is inside' if inside else 'is OUTSIDE'} the predicted range "
-                      f"[{lo:g}, {hi:g}]"
-                      + ("" if inside else " - a bug or a discovery; explain it before moving on"),
-                      predicted={"low": lo, "high": hi}, observed=score)
-    if mode == "direction":
-        want = str(pred.get("direction", "")).strip().lower()
-        vs = str(pred.get("vs", "")).strip()
-        ref = next((r for r in priors if vs in (r["exp_name"], r["id"])), None)
-        if ref is None and vs.lower() == "baseline":
-            ref = next((r for r in priors if r["id"] == "000"), None)
-        if ref is None:
-            return _check("unavailable",
-                          f"the prediction is 'move {want} vs {vs}', but no results/result_*.json for "
-                          f"{vs} exists to compare against",
-                          needs=f"a completed experiment {vs} (or a corrected 'vs' in the prediction)")
-        delta = score - ref["score"]
-        # SAME selector as check_noise_floor: the resolution below which "higher" is not observable is a
-        # property of the campaign's noise model, not of whichever knob happens to be filled. `is None`,
-        # not `or` - a tolerance of exactly 0 is a legitimate declaration of bit-reproducibility.
-        eps = props.get("tolerance" if props.get("noise_model") == "deterministic" else "noise_floor")
-        eps = 0.0 if eps is None else eps
-        got = "unchanged" if abs(delta) <= eps else ("higher" if delta > 0 else "lower")
-        ok = (got == want)
-        return _check("pass" if ok else "fail",
-                      f"predicted {want} vs {ref['exp_name']}; observed {got} "
-                      f"(delta {delta:+.6g}, resolution {eps:g})",
-                      predicted={"direction": want, "vs": ref["exp_name"]}, observed=got, delta=delta)
-    return _check("unavailable",
-                  "this campaign records no a-priori bound (prediction_mode='none'): "
-                  + (props.get("prediction_mode_reason") or "no reason recorded"),
-                  needs="prediction_mode 'range' or 'direction' in configs/loop.json, if the answer has "
-                        "become boundable since setup")
+def check_deliverable(cfg: dict) -> dict:
+    """A ZERO-EVALUATION unit's commitment: the `_deliverable` its config named before the run (the
+    deliverable gate refuses a run without one). Whether the deliverable is on disk is the campaign's
+    check (campaign_checks receives the payload)."""
+    deliverable = str(cfg.get("_deliverable") or "").strip()
+    if not deliverable:
+        return _check("fail", "this unit recorded no score and its config names no _deliverable - there is "
+                              "nothing it can be held to (the deliverable gate should have refused this run)",
+                      needs='"_deliverable": "..." in configs/<exp_name>.json')
+    return _check("pass", "deliverable named before the run: " + deliverable[:200], deliverable=deliverable)
 
 
 def check_noise_floor(score: float, props: dict, incumbent: dict | None,
@@ -1330,33 +1163,33 @@ def check_levers(declared, changes: dict) -> dict:
                   declared=names, moved=moved)
 
 
-def check_hard_bounds(score: float) -> dict:
-    """Is the score physically possible at all? Reads metric.PLAUSIBILITY_BOUNDS, the encoded form of
-    the hard bounds campaign.md states in prose.
+def check_plausible_range(score: float) -> dict:
+    """Is the score inside the campaign's PLAUSIBLE RANGE - metric.PLAUSIBILITY_BOUNDS, fixed once at
+    setup and signed off by the user (typically the perfect score to the trivial-predictor score)? This
+    is a cheap implementation-error check, not a test of anyone's prediction: a score outside the range
+    points at the scorer, the data or the pipeline, and it triggers extra scrutiny.
 
     FLAGS rather than refuses, deliberately. Refusing would lose the artifact you need to DEBUG the
-    violation, and it would put quiet pressure on the next person to widen the bounds until their run
-    goes through - which is the fabricated-range failure wearing different clothes. A violation is
-    recorded loudly and the record is kept.
+    violation, and it would put quiet pressure on the next worker to widen the range until their run
+    goes through. A violation is recorded loudly and the record is kept.
     """
     if score is None:
         return _check("unavailable", "no score to bound - a zero-evaluation unit records null, and "
-                                     "'within the metric's hard bounds' has no meaning for null",
+                                     "'inside the plausible range' has no meaning for null",
                       needs="a unit that scores {{PRIMARY_METRIC}}")
     bounds = getattr(metric, "PLAUSIBILITY_BOUNDS", None)
     if not bounds:
         return _check("unavailable",
-                      "this campaign encodes no hard bounds, so 'physically possible' has no "
-                      "machine-readable meaning here",
-                      needs="metric.PLAUSIBILITY_BOUNDS in scripts/metric.py - encode only what is true "
-                            "BY CONSTRUCTION (a correlation cannot exceed 1), never the range you hope "
-                            "for; that is the a-priori prediction and it lives elsewhere")
+                      "this campaign encodes no plausible range, so a probable implementation error has "
+                      "no machine-readable meaning here",
+                      needs="metric.PLAUSIBILITY_BOUNDS in scripts/metric.py - the range set at setup "
+                            "(e.g. the perfect score to the score of a trivial predictor)")
     why = metric.implausible(float(score))
     if why:
-        return _check("fail", f"{why} - this is a BUG in the scorer, the data or the pipeline, not a "
-                              "disappointing result; no reading of this number is worth making until "
-                              "it is found", bounds=list(bounds))
-    return _check("pass", f"within the metric's hard bounds {tuple(bounds)}", bounds=list(bounds))
+        return _check("fail", f"{why} - outside the plausible range: probably an implementation error in "
+                              "the scorer, the data or the pipeline; find it before reading the number",
+                      bounds=list(bounds))
+    return _check("pass", f"inside the plausible range {tuple(bounds)}", bounds=list(bounds))
 
 
 def _new_best(score, props: dict, incumbent: dict | None, comparable: bool = True) -> tuple[bool, str]:
@@ -1396,15 +1229,16 @@ def _owed_check(rows: dict, new_best: bool, checks: dict, props: dict) -> dict:
         return {"check": kind, "when": "survival",
                 "why": "a new best - checked once the next unit has not beaten it, by "
                        + ("the next worker (a peer check)" if kind == "peer" else "a verifier the driver spawns")}
-    pred = checks.get("prediction") or {}
-    outside = (props.get("prediction_mode") == "range" and pred.get("status") == "fail"
-               and isinstance(pred.get("predicted"), dict) and "low" in pred["predicted"])
+    # Outside the PLAUSIBLE RANGE fixed at setup - a probable implementation error, never a missed guess.
+    # `hard_bounds` is the key checks artifacts carried before the range was renamed.
+    pr = checks.get("plausible_range") or checks.get("hard_bounds") or {}
+    outside = pr.get("status") == "fail"
     if sv == "every":
         return {"check": "self-verify", "when": "now",
                 "why": "this preset self-verifies every result it does not check independently"}
     if sv == "out-of-range" and outside:
         return {"check": "self-verify", "when": "now",
-                "why": "outside the predicted range - " + str(pred.get("detail") or "")[:160]}
+                "why": "outside the plausible range - " + str(pr.get("detail") or "")[:160]}
     return {"check": None, "when": "", "why": "nothing owed under this preset"
             + (" (a new best: none of this preset's checks applies)" if new_best else "")}
 
@@ -1560,7 +1394,7 @@ def _changes_summary(exps: str) -> str:
     return body
 
 
-def write_checks(exp_id: str, label: str, score: float, diags: dict, apriori: dict | None,
+def write_checks(exp_id: str, label: str, score: float, diags: dict, cfg: dict,
                  props: dict, timing: dict | None = None, prediction=None) -> dict:
     """Compute every mechanical check for this experiment and write results/checks_<NN>.json.
 
@@ -1583,20 +1417,22 @@ def write_checks(exp_id: str, label: str, score: float, diags: dict, apriori: di
     declared = ((_read_json(RESULTS / f"result_{exp_id}.json", {}) or {}).get("config") or {}).get("_levers")
     # A ZERO-EVALUATION unit (score None): every check that needs a number reports `unavailable` with
     # what it would need - never `pass` (a green on something nobody measured) and never `fail` (a flag
-    # for correctly declining to produce a score); `prediction` judges the deliverable it named.
+    # for correctly declining to produce a score); `deliverable_named` judges the one its config named
+    # (the campaign's own campaign_checks may add a `deliverable` check of what is actually on disk).
     checks = {
-        "prediction": check_prediction_outcome(score, apriori or {}, props, priors),
+        "plausible_range": check_plausible_range(score),
         "levers": check_levers(declared, changes),
         "noise_floor": check_noise_floor(score, props, inc,
                                          comparable=comparability["status"] != "fail",
                                          excluded=int(comparability.get("excluded") or 0)),
         "comparability": comparability,
-        "hard_bounds": check_hard_bounds(score),
         "guardrail": check_guardrail(diags),
         "correctness_suite": check_correctness_state(),
         "epoch": check_epoch(props),
         "save_set": None,   # filled below
     }
+    if score is None:
+        checks["deliverable_named"] = check_deliverable(cfg or {})
     # The campaign's own checks (experiment.py campaign_checks - a seam): merged under their own names,
     # never over a kit check, and only in the three-valued shape every reader of this artifact expects.
     cfg_now = (_read_json(RESULTS / f"result_{exp_id}.json", {}) or {}).get("config") or {}
@@ -1639,7 +1475,7 @@ def write_checks(exp_id: str, label: str, score: float, diags: dict, apriori: di
         "metric": {"name": "{{PRIMARY_METRIC}}", "value": None if score is None else float(score),
                    "is_evaluation": score is not None,
                    "higher_is_better": bool(metric.HIGHER_IS_BETTER)},
-        "campaign": {k: props.get(k) for k in ("prediction_mode", "noise_model", "noise_floor",
+        "campaign": {k: props.get(k) for k in ("noise_model", "noise_floor",
                                                "tolerance", "metric_version", "data_version",
                                                "metric_revision")},
         "checks": checks,
@@ -1691,13 +1527,13 @@ def write_checks(exp_id: str, label: str, score: float, diags: dict, apriori: di
     return payload
 
 
-def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = None,
+def evaluate_and_record(cfg: dict, prediction, target,
                         props: dict | None = None, timing: dict | None = None) -> dict:
     """Score with the FROZEN metric, run the guardrail, and write result_<NN>.json (+ figure).
 
     The scoreboard row is appended LAST, behind the save-set gate - a row exists only for a fully-saved
-    result. The a-priori range is echoed into the result JSON so an out-of-envelope score is visible in
-    the record, not only in the analysis narrative. `timing` is the runner's own measured breakdown
+    result. Whether the score is inside the plausible range is judged by write_checks() and recorded in
+    results/checks_<NN>.json, the ledger and the logbook. `timing` is the runner's own measured breakdown
     (gates / suite / snapshot / solve); the solve time travels with the result as the unit's cost.
     """
     _beat("scoring")
@@ -1742,19 +1578,6 @@ def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = No
         "solve_wall_clock_s": timing.get("solve_s"),
         "config": cfg,
     }
-    if apriori:
-        result["apriori"] = apriori.get("predicted")
-        # Mode-safe: only a `range` prediction has a numeric envelope to fall outside of. The full
-        # judgement for every mode is computed by write_checks() below and recorded in
-        # results/checks_<NN>.json - this key is kept because the result JSON has carried it since the
-        # prediction gate shipped, and something may still read it.
-        rng = apriori.get("predicted") or {}
-        try:
-            lo, hi = float(rng["low"]), float(rng["high"])
-        except (KeyError, TypeError, ValueError):
-            lo = hi = None
-        if lo is not None and score is not None and not (lo <= float(score) <= hi):
-            result["outside_apriori_range"] = True
     # The evidence behind the number - the campaign's own keys of the result JSON (fitted parameters,
     # per-condition splits, a census, a deliverable's on-disk state): experiment.py's
     # campaign_result_fields(cfg, prediction, diags, score), a seam. Never over a kit key, and never
@@ -1791,7 +1614,7 @@ def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = No
 
     assert_save_set(exp_id, label, fig)   # RECORD GATE: no row until the save-set exists on disk
 
-    evf = _expected_vs_found(score, apriori, props, exp_id)
+    plaus = _plausible_cell(score, cfg)
     append_scoreboard_row({
         "exp_id": exp_id,
         "timestamp": result["utc"],
@@ -1803,11 +1626,12 @@ def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = No
         "data_version": result["data_version"],
         "tier": cfg.get("_tier", "Baseline" if exp_id == "000" else ""),
         # The narrative cells - the ledger IS the one-line timeline (the JOURNAL keeps no copy of it):
-        # `what` (the config's one-line comment), `expected_vs_found` (the same judgement the logbook
-        # line carries), an optional `note` (--record --ledger-note, capped) and `finding` (--record
-        # --finding, one line citing its verdict). `description` / `notes` are the older spellings.
+        # `what` (the config's one-line comment), `plausible` (the same judgement the logbook line
+        # carries; an older ledger's `expected_vs_found` column is prediction history, left blank), an
+        # optional `note` (--record --ledger-note, capped) and `finding` (--record --finding, one line
+        # citing its verdict). `description` / `notes` are the older spellings.
         "what": cfg.get("_comment", ""), "description": cfg.get("_comment", ""),
-        "expected_vs_found": evf,
+        "plausible": plaus,
         # BLANK, not "0.0000", for a zero-evaluation unit: a blank cell records nothing, which is the
         # truth here; a 0 is a number every later comparison would have to be defended against.
         "{{PRIMARY_METRIC}}": "" if zero else f"{score:.4f}",
@@ -1818,11 +1642,11 @@ def evaluate_and_record(cfg: dict, prediction, target, apriori: dict | None = No
                       prediction=prediction) or {}),
         "note": "", "notes": "", "finding": "",
     })
-    append_logbook(cfg, exp_id, label, score, diags, apriori, expected_vs_found=evf)
+    append_logbook(cfg, exp_id, label, score, diags, plausible=plaus)
     timing["record_s"] = round(time.monotonic() - t_record, 3)
     # Last, so save_set can report the complete contract (the logbook entry lands one line above).
     try:
-        write_checks(exp_id, label, score, diags, apriori, props, timing=timing, prediction=prediction)
+        write_checks(exp_id, label, score, diags, cfg, props, timing=timing, prediction=prediction)
     except Exception as exc:                      # never lose the experiment over its own verdict file
         print(f"WARNING: the mechanical checks could not be computed ({type(exc).__name__}: {exc}). "
               f"Recording that failure to results/checks_{exp_id}.json rather than leaving no verdict - "
@@ -2835,7 +2659,6 @@ def _read_json(path: Path, default):
 # "campaign" - because Tier 0 asserts a routing row's leading concept occurs in the file it names, so a
 # property split across campaign.md prose and JSON would be a fork with a green check over it.
 
-PREDICTION_MODES = ("range", "direction", "none")
 NOISE_MODELS = ("stochastic", "deterministic")
 # The verification PRESET (configs/loop.json verify.preset) - the one user-facing choice of how much
 # verification a campaign buys, and of what kind. Each preset is a FIXED table of rows x
@@ -2845,7 +2668,7 @@ NOISE_MODELS = ("stochastic", "deterministic")
 # Rows: invariants (cheap authored output checks), machinery (the code's own fixed-input checks), gates
 # (expensive per-result gates) - triggers every | promotion (a new best) | on-change | setup | off;
 # self_check (the worker's recorded checks) - every | off; self_verify (the verify protocol, run by the
-# worker in its own session on its own result) - every | out-of-range | off; independent (a context other
+# worker in its own session on its own result) - every | out-of-range (outside the plausible range) | off; independent (a context other
 # than the one that produced the result) - survivor:peer (a new best, checked by the next worker once the
 # next unit has not beaten it) | survivor:verifier (the same, by a driver-spawned verifier) |
 # every:verifier | off; capstone (the end-of-campaign claim audit, which re-checks the final best) -
@@ -2981,8 +2804,6 @@ def _campaign_props(loop_cfg: dict | None = None) -> dict:
         return v
 
     return {
-        "prediction_mode": str(c.get("prediction_mode") or "range").strip().lower(),
-        "prediction_mode_reason": str(c.get("prediction_mode_reason") or "").strip(),
         "noise_model": str(c.get("noise_model") or "stochastic").strip().lower(),
         "noise_floor": _num("noise_floor"),
         "tolerance": _num("tolerance"),
@@ -3009,9 +2830,7 @@ def campaign_props_problems(props: dict) -> list[str]:
 
     A MISSING noise_floor / tolerance is deliberately NOT a failure: it is unset debt, and the honest
     response is for the checks artifact to report that check `unavailable` naming the knob that would
-    supply it, not for the runner to refuse a campaign that has not estimated its spread yet. A missing
-    prediction_mode_reason under mode 'none' IS a failure - the recorded reason is the only thing standing
-    between "we genuinely cannot bound this" and "bounding it was inconvenient".
+    supply it, not for the runner to refuse a campaign that has not estimated its spread yet.
     """
     bad = []
     if props.get("_unreadable"):
@@ -3021,21 +2840,10 @@ def campaign_props_problems(props: dict) -> list[str]:
         return [props["_unreadable"] + ". Fix: restore it (new-campaign generates it; a "
                 "results/snapshots/ copy has the version this campaign last ran under)."]
     bad.extend(props.get("_bad_nums") or [])
-    if props["prediction_mode"] not in PREDICTION_MODES:
-        bad.append(f"configs/loop.json campaign.prediction_mode is {props['prediction_mode']!r}; expected "
-                   f"one of {' | '.join(PREDICTION_MODES)}. Fix: set it to the honest one - 'range' if you "
-                   "can bound the answer, 'direction' if you can only say which way, 'none' (with a "
-                   "reason) if neither is honest.")
     if props["noise_model"] not in NOISE_MODELS:
         bad.append(f"configs/loop.json campaign.noise_model is {props['noise_model']!r}; expected one of "
                    f"{' | '.join(NOISE_MODELS)}. Fix: 'deterministic' if repeating a run reproduces the "
                    "metric exactly, else 'stochastic'.")
-    if props["prediction_mode"] == "none" and not props["prediction_mode_reason"]:
-        bad.append("configs/loop.json sets campaign.prediction_mode='none' with an empty "
-                   "campaign.prediction_mode_reason. Fix: record WHY this campaign cannot honestly bound "
-                   "its answer (exploratory discovery, first-of-kind measurement, unknown landscape). "
-                   "Running with no a-priori bound is a real choice; making it without a recorded reason "
-                   "is how the control quietly becomes nobody's decision.")
     if props["metric_revision"] not in METRIC_REVISION_MODES:
         if props["metric_revision"] in METRIC_REVISION_RESERVED:
             bad.append(f"configs/loop.json campaign.metric_revision is {props['metric_revision']!r}, which is "
@@ -3814,9 +3622,13 @@ def preflight(smoke: bool = False) -> list[str]:
             for problem in prop_problems:
                 bad(problem)
             if not prop_problems:
-                note = (f"campaign: prediction_mode={props['prediction_mode']} "
+                bounds = getattr(metric, "PLAUSIBILITY_BOUNDS", None)
+                note = (f"campaign: plausible_range={tuple(bounds) if bounds else 'unset'} "
                         f"noise_model={props['noise_model']} "
                         + f"metric_revision={props['metric_revision']}")
+                if not bounds:
+                    note += (" (plausible range unset - set metric.PLAUSIBILITY_BOUNDS; until then the "
+                             "implementation-error check reports 'unavailable')")
                 if props["noise_model"] == "stochastic" and props["noise_floor"] is None:
                     note += " (noise_floor unset - the noise-floor check reports 'unavailable')"
                 if props["noise_model"] == "deterministic" and props["tolerance"] is None:
@@ -4129,7 +3941,7 @@ def _supervise_unlocked(smoke: bool = False):
                 def _epochs_summary(block) -> str:
                     return "{" + ", ".join(f"{k}: {v.get('status', '?') if isinstance(v, dict) else '?'}"
                                            for k, v in (block or {}).items()) + "}"
-                for key in ("metric_revision", "metric_version", "data_version", "prediction_mode",
+                for key in ("metric_revision", "metric_version", "data_version",
                             "noise_model", "metric_epochs"):
                     if old_props.get(key) != props.get(key):
                         before, after = old_props.get(key), props.get(key)
@@ -4473,6 +4285,16 @@ def _route_checks(q: dict, stem: str, cfg_path) -> None:
             else:
                 _owe_independent(q, e, f"survived {stem}")
         q["awaiting_survival"] = [e for e in (q.get("awaiting_survival") or []) if e.get("exp") == stem]
+    contest = ver.get("contest") if isinstance(ver.get("contest"), dict) else None
+    if contest and str(contest.get("status") or "pending") == "pending":
+        # A CONTESTED gate outcome: the worker disputed its own result's pass or refusal and does not
+        # decide it. The independent check is owed NOW, whatever the preset (a worker's explicit dispute
+        # is the one trigger every preset honours), it supersedes any survivor wait, and the pointer
+        # waits for the verdict (the guard refuses a promotion write while the contest is pending).
+        q["awaiting_survival"] = [e for e in (q.get("awaiting_survival") or []) if e.get("exp") != stem]
+        _owe_independent(q, dict(base, exp=stem, check="verifier", contest=contest),
+                         f"contested gate outcome ({contest.get('disputes') or 'pass'})")
+        return
     chk, when = owed.get("check"), owed.get("when")
     if chk in ("peer", "verifier") and when == "survival":
         q.setdefault("awaiting_survival", []).append(dict(base, exp=stem, check=chk))
@@ -4527,15 +4349,35 @@ def _stamp_peer_checks(due: list, t_spawn: float) -> None:
 
 
 def _check_line(group: list, extras: dict) -> str:
-    """What the verifier is checking and why, as a prompt VALUE (never through the template string)."""
+    """What the verifier is checking and why, as a prompt VALUE (never through the template string).
+
+    A CONTESTED result carries the worker's charge in the same line: the claim the verifier grades is the
+    recorded gate outcome, the charge is the first attack to run, and the check is blinded whatever the
+    preset - the charge must be judged on the artifacts, never on the narrative that produced it."""
     why = "; ".join(sorted({str(e.get("trigger") or "") for e in group if e.get("trigger")}))
     line = ("\nThis is the result's ONE independent check: " + (why or "owed by the preset")
             + ". Refute it by whatever route the claim calls for - re-score the saved artifact in a fresh "
               "process, re-derive, probe what changed; re-run a search only when the claim is about the "
               "search. Write \"kind\": \"verifier\" in each verdict.")
-    if extras.get("blinded"):
+    contests = [e.get("contest") for e in group if isinstance(e.get("contest"), dict)]
+    if extras.get("blinded") or contests:
         line += (" Blinded: do not read results/JOURNAL.md or the logbook narrative - the ledger and the "
                  "artifacts only.")
+    for c in contests:
+        disputes = str(c.get("disputes") or "pass")
+        line += (f"\nCONTEST ({disputes}). The worker that recorded this result DISPUTES its gate outcome"
+                 + (f" - {_one_line(str(c.get('gate')))}" if c.get("gate") else "")
+                 + " - and does not decide it; you do. The charge, as filed: \""
+                 + _one_line(str(c.get("claim") or "")) + "\". Evidence the charge names: "
+                 + (", ".join(str(p) for p in (c.get("evidence") or [])) or "(none named)")
+                 + ". The claim you grade is the RECORDED OUTCOME (a " + disputes
+                 + "), and the charge is the first attack to run against it. CONFIRMED = the outcome stands "
+                   "and the charge fails; REFUTED = the charge holds and the outcome is overturned; "
+                   "PROVISIONAL / QUESTIONABLE ASSUMPTION / INCONCLUSIVE = the charge is not established, so "
+                   "the recorded outcome stands with your verdict as its label (the worker's doubt is on the "
+                   "record, not a veto). Judge the charge on the artifacts it names and the ledger - not on "
+                   "campaign.md's landmine rows and not on the worker's reasoning. Write \"contest\": true "
+                   "in the verdict.")
     return line
 
 
@@ -4714,7 +4556,9 @@ def _service_verification(k: dict, model: str, vfail: int, effort: str = "") -> 
         refuted = []
         for s in exps:
             _stamp_verified(s)
-            _stamp_label(s, next((e for e in group if e.get("exp") == s), group[0]))
+            entry_s = next((e for e in group if e.get("exp") == s), group[0])
+            _stamp_label(s, entry_s)
+            _contest_resolve(s, entry_s)
             vf = _find_verdict_file(s)
             v = (_read_json(vf, {}) or {}) if vf else {}
             if str(v.get("verdict", "")).strip().upper() == "REFUTED":
@@ -4771,6 +4615,7 @@ def _service_due(k: dict, model: str, vfail: int) -> int:
         _stamp_verified(stem)
         entry = next((e for e in (q.get("pending_verification") or []) if e.get("exp") == stem), {})
         _stamp_label(stem, entry)
+        _contest_resolve(stem, entry)
 
     return policy.service(
         ROOT, _verification_backlog(q), k, model, vfail,
@@ -5065,14 +4910,211 @@ def _self_verify_record(exp: str, sv: dict) -> int:
     return 0
 
 
+# ---- a CONTEST: the worker disputes its own result's gate outcome, and does not decide it -----------
+# The failure this answers (the V_B- level-structure test campaign, exp017 / exp019): two results met every
+# written promotion condition and were set aside by the worker's judgement, recorded as "refused", with no
+# decision-record entry and no second opinion - the same context that produced the doubt confirmed it. A
+# set-aside is a claim like any other. The record file's `contest` key files the objection as a falsifiable charge with the artifacts
+# it rests on; the driver spawns an INDEPENDENT verifier for it whatever the preset (blinded, artifacts
+# only); the pointer waits (the guard refuses a promotion write while the contest is pending); and the
+# recorded outcome stands unless the verdict is REFUTED - a doubt the verifier cannot establish is on the
+# record, not a veto. A contested pass that stands is promoted by the driver with the verdict's label.
+
+CONTEST_CLAIM_MIN = 40      # chars: a charge is a sentence with a falsifier in it, not a word
+
+
+def _contest_problem(exp: str, contest, sv) -> str | None:
+    """Why the record's `contest` block cannot be filed, or None. A contest disputes the gate outcome
+    RECORDED for this result - a pass the worker does not believe, or a refusal it does not accept - so it
+    is held to the shape of a claim: a falsifiable charge, what it disputes, and the artifacts it rests
+    on, each on disk under the campaign. Its verifier is the result's one check, so a self_verify block
+    beside it is refused (never twice); a contest already resolved is not re-opened by a re-run."""
+    if not isinstance(contest, dict):
+        return "contest must be an object {claim, disputes, gate, evidence}"
+    problems = []
+    claim = _one_line(str(contest.get("claim") or ""))
+    if len(claim) < CONTEST_CLAIM_MIN:
+        problems.append("contest.claim must state the objection as a falsifiable charge - what the verifier "
+                        "should find if you are right, and what would show you wrong - not a doubt")
+    disputes = str(contest.get("disputes") or "pass").strip().lower()
+    if disputes not in CONTEST_DISPUTES:
+        problems.append("contest.disputes must be 'pass' (a gate this result passed that you do not believe) "
+                        "or 'refusal' (a gate that refused it, wrongly)")
+    ev = contest.get("evidence")
+    if not isinstance(ev, list) or not ev:
+        problems.append("contest.evidence must list at least one artifact under the campaign (results/...) "
+                        "the charge rests on - the verifier judges the charge on those, not on your reasoning")
+    else:
+        for p in ev:
+            rel = str(p).replace("\\", "/")
+            try:
+                fp = (ROOT / rel).resolve()
+                fp.relative_to(ROOT.resolve())
+            except (OSError, ValueError):
+                problems.append(f"contest.evidence path escapes the campaign: {p}")
+                continue
+            if not fp.is_file():
+                problems.append(f"contest.evidence names a file that does not exist: {p}")
+    stem = _label_of(exp)
+    eid = exp_id_for(stem)
+    if not eid or not (CHECKS / f"checks_{eid}.json").is_file():
+        problems.append(f"no results/checks_{eid or '<NN>'}.json for {exp!r} - a contest disputes a RECORDED gate "
+                        "outcome; the unit runs first")
+    if isinstance(sv, dict):
+        problems.append("a contested result's one check is the driver's independent verifier - drop the "
+                        "self_verify block (a result is never verified twice)")
+    existing = _read_json(CONTESTS / f"{stem}.json", None)
+    if isinstance(existing, dict) and str(existing.get("status") or "pending") != "pending":
+        problems.append(f"the contest on {stem} is already resolved ({existing.get('verdict')}; "
+                        f"results/contests/{stem}.json) - a resolved contest is not re-opened; a new objection "
+                        "is a new unit's claim")
+    return "; ".join(problems) or None
+
+
+def _contest_record(exp: str, contest: dict) -> int:
+    """File the contest: results/contests/<stem>.json (pending), the checks artifact's
+    `verification.contest` and its `owed` re-pointed at the verifier (the preset's own answer kept as
+    `owed_by_preset`), the logbook's Disputes line. The driver reads the artifact at accept time and owes
+    the independent check at once; the guard reads the contest file and refuses a promotion write."""
+    stem = _label_of(exp)
+    eid = exp_id_for(stem)
+    art = CHECKS / f"checks_{eid}.json"
+    ck = _read_json(art, None)
+    if not isinstance(ck, dict):
+        print(f"--record: no results/checks_{eid}.json for {exp!r}")
+        return 2
+    disputes = str(contest.get("disputes") or "pass").strip().lower()
+    claim = _one_line(str(contest.get("claim") or ""))
+    entry = {"exp": stem, "exp_id": eid, "claim": claim, "disputes": disputes,
+             "gate": _one_line(str(contest.get("gate") or "")),
+             "evidence": [str(p).replace("\\", "/") for p in contest.get("evidence") or []],
+             "filed_utc": _utc_stamp(), "status": "pending"}
+    CONTESTS.mkdir(parents=True, exist_ok=True)
+    _write_text_atomic(CONTESTS / f"{stem}.json", json.dumps(entry, indent=2) + "\n")
+    ver = ck.setdefault("verification", {})
+    if isinstance(ver.get("owed"), dict) and "owed_by_preset" not in ver:
+        ver["owed_by_preset"] = ver["owed"]
+    ver["owed"] = {"check": "verifier", "when": "now",
+                   "why": f"contested gate outcome ({disputes}) - the worker disputes it and does not decide it; "
+                          "the driver's independent verifier does"}
+    ver["contest"] = dict(entry, file=f"results/contests/{stem}.json")
+    tmp = art.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(ck, indent=2), encoding="utf-8")
+    os.replace(tmp, art)
+    _set_logbook_field(stem, "Disputes & responses",
+                       f"Concern (the worker's own contest, {disputes}): {claim[:240]} -- Response: pending the "
+                       f"driver's independent verifier (results/contests/{stem}.json)", only_if_prefix=("",))
+    print(f"contest recorded -> results/contests/{stem}.json ({disputes}): the driver spawns an independent "
+          "verifier for the charge and the pointer waits for its verdict - do NOT write configs/RECOMMENDED.json "
+          "for this result; the recorded outcome stands unless the verdict is REFUTED")
+    return 0
+
+
+def _promote_pointer(stem: str, label: str, why: str) -> bool:
+    """The driver's own promotion write, the twin of _recommended_follows's rollback: RECOMMENDED.json from
+    the experiment's config, carrying its label and the reason. The guard polices AGENTS' writes; this one
+    is mechanical, so it applies the guard's own promotion bar itself (the correctness suite, its staleness,
+    the epoch) and refuses loudly rather than promote past it - the next worker then decides with the
+    verdict in hand."""
+    cfg = _read_json(ROOT / "configs" / f"{stem}.json", None)
+    if not isinstance(cfg, dict):
+        print(f"[supervise] cannot promote {stem}: configs/{stem}.json is missing or unreadable utc={_utc_stamp()}")
+        return False
+    try:
+        import guard_promotion as _guard
+        preset = _verify_rows(_read_json(LOOPCFG, {}) or {})["preset"]
+        reason = (_guard.correctness_blocks_promotion(ROOT, relaxed=preset in ("none", "minimal"))
+                  or ("the correctness green was recorded against different FROZEN/core code than is on disk - "
+                      "re-run the suite first" if _guard.green_is_stale(ROOT) else None)
+                  or _guard.epoch_blocks_promotion(ROOT))
+    except Exception as exc:
+        reason = f"the promotion gate could not be evaluated ({type(exc).__name__}: {exc})"
+    if reason:
+        print(f"[supervise] {stem} is NOT promoted by the driver: {reason} utc={_utc_stamp()}")
+        return False
+    res = _read_json(RESULTS / f"result_{exp_id_for(stem)}.json", {}) or {}
+    rec_path = ROOT / "configs" / "RECOMMENDED.json"
+    new = dict(cfg, exp_name="RECOMMENDED", _promoted_from=stem,
+               _metric_version=res.get("metric_version") or cfg.get("_metric_version"),
+               _promoted_by_driver=why, verification_label=label)
+    _write_text_atomic(rec_path, json.dumps(new, indent=2) + "\n")
+    print(f"[supervise] RECOMMENDED.json -> {stem} ({label}): {why} utc={_utc_stamp()}")
+    return True
+
+
+def _contest_resolve(stem: str, entry: dict | None = None) -> None:
+    """After a verdict lands on a CONTESTED result: close the contest, carry the outcome into the checks
+    artifact and the logbook, act on it, and relay it. The recorded outcome stands unless the verdict is
+    REFUTED. A contested PASS that stands is promoted by the driver with the verdict's label (the worker
+    did not decide it; the verifier did); an overturned pass is not promoted and carries its refuted label.
+    An overturned REFUSAL is not promoted by the driver - the other promotion conditions are the worker's
+    to re-check - so the next worker gets the verdict as a note and decides. A no-op for an uncontested
+    result or a contest already closed."""
+    cf = CONTESTS / f"{stem}.json"
+    c = _read_json(cf, None)
+    if not isinstance(c, dict) or str(c.get("status") or "pending") != "pending":
+        return
+    vf = _find_verdict_file(stem)
+    v = (_read_json(vf, {}) or {}) if vf else {}
+    verdict = str(v.get("verdict", "")).strip().upper()
+    if vf is None or not verdict:
+        return
+    eid = exp_id_for(stem)
+    art = CHECKS / f"checks_{eid}.json"
+    ck = _read_json(art, None) or {}
+    label = str(ck.get("label") or f"{verdict}/verifier")
+    disputes = str(c.get("disputes") or "pass")
+    overturned = verdict == "REFUTED"
+    promoted = False
+    if disputes == "pass":
+        if overturned:
+            outcome = f"the contested pass is OVERTURNED ({label}): not promoted; the result carries its refuted label"
+        else:
+            promoted = _promote_pointer(stem, label, f"a contested pass that stood: verdict {verdict} "
+                                                     f"(results/verdicts/{vf.name}), {_utc_stamp()}")
+            outcome = (f"the contested pass STANDS ({label}): "
+                       + (f"promoted by the driver, configs/RECOMMENDED.json -> {stem}" if promoted else
+                          "NOT promoted by the driver (the promotion gate blocked it; the driver log says why) - "
+                          "the next worker decides"))
+    elif overturned:
+        outcome = (f"the contested refusal is OVERTURNED ({label}): the next worker decides the promotion - "
+                   "write the pointer if every promotion condition now holds")
+    else:
+        outcome = f"the contested refusal STANDS ({label})"
+    c.update(status="resolved", verdict=verdict, label=label, verdict_file=vf.name, resolved_utc=_utc_stamp(),
+             outcome=outcome, promoted=promoted)
+    _write_text_atomic(cf, json.dumps(c, indent=2) + "\n")
+    if isinstance(ck.get("verification"), dict) and isinstance(ck["verification"].get("contest"), dict):
+        ck["verification"]["contest"].update(status="resolved", verdict=verdict, outcome=outcome, promoted=promoted)
+        tmp = art.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(ck, indent=2), encoding="utf-8")
+        os.replace(tmp, art)
+    _set_logbook_field(stem, "Disputes & responses",
+                       f"Concern (the worker's own contest, {disputes}): {str(c.get('claim') or '')[:240]} -- "
+                       f"Response (independent verifier, results/verdicts/{vf.name}): {verdict}; {outcome}",
+                       only_if_prefix=("Concern (the worker's own contest",))
+    try:
+        INBOX.mkdir(parents=True, exist_ok=True)
+        (INBOX / f"contest_{stem}.md").write_text(
+            f"Driver ({_utc_stamp()}): the contest on {stem} ({disputes}) is resolved - verdict {verdict} "
+            f"(results/verdicts/{vf.name}). {outcome}."
+            + (f" Verifier summary: {_one_line(str(v.get('summary')))}" if v.get("summary") else "")
+            + (f" Follow-up it names: {_one_line(str(v.get('follow_up')))}" if v.get("follow_up") else "")
+            + "\n", encoding="utf-8")
+    except OSError as exc:
+        print(f"[supervise] could not leave the contest note for {stem} ({exc})")
+    print(f"[supervise] contest on {stem} ({disputes}) resolved by verdict {verdict}: {outcome} utc={_utc_stamp()}")
+
+
 def _record_from_file(exp: str, path: str, flags: dict) -> int:
     """`--record EXP --from-file record.json`: the WHOLE record in one file - {"analysis", "next",
     "ledger_note", "finding", "replace", "self_check": {"ran", "changes", "estimate", "note"},
     "self_verify": {"ran", "outcome", "note"} (only when the result is owed one - the card says),
     "landmine": {"trigger", "landmine", "do_instead"}, "discovery": {"title", "text", "verdict"}} (the last
-    two may be lists) - every key optional, flags on the command line win. The JOURNAL is not in it:
-    the worker writes results/JOURNAL.md anew as a file. Three turns for the record: the record file,
-    the command, the new JOURNAL."""
+    two may be lists), "contest": {"claim", "disputes", "gate", "evidence"} (a dispute of this result's
+    recorded gate outcome: the driver's independent verifier decides it, the pointer waits) - every key
+    optional, flags on the command line win. The JOURNAL is not in it: the worker writes results/JOURNAL.md
+    anew as a file. Three turns for the record: the record file, the command, the new JOURNAL."""
     try:
         rec = json.loads((ROOT / path).read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
@@ -5082,7 +5124,9 @@ def _record_from_file(exp: str, path: str, flags: dict) -> int:
         print("--record --from-file: the file must hold one JSON object")
         return 2
     sv = rec.get("self_verify")
-    problem = _self_verify_problem(exp, sv)
+    contest = rec.get("contest")
+    # A contest makes the driver's verifier the result's one check, so the self-verify rule yields to it.
+    problem = _contest_problem(exp, contest, sv) if contest is not None else _self_verify_problem(exp, sv)
     if problem:
         # Refused BEFORE anything is written, so the corrected file records in one go.
         print(f"--record: REFUSED - {problem}")
@@ -5095,6 +5139,8 @@ def _record_from_file(exp: str, path: str, flags: dict) -> int:
         rc = max(rc, r)
     if isinstance(sv, dict):
         rc = max(rc, _self_verify_record(exp, sv))
+    if contest is not None:
+        rc = max(rc, _contest_record(exp, contest))
     r = _record_cli(exp, flags.get("analysis") or str(rec.get("analysis") or ""),
                     flags.get("next") or str(rec.get("next") or ""),
                     flags.get("ledger_note") or str(rec.get("ledger_note") or ""),
@@ -5294,7 +5340,7 @@ def _unit_artifacts(eid: str, label: str) -> list[Path]:
     n = str(int(eid)) if eid.isdigit() else re.escape(eid)
     pat = re.compile(rf"(?<![0-9a-z])exp0*{n}(?![0-9])|{re.escape(label)}", re.I)
     out = [p for p in (RESULTS / f"result_{eid}.json", CHECKS / f"checks_{eid}.json",
-                       ROOT / "configs" / f"{label}.json", ROOT / "predictions" / f"{label}.json") if p.is_file()]
+                       ROOT / "configs" / f"{label}.json") if p.is_file()]
     out += sorted(p for p in RESULTS.glob("record_*.json")
                   if p.stem.split("_", 1)[-1].isdigit() and eid.isdigit() and int(p.stem.split("_", 1)[-1]) == int(eid))
     for base in (RESULTS / "verdicts", RESULTS / "data", RESULTS / "diagnostics", ROOT / "scripts", RESULTS / "images"):
@@ -5390,9 +5436,9 @@ def _card(exp: str) -> str:
     lines.append(head)
     if res.get("guardrail") is not None:
         lines.append(f"guardrail: {res.get('guardrail')}")
-    pred = checks.get("prediction") or {}
-    if pred:
-        lines.append(f"expected vs found: {pred.get('status', '?')} - {pred.get('detail', '')}")
+    pr = checks.get("plausible_range") or checks.get("hard_bounds") or {}
+    if pr:
+        lines.append(f"plausible range: {pr.get('status', '?')} - {pr.get('detail', '')}")
     if res.get("solve_wall_clock_s") is not None:
         lines.append(f"solve: {res.get('solve_wall_clock_s')} s")
     fails = [n for n, c in checks.items() if isinstance(c, dict) and c.get("status") == "fail"]
@@ -5484,14 +5530,14 @@ def _self_check_cli(exp: str, ran: list, changes: list, estimate: str, note: str
         for p in problems:
             print(f"  - {p}")
         return 2
-    pred = (ck.get("checks") or {}).get("prediction") or {}
-    apriori = {"predicted": pred.get("predicted"), "observed": (ck.get("metric") or {}).get("value"),
-               "within": {"pass": True, "fail": False}.get(pred.get("status"))}
+    pr = (ck.get("checks") or {}).get("plausible_range") or {}
+    plausible = {"bounds": pr.get("bounds"), "observed": (ck.get("metric") or {}).get("value"),
+                 "within": {"pass": True, "fail": False}.get(pr.get("status"))}
     changed = ([c["path"] for c in ((ck.get("changes") or {}).get("files") or [])]
                + [c["key"] for c in ((ck.get("changes") or {}).get("config_keys") or [])])
     named = [c["change"] for c in considered]
     unconsidered = [c for c in changed if not any(c in n or n in c for n in named)]
-    ck["self_check"] = {"status": "recorded", "utc": _utc_stamp(), "ran": entries, "apriori": apriori,
+    ck["self_check"] = {"status": "recorded", "utc": _utc_stamp(), "ran": entries, "plausible": plausible,
                         "estimate": est, "changes_considered": considered,
                         "changes_unconsidered": unconsidered, "reconciled": (note or "").strip()}
     if ck.get("label") in (None, "unverified"):
@@ -5596,7 +5642,7 @@ def main():
     ap.add_argument("--ran", action="append", metavar="NAME=OUTCOME[:DETAIL]", help="with --self-check")
     ap.add_argument("--change", action="append", metavar="WHAT=>EXPECTED=>OBSERVED", help="with --self-check")
     ap.add_argument("--estimate", metavar="X", help="with --self-check: your a-priori point estimate")
-    ap.add_argument("--note", metavar="TEXT", help="with --self-check: one line reconciling prediction and result")
+    ap.add_argument("--note", metavar="TEXT", help="with --self-check: one line reconciling your estimate and the result")
     ap.add_argument("--from-file", metavar="JSON", help="with --self-check: a JSON file {\"ran\": [...], \"changes\": "
                     "[...], \"estimate\": X, \"note\": \"...\"} instead of (or in addition to) the flags - a long "
                     "self-check is one file, not a shell quoting exercise")
@@ -5612,7 +5658,9 @@ def main():
     ap.add_argument("--record-file", dest="record_file", metavar="JSON",
                     help="with --record: the WHOLE record as one JSON file - analysis, next, ledger_note, finding, "
                          "self_check {ran, changes, estimate, note}, landmine {trigger, landmine, do_instead}, "
-                         "discovery {title, text, verdict} - every key optional; "
+                         "discovery {title, text, verdict}, contest {claim, disputes, gate, evidence} (a dispute "
+                         "of this result's gate outcome: the driver spawns an independent verifier and the "
+                         "pointer waits) - every key optional; "
                          "flags on the command line win. The JOURNAL is a file you write, not a key")
 
     g.add_argument("--card", metavar="EXP",
@@ -5773,13 +5821,10 @@ def main():
     sys.stdout = _Tee(DIAG / f"{stem}_{_utc_stamp()}.log")
     print(f"=== {stem} :: {{CAMPAIGN_TITLE}} ===")
 
-    apriori = check_prediction_gate(cfg, props)   # SPEND GATE: no run without a written prediction
+    check_deliverable_gate(cfg)   # SPEND GATE: a zero-evaluation unit names its deliverable first
 
     t_snap = time.monotonic()
     snapshot_experiment(cfg, args.config if not args.baseline else None, props)
-    pred_file = PREDICTIONS / f"{stem}.json"
-    if pred_file.is_file():                # the prediction is part of the reproducible record
-        shutil.copy2(pred_file, SNAPSHOTS / stem / "prediction.json")
     print(f"snapshot -> results/snapshots/{stem}/")
     snapshot_s = time.monotonic() - t_snap
     _beat("snapshot")
@@ -5796,7 +5841,7 @@ def main():
         ticker.stop()
     solve_s = time.monotonic() - t_solve   # the measured unit cost, recorded with the result
     _beat("solve_done")
-    evaluate_and_record(cfg, prediction, target, apriori, props, timing={
+    evaluate_and_record(cfg, prediction, target, props, timing={
         "start_iso": run_start_iso, "t_run": t_run, "gates_s": round(gates_s, 3),
         "suite_s": _SUITE_TIMING.get("wall_s"), "snapshot_s": round(snapshot_s, 3),
         "solve_s": round(solve_s, 6)})   # microseconds: an analytic toy solve must not round to zero

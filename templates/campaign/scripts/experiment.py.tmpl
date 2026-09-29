@@ -30,8 +30,8 @@ Optional seams (define one to extend the record; omit it and the runner uses its
 Optional constants:
   ZERO_EVALUATION_MODES = {"ledger"}                  config `mode` values that record NO score - a unit whose
                                                       deliverable is a decision-record entry, a documented
-                                                      procedure, a corrected threshold. The prediction gate
-                                                      then asks for {"predicted": {"deliverable": "..."}}, the
+                                                      procedure, a corrected threshold. Its config names
+                                                      `"_deliverable": "..."` (the deliverable gate), the
                                                       primary metric is null on disk (never 0), every numeric
                                                       check reports `unavailable`, and the row is never a
                                                       comparand. run_experiment still runs (its payload is the
@@ -62,7 +62,6 @@ RESULTS = ROOT / "results"
 IMAGES = RESULTS / "images"
 DIAG = RESULTS / "diagnostics"
 SNAPSHOTS = RESULTS / "snapshots"
-PREDICTIONS = ROOT / "predictions"
 SCOREBOARD = RESULTS / "scoreboard.tsv"
 
 

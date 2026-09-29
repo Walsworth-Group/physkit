@@ -10,7 +10,7 @@ and the claim audit read the same words.
 ## What every preset does, whatever the choice
 
 - **The runner floor always runs**: the FROZEN scorer's self-test, the mechanical checks artifact
-  (prediction, noise floor, comparability, hard bounds, save-set, epoch), and the ledger and epoch gates.
+  (plausible range, noise floor, comparability, save-set, epoch), and the ledger and epoch gates.
   It is what keeps the ledger honest, not verification; a preset cannot turn it off.
 - **One check per result.** Each result gets at most ONE check, the strongest its preset owes it,
   decided by the runner when the result is recorded (`verification.owed` in its checks artifact, and on
@@ -40,6 +40,15 @@ and the claim audit read the same words.
   (independent). `unverified` is a legitimate label; a softened one is not - a recorded verdict is never
   replaced by a weaker label. A shareable report waits for the claim audit while any exported claim lacks
   an independent label.
+- **A contested gate outcome gets an independent check under every preset.** A worker that disputes the
+  gate outcome recorded for its own result (a pass it does not believe, a refusal it does not accept)
+  does not decide it: it files a `contest` in its record — the objection as a falsifiable charge, with the
+  artifacts it rests on — and the driver spawns a verifier for the charge at once, blinded, whatever the
+  preset (the second exception to one check per result, and the only trigger a worker holds). The pointer
+  waits: the promotion guard refuses a write while the contest is pending. The verdict grades the recorded
+  outcome with the charge as its first attack; the outcome stands unless REFUTED, and a contested pass that
+  stands is promoted by the driver with the verdict's label. A doubt the verifier cannot establish is on
+  the record, not a veto.
 
 ## The five presets
 
@@ -60,23 +69,23 @@ the campaign · when to choose it · rough cost.
 
 ### `minimal` — the default
 
-- **Summary.** Unit tests, and a self-verify when a result surprises.
-- **Each unit.** The runner floor; the authored invariants; the worker's self-check. A result outside
-  its predicted range - better or worse - is self-verified by its worker (`prediction_mode: range` only;
-  without a range there is no such trigger).
-- **A new best.** The same rule: self-verified if it fell outside its range, otherwise `self-checked`.
+- **Summary.** Unit tests, and a self-verify when a score is implausible.
+- **Each unit.** The runner floor; the authored invariants; the worker's self-check. A score outside
+  the metric's plausible range (set once at setup; a probable implementation error) is self-verified by
+  its worker; a campaign with no range has no such trigger. Otherwise the route to a check is a contest.
+- **A new best.** The same rule: self-verified if it fell outside the range, otherwise `self-checked`.
 - **End of campaign.** The default claim audit, which re-checks the final best.
 - **Choose it when** a wrong answer costs little and you will read the record yourself before anything
   leaves the campaign: the common case, and the default, since the claim audit still stands between the
   loop and a shareable report.
-- **Cost.** A self-verify per surprising result (a few turns of the worker's own unit); the audit at the
-  end.
+- **Cost.** A self-verify per implausible result (rare; a few turns of the worker's own unit); the audit
+  at the end.
 
 ### `light`
 
 - **Summary.** As `minimal`, and an independent check of every best that survives, by the next worker.
 - **Each unit.** The runner floor; the authored invariants, with the machinery checks once at setup;
-  the self-check. A result outside its predicted range that is not a new best is self-verified.
+  the self-check. A score outside the plausible range that is not a new best is self-verified.
 - **A new best.** No self-verify: once the next unit has not beaten it, the NEXT worker checks it first
   thing (a peer check - its VALUES carry the result and its delta), writing a verdict labelled
   `<VERDICT>/peer`. The per-result gates run for it at record time.

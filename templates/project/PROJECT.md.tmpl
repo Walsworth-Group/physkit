@@ -34,6 +34,7 @@ ledgers last. The directory map is the top-level `README.md`; the always-on rule
   into it (`data/README.md` carries the rules; that pointer is the tree's only absolute path).
 
 ## Standing constraints
+[[KEEP — read by run_campaign.py and validate_campaign.py: this heading; everything under it ships in every spawn]]
 <!-- GUARDED tier — same rule as §Mission. -->
 
 **The operative section.** The campaign driver delivers everything under this heading into every
@@ -175,6 +176,7 @@ Positions the work so agents know what would be new and what not to over-claim.
 - **What not to claim:** <over-claims to avoid given the above>
 
 ## Updates from discoveries
+[[KEEP — read by run_campaign.py: the heading, exactly; a worker's discovery record is refused without it]]
 <!-- OPEN tier, append-only. -->
 
 Append here when a `verify`-CONFIRMED finding changes the physical understanding or the predictive
@@ -209,6 +211,7 @@ would make you revisit it (mirrors the `record-decision` skill).
      where one exists. -->
 
 ## Lineage
+[[KEEP — read by validate_campaign.py: the heading; every campaign's slug appears under it]]
 <!-- OPEN tier, append-only tables: never delete a row; supersede it. -->
 
 The project's master index: every campaign and session, what changed, and what it found, in one

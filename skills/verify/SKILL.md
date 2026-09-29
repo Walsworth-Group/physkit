@@ -327,6 +327,17 @@ physical range. This is about the config's validity, not about attribution among
 earned the win" is a separate claim, graded separately, and a shaky answer to it does not block the
 empirical one (see *Confounded attribution*).
 
+**A contest.** In a supervised loop the driver's verifier VALUES may carry a `CONTEST` line: the worker
+disputed the gate outcome recorded for its own result and filed the objection as a charge, with the
+artifacts it rests on. The claim under test is then the recorded outcome (the pass, or the refusal), and
+the charge is the first attack to run against it, judged on the artifacts it names and the ledger — not on
+the campaign's landmine rows or the worker's narrative, which are the frame the contest exists to test.
+The gate reads the other way round from a finding: the outcome **stands** unless REFUTED. CONFIRMED, the
+charge failed; REFUTED, the charge holds and the outcome is overturned; PROVISIONAL / QUESTIONABLE /
+INCONCLUSIVE, the charge is not established and the outcome stands with that verdict as its label. Write
+`"contest": true` in the artifact and name in `follow_up` the unit that would settle what the charge
+raised; the driver promotes a contested pass that stands, and never the verifier.
+
 **Clear the noise floor before promoting.** A delta only counts if it exceeds measurement jitter. Establish
 the noise floor: repeat the evaluation across seeds or perturbations (or re-runs of a stochastic pipeline)
 and take the spread (SD or MAD) of the primary metric. Require the improvement over the incumbent to be

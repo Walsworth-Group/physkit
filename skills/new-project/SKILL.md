@@ -64,6 +64,8 @@ directory name, is what marks it promoted-frozen (project `CLAUDE.md` rule 6).
   discoveries and §Lineage as their seeded empty forms. **Preserve the edit-tier comment banners** — the
   OPEN/GUARDED split (mirrored as project `CLAUDE.md` rule 7) is what lets future agents update the
   overview without eroding the signed-off core.
+- **Resolve every `[[KEEP — … ]]` tag:** keep what it marks (the headings the runner and validator read,
+  the instruction-file marker on line 1) and delete the tag line; the rest is shaped to the project.
 - **Keep `README.md` short.** It is the map for someone unfamiliar — what campaigns and sessions are,
   where the data and promoted artifacts live — pointing at `PROJECT.md` for everything deeper. The map
   lives there ONLY; do not restate it in `PROJECT.md`.

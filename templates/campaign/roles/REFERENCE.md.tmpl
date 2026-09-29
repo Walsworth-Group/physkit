@@ -5,6 +5,7 @@ campaign: open **one section**, and only when `roles/worker.md` names it. Nothin
 obligation; the contract is `roles/worker.md`.
 
 ## Metric epochs — when the FROZEN metric itself is wrong
+[[KEEP — cited by name from CLAUDE.md, campaign.md, the roles and metric.py: keep the heading and the `## METRIC-REVISION PROPOSAL` block format]]
 Frozen means locked against quiet change, not immutable. A campaign sometimes discovers its ruler is
 wrong: the scorer measures the wrong thing (noise-free data when the campaign targets low SNR; a proxy
 that overfits and needs a second gate), or it does not compute what `campaign.md` §The ONE metric
@@ -100,6 +101,13 @@ an independent check is owed, the verify skill's fresh-agent refuter.
   response there; a user's challenge you answer is acknowledged in the JOURNAL under `## Open
   questions`). Never delete a raised issue; rebut it if you disagree. These records are part of the
   project's scientific integrity.
+- A worker's dispute of its own result's gate outcome is a **contest**, not a set-aside: the `contest`
+  key of the record file (a falsifiable charge, `pass` or `refusal`, the gate, the artifacts it rests on)
+  files `results/contests/<stem>.json`, the driver spawns an independent, blinded verifier for the charge
+  under every preset, and the guard refuses a promotion write while it is pending. The verdict grades the
+  recorded outcome with the charge as its first attack; the outcome stands unless REFUTED, and a contested
+  pass that stands is promoted by the driver with the verdict's label. The verdict reaches the next
+  worker as an inbox note (`results/inbox/contest_<stem>.md`) with its follow-up.
 
 ## The reproducibility bundle — every experiment (baseline, non-negotiable)
 Every experiment must stay reproducible even after the shared code/config are later edited. For each

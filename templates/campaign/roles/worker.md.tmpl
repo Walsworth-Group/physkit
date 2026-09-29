@@ -36,25 +36,26 @@ operational failure: `results/result_<NN>.json` with the run's figure · the sna
 `results/JOURNAL.md` written anew.
 
 ## The Experiment Loop
-1. **CHOOSE & PREDICT** — there is no queue: pick the ONE experiment the campaign needs now from the
+[[KEEP — read by run_campaign.py: the record-file keys in step 9, the `**NEXT:** STOP - <why>` form in step 10, and the runner commands, spelled exactly]]
+1. **CHOOSE** — there is no queue: pick the ONE experiment the campaign needs now from the
    JOURNAL's `**NEXT:**` line and *What to try next and why*, the ledger's last rows and the previous
    unit's card — usually NEXT, or a better idea you can justify in one line. The judgement that the
    campaign is done is yours too (step 10). Name it `exp<NN>_<slug>` with the next free id and pick the
-   change it makes (`campaign.md` §The levers). Before running, write `predictions/<exp_name>.json` in
-   the shape this campaign's `prediction_mode` requires, with a ONE-SENTENCE rationale: the number and
-   the one basis it rests on. The prediction written first is what makes the comparison a test.
+   change it makes (`campaign.md` §The levers).
 2. **IMPLEMENT** — {{IMPLEMENT_VERB}}, in the campaign's own code (never the runner); a new config
    `configs/exp<NN>_<slug>.json` from the CONFIG TEMPLATE in your brief, with the levers it moves listed
    in `_levers` — the runner cross-checks that list against the keys that changed (HARD GATE 2) — plus a
-   one-line `_comment` and `_hypothesis` (cite a borrowed idea's source there).
+   one-line `_comment` and `_hypothesis` (cite a borrowed idea's source there). A unit that records no
+   score also names its `_deliverable` (what will be on disk afterwards that is not now); the runner
+   refuses it otherwise.
 3. **{{RUN_STEP_NAME}}** — {{RUN_COMMAND}} (the FROZEN metric; the targets in `campaign.md`).
 4. **EVALUATE** — {{PRIMARY_METRIC}} (PRIMARY) + {{SECONDARY_METRICS}} via {{EVAL_WRITER}}.
 5. **{{SANITY_STEP}}** — {{GUARDRAIL_CHECK}} (logged, not primary).
 6. **LOG** — the runner writes the ledger row and ends the run with the result card.
 7. **ANALYZE** — from the card, read once. The runner has already judged whether the change cleared this
    campaign's resolution ({{SPREAD_NOUN}} spread, or the tolerance if deterministic) and whether the
-   result met the prediction; a result outside the range you predicted, or outside the metric's
-   plausible bounds, is settled before it is acted on. Every failed check is yours to explain, by name.
+   score is inside the metric's plausible range (`campaign.md`); a score outside it is FLAGGED, probably an
+   implementation error, and is settled before it is acted on. Every failed check is yours to explain, by name.
    Then your own checks, directed at what this unit changed (the checks artifact's `changes` block names
    every file and config key that moved): per change, expected and observed, and the checks you ran -
    only checks the runner does not already run (answer its flags by name in the analysis). They are the
@@ -63,8 +64,9 @@ operational failure: `results/result_<NN>.json` with the run's figure · the sna
 8. **ARTIFACTS** — save {{ARTIFACT_LIST}}, a cheap visualization, and the snapshot (§The save-set).
 9. **RECORD** — the runner already wrote this experiment's logbook entry and ledger row. Everything you
    owe is ONE file and ONE command: write `results/record_<NN>.json` with the Write tool,
-   `{"self_check": {"ran": ["name=pass|fail|skip:detail", ...], "changes": ["what=>expected=>observed", ...], "estimate": X, "note": "..."}, "self_verify": {"ran": ["name=pass|fail|skip:detail", ...], "outcome": "holds|refuted|inconclusive", "note": "..."}, "analysis": "<one paragraph: every failed check answered by name, then what you judge worth recording>", "next": "<one line>", "ledger_note": "<at most 200 chars the numbers do not show>", "finding": "<one line citing results/verdicts/<id>.json, only when a verdict settled something>", "landmine": {"trigger": "...", "landmine": "...", "do_instead": "..."}, "discovery": {"title": "...", "text": "<the effect, its equations, references>", "verdict": "results/verdicts/<id>.json"}}`
-   — every key optional but `self_verify`, which is there exactly when the card says one is owed — then
+   `{"self_check": {"ran": ["name=pass|fail|skip:detail", ...], "changes": ["what=>expected=>observed", ...], "estimate": X, "note": "..."}, "self_verify": {"ran": ["name=pass|fail|skip:detail", ...], "outcome": "holds|refuted|inconclusive", "note": "..."}, "analysis": "<one paragraph: every failed check answered by name, then what you judge worth recording>", "next": "<one line>", "ledger_note": "<at most 200 chars the numbers do not show>", "finding": "<one line citing results/verdicts/<id>.json, only when a verdict settled something>", "landmine": {"trigger": "...", "landmine": "...", "do_instead": "..."}, "discovery": {"title": "...", "text": "<the effect, its equations, references>", "verdict": "results/verdicts/<id>.json"}, "contest": {"claim": "<the objection as a falsifiable charge>", "disputes": "pass|refusal", "gate": "<which gate outcome>", "evidence": ["results/<the artifacts the charge rests on>"]}}`
+   — every key optional but `self_verify`, which is there exactly when the card says one is owed (a
+   `contest` replaces it: see §Recording a promotion) — then
    `python scripts/run_campaign.py --record <exp> --from-file
    results/record_<NN>.json` (the exact filename is on the card); validated and idempotent, a re-run
    replaces; a refusal lists every problem at once, so fix them together and re-run once. Its output is the
@@ -131,6 +133,7 @@ scorer is an epoch (`roles/REFERENCE.md` §Metric epochs). Rank only within one 
 runner refuses the rest.
 
 ## Verification at your level
+[[KEEP — read by run_campaign.py: this heading and one "### `<preset>`" subsection per preset; only the active one is delivered, so add no other ### here]]
 Each result gets at most ONE check, the strongest this campaign's preset (`configs/loop.json`
 `verify.preset`, the user's; never lower it) owes it, decided by the runner when the result is recorded
 and printed on the card. A new best's check waits until the next unit has not beaten it; the claim audit
@@ -145,6 +148,8 @@ this session and without its fresh-agent step, starting from the delta. Predict 
 show, then try to refute it: beat it, enumerate its class, seek a counterexample, re-score the saved
 artifact in a fresh process. It goes in the record file as `self_verify` (what you tried, and `holds`,
 `refuted` or `inconclusive`); the runner refuses a record that omits an owed one or carries one not owed.
+The one exception under every preset: a result whose gate outcome you **contest** (§Recording a promotion)
+is owed the driver's independent verifier instead, at once.
 
 The driver delivers only your preset's section below; the others stay on disk in this file.
 
@@ -153,12 +158,13 @@ Nothing is owed. Investigate what you judge worth investigating, when you judge 
 outside any formal procedure, and say what you checked in the analysis. Every result is `unverified`.
 
 ### `minimal`
-Self-check every unit (step 7). Self-verify a result the card marks owed: one outside the range you
-predicted, better or worse. Nothing else is owed.
+Self-check every unit (step 7). Self-verify a result the card marks owed: one outside the metric's
+plausible range, better or worse. Nothing else is owed, unless you contest (above).
 
 ### `light`
-Self-check every unit. Self-verify a result the card marks owed: one outside the range you predicted that
-is not a new best. A new best is not self-verified: its check is a peer check by the next worker, once
+[[KEEP — read by the promotion guard and the driver: the verdict file's path and fields, and the phrase "peer check owed first"]]
+Self-check every unit. Self-verify a result the card marks owed: one outside the metric's plausible range
+that is not a new best. A new best is not self-verified: its check is a peer check by the next worker, once
 the next unit has not beaten it.
 
 **When your VALUES say `peer check owed first`**, do it before your own unit. You are that result's
@@ -178,6 +184,7 @@ Self-check every unit; nothing is self-verified: the driver spawns a blinded ver
 Keep every unit reproducible from its config and its save-set.
 
 ## Recording a promotion
+[[KEEP — read by the promotion guard: `_promoted_from` and `verification_label` in the pointer write, and no pointer for a contested result]]
 The pointer follows the true best at once: when the card says your result is a new best, write
 `configs/RECOMMENDED.json` from its config.
 What the write must carry, stated so nobody reads the guard's source: `"_promoted_from": "<its exp name>"`
@@ -188,6 +195,21 @@ promotion-time checks have not passed FOR that experiment (`--run-suite due --fo
 driver carries a later label into the pointer, and rolls the pointer back when a check refutes the result. Every finding cites its verdict artifact by
 path; a `discovery` for PROJECT.md needs a CONFIRMED independent verdict. Nothing scored under a
 rolled-back or undeclared metric epoch promotes.
+
+**When you disagree with a gate outcome, you do not decide it — you contest it.** A result that met
+every written promotion condition is promoted, or contested; a result a gate refused is left refused, or
+contested. Never set a gate outcome aside by judgement, and never write "refused" for a result the gates
+passed. A contest is the `contest` key of the record file: the objection as a falsifiable charge (what
+the verifier should find if you are right, and what would show you wrong), what it disputes (`pass` or
+`refusal`), the gate outcome in question, and the artifacts the charge rests on (`results/...`, each on
+disk). It replaces the `self_verify` block: the driver spawns an independent verifier for the charge —
+blinded, artifacts only, whatever the campaign's preset — and that is the result's one check. Do NOT
+write `configs/RECOMMENDED.json` for a contested result: the guard refuses it, and the pointer waits.
+The recorded outcome stands unless the verdict is REFUTED (a doubt the verifier cannot establish is on
+the record, not a veto): a contested pass that stands is promoted by the driver with the verdict's label;
+an overturned pass carries its refuted label; an overturned refusal comes back to the next worker as an
+inbox note, and that worker decides the promotion. The verdict and its follow-up reach the next worker
+as a note either way.
 
 ## The save-set — what every unit writes
 Everything is keyed by the config stem `exp<NN>_<slug>` (the label). Per experiment:
