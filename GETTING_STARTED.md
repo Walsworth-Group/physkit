@@ -364,4 +364,6 @@ doing now.
 `correctness-suite`, `debug`, `dimensional-analysis`, `derive`, `attribute-mechanism`, `record-decision`, `cite-check`, `report`. **Campaign layer**:
 `new-campaign` (scaffold + interview), `run-campaign` (launch/monitor/steer the supervised loop),
 `campaign-status` (periodic checkpoint), `handoff` (cold-resume),
-`discovery-loop`, `experiment-design`, `model-selection`; the end-of-campaign capstone is `report` in its campaign mode.*
+`discovery-loop`, `experiment-design`, `model-selection`; the end-of-campaign capstone is `report` in its campaign mode.
+**Kit improvement**: `campaign-review` (retrospective on a finished campaign → bucketed keepers), `improve-kit`
+(apply the approved ones to your own copy of the kit, with sign-off; the integrity core is frozen).*

@@ -14,6 +14,13 @@ versions behind, work upward from the oldest section that matches your tree.
 > `python` is correct on macOS and Linux. Every command in this file works either way with that
 > substitution.
 
+## To a kit without the principles doc (`docs/PRINCIPLES.md`; kit ≥ v0.12.2, ADR-0034)
+
+Nothing to do for an existing campaign. Its `CLAUDE.md` may name `docs/PRINCIPLES.md` as the reasoning behind
+its rules; that line refers to the kit version stamped in `campaign.md`, where the file exists. An upgraded
+campaign gets the new line from the template. The rules themselves are unchanged: they are stated in
+`docs/CORE.md` and the skills.
+
 ## To reshapeable templates — `[[KEEP]]` tags mark what code reads (kit ≥ v0.12.1, ADR-0033)
 
 Nothing to do for an existing campaign. The templates now carry `[[KEEP — …]]` tag lines that tell a setup
@@ -163,7 +170,7 @@ sibling for the performance test) gets all of it.
 recording after the split (its deliverable arm of the prediction gate, its scoring bypass, its
 `theta`-keyed comparand rule and its payload merge were edits to kit-owned functions the split could not
 carry): `ZERO_EVALUATION_MODES`; `prediction=` at `campaign_scoreboard_fields` / `campaign_checks`;
-`campaign_result_fields`; `campaign_comparand` and a payload `comparand: false`. The changelog has the
+`campaign_result_fields`; `campaign_comparand` and a payload `comparand: false`. The release notes have the
 detail; the seam file's header documents each.
 
 **Migration.** `upgrade_campaign.py` brings in the runner. Then, only if your campaign had such edits:
@@ -554,7 +561,7 @@ exported claim carries an honest verification label (`unverified` · `self-check
 · `<verdict>/re-execution` · `<verdict>/audit`); where the preset checks promotions only CONFIRMED
 graduates, where it does not (`minimal`) the row promotes stamped `unverified` and the guard refuses
 one that does not say so. `report` (campaign mode) waits for the claim audit while an exported claim's label is
-non-independent. The verbatim sentence lives in `docs/CORE.md`, `docs/PRINCIPLES.md`, the campaign
+non-independent. The verbatim sentence lives in `docs/CORE.md`, the campaign
 `CLAUDE.md` (HARD GATE 1), and `campaign.md`.
 
 ## To measured verification depth, the change manifest, and the time ledgers (kit ≥ v0.11.0, 2026-09-03)

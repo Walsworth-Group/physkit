@@ -1,7 +1,7 @@
 {
   "name": "physkit",
   "displayName": "PhysKit",
-  "version": "0.12.1",
+  "version": "0.12.2",
   "description": "A dual-use toolkit for rigorous physical-science work: a general layer of skills for framing problems, verifying results, designing simulations, debugging, and reporting; and a campaign layer that scaffolds and runs autonomous-research loops. Honesty and independent verification are the frozen core.",
   "author": {
     "name": "Walsworth Group",

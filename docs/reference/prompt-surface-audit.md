@@ -17,7 +17,7 @@ A rule present in the kit is not thereby in force. Doctrine reaches an agent thr
 enumerable set of surfaces, and each surface has its own failure mode. Before relying on a rule,
 verify it is physically present in the rendered context of every agent expected to obey it, and
 re-verify after every prompt change. This is the prompt-side counterpart of *enforce, don't exhort*
-(`PRINCIPLES.md` Ctx 9): that rule requires wiring the check as a gate and asserting the gate is
+(CORE, Running unattended): that rule requires wiring the check as a gate and asserting the gate is
 present; this one requires the same of the doctrine itself.
 
 ## The surfaces (and how each one fails)
@@ -76,7 +76,7 @@ Audit both directions: is the rule present, and is anything present that opposes
 
 ## Composition
 
-`PRINCIPLES.md` Ctx 9 (*enforce, don't exhort* / *assert the gate is present*) is the parent doctrine ·
+CORE's *enforce, do not exhort* (Running unattended) is the parent doctrine ·
 `new-campaign` Step 5 wires the audit into the launch checklist · `campaign-status` hygiene checks are
 the natural place to re-assert it mid-campaign · `context-economy.md` governs how much context each
 role gets; this doc governs whether the load-bearing rules are in it.

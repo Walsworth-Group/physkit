@@ -97,9 +97,13 @@ reordering one is a deliberate, stated decision, never a silent shortcut.
    interrogable; verification makes it right. Anchor every load-bearing fact to its most authoritative
    source and tag its provenance — PINNED (authoritative artifact/probe) / REPORTED (stated in text) /
    INFERRED (untrusted proxy) / RECALLED (memory) / REASONED (own judgment). A fact still at INFERRED or
-   RECALLED is a blocker to resolve before expensive work rests on it. A memory or durable-note write is a
-   ledger write: verify before persisting a conclusion, tag its provenance the same way, and retract it in
-   place and reconcile the index when it changes. A silent cross-session channel steers future sessions.
+   RECALLED is a blocker to resolve before expensive work rests on it. The record carries its own
+   corrections: a reversed or superseded finding is marked superseded where it stands, with the correction
+   in the same record, append-only, never dropped silently or fixed only elsewhere; a stale claim, or an
+   index line still pointing at a retracted conclusion, misleads the next reader. A memory or durable-note
+   write is a ledger write: verify before persisting a conclusion (when unsure, persist the open question),
+   tag its provenance the same way, and retract it in place and reconcile the index when it changes. A silent cross-session channel
+   steers future sessions.
 
 Then iterate. A surprise or a correction updates the frame (step 2) and the plan, not just the log.
 
@@ -127,7 +131,8 @@ Operate autonomously; keep every unattended action provably safe:
   science. Watch new results completed and accepted per unit time, and treat a stalled log as a dead run.
 - Enforce, do not exhort. The integrity-critical checks are gates, not reminders; do not skip them under
   time pressure. Ending the loop is itself gated, because prose cannot hold a loop open: it stops running
-  when you do. Depth: `PRINCIPLES.md` §Operating-unattended.
+  when you do. Depth: `docs/reference/expensive-evaluation.md` (monitoring a long run),
+  `docs/reference/prompt-surface-audit.md` (is the rule actually in the agent's context?).
 
 ## Honest reporting
 Register may tailor to the reader; facts and caveats never do. Before publishing, recompute load-bearing
@@ -178,16 +183,15 @@ Skill: `/physkit:report` (in a campaign, its capstone mode).
 | a campaign plateaued across lever families | `assumption-audit` (campaign layer) |
 | a bug invalidated a campaign's findings | `fork-campaign` (campaign layer) |
 | closing a campaign | `claim-audit`, then `report` in campaign mode (campaign layer) |
+| improving the kit itself from a finished campaign | `campaign-review`, then `improve-kit` |
 | a discovery / next-experiment / model-discrimination campaign (archetypes G / H / I) | `discovery-loop` / `experiment-design` / `model-selection` (campaign layer) |
-| a principle's full statement / rationale | `docs/PRINCIPLES.md` — the relevant section, not the whole file |
 | the map of all files | `docs/DOCTRINE_INDEX.md` |
 
 Surface it to the user: flag a skill the user would not know to ask for, or the next one for the project's
 stage. Give one most-relevant suggestion with its provenance, not a menu.
 
-The nine pillars, one line each, with the full text in `PRINCIPLES.md` (and the pillar taxonomy):
+The nine pillars, one line each (the pillar taxonomy):
 **1** Adaptability & self-improvement · **2** Integrity & honest reporting · **3** Verification &
 correctness · **4** Physics-aware reasoning · **5** Methodical inquiry · **6** Traceability (provenance ·
 records · reproducibility) · **7** Autonomy & supervision · **8** Communication & specification ·
-**9** Focus (context economy). Cite `PRINCIPLES.md` sections by name, not number; its internal numbering
-does not track the pillar numbering.
+**9** Focus (context economy).

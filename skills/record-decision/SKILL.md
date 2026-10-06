@@ -72,9 +72,9 @@ never rewrite history, and supersede an old entry with a new one that links to i
 ## Composition
 - `frame-problem` — a parked physical effect or a key assumption gets a decision record so its rationale
   and revisit-trigger survive.
-- Sign-off tracking (`docs/PRINCIPLES.md` Ctx 9) — a timed-out or unanswered approval request is recorded
+- Sign-off tracking — a timed-out or unanswered approval request is recorded
   as "no sign-off obtained" at the time, never inferred later from an unrelated go-ahead. Resurface the
-  gap proactively.
+  gap proactively, as a request probably missed rather than a refusal, and assume neither answer meanwhile.
 - `verify` — the reason for a non-obvious check, and the premise behind a QUESTIONABLE ASSUMPTION verdict.
 - `simulation-design` / `correctness-suite` — the rationale for a tool choice, a discretization, or a
   non-obvious regression gate.

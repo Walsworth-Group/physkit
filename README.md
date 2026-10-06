@@ -42,7 +42,7 @@ They group into nine pillars, led by the one that improves all the others. The t
 
 | Pillar | Design face — built into the kit | Operating face — skills on a task |
 |---|---|---|
-| **Adaptability & self-improvement** | PhysKit is a living document — improved from real-run retrospectives, with the frozen core off-limits, so it adapts over time | `discovery-loop` / `experiment-design` evolve the artifact; fix a crash and re-run before judging the idea; diagnose a failure before pivoting |
+| **Adaptability & self-improvement** | PhysKit is a living document — improved from real-run retrospectives, with the frozen core off-limits, so it adapts over time | `campaign-review` → `improve-kit` turn a finished campaign into reviewed changes to your copy of the kit; `discovery-loop` / `experiment-design` evolve the artifact; fix a crash and re-run before judging the idea; diagnose a failure before pivoting |
 | **Integrity & honest reporting** | the frozen honesty core in `docs/CORE.md`, applied through the campaign's promotion discipline | `report` labels every number by provenance + give the honest band; `cite-check` blocks fabricated references |
 | **Verification & correctness** | `correctness-suite` stands up analytic-limit, convergence, and regression checks, re-run after every core change | `verify` checks independently and recomputes with graded verdicts; `dimensional-analysis`; `debug` |
 | **Physics-aware reasoning** | `frame-problem` requires a physics-effect inventory + verification plan; `docs/SIMULATION_VALIDATION.md` codifies V&V&UQ | `dimensional-analysis`, `derive`, `simulation-design`, `correctness-suite` (manufactured solutions, order-of-accuracy) |
@@ -59,7 +59,7 @@ verification, physical plausibility is a gate, and a few more. Seven of the nine
 kernel. Communication and Focus do not, by design: they track what models are capable of, and are expected
 to improve as models do.
 
-The full per-pillar doctrine, with rationale and provenance, is in [`docs/PRINCIPLES.md`](docs/PRINCIPLES.md); the always-loaded essence is in [`docs/CORE.md`](docs/CORE.md).
+The doctrine is stated in [`docs/CORE.md`](docs/CORE.md), which is always loaded; each skill and reference doc carries the depth for the work it covers.
 
 ## Install
 
@@ -130,8 +130,8 @@ launch an autonomous campaign.
 .claude-plugin/   Claude Code plugin.json + marketplace.json (the manifests)
 .codex-plugin/    Codex plugin.json (points at the same skills/)
 .agents/          vendor-neutral Codex marketplace entry
-skills/           the 24 skills (general + campaign), each a SKILL.md
+skills/           the 26 skills (general + campaign + kit improvement), each a SKILL.md
 scripts/          install-skills.{sh,ps1} — skills-only projection for general cross-harness use
-docs/             always-on spine (CORE, PRINCIPLES) + on-demand reference docs
+docs/             always-on spine (CORE) + on-demand reference docs
 templates/        project + campaign scaffolds materialized by /physkit:new-project + new-campaign
 ```

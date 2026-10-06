@@ -24,7 +24,7 @@ things are fixed:
   one of them and cannot be argued with from inside a spawn. Propose each by name (Step 2); what you only
   suspect goes to the JOURNAL marked `[setup inference]` (Step 3).
 
-**Stance for the interview** (from `docs/PRINCIPLES.md` §1):
+**Stance for the interview** (CORE Stage 0, applied to setup):
 - **Fill from sources first; ask only when unsure. Never ask what you can check.** Before asking anything,
   harvest every answer you can definitively obtain from what is already available: the conversation so far,
   any documents or paper manuscripts the user says describe their setup, data and config files in the
@@ -83,9 +83,6 @@ linked package resource is absent, this is a skills-only projection rather than 
 stop and ask the user to install the full plugin; never fall back silently to a source checkout.
 
 Read these so your questions and fills are grounded:
-- [`../../docs/PRINCIPLES.md`](../../docs/PRINCIPLES.md) — the doctrine every campaign inherits, sectioned by 8
-  contexts. Skim it now. Once the archetype(s) are chosen (Step 1), read in depth only the contexts they
-  lean on; the cheatsheet maps each archetype to its disciplines.
 - [`../../docs/CORE.md`](../../docs/CORE.md) — the always-on spine and the general skills it routes to
   (`frame-problem`, `verify`, `simulation-design`, `correctness-suite`, `report`, …) that this campaign
   composes.
@@ -143,7 +140,7 @@ Collect what already answers the interview, so you only ask about real gaps:
   config files already in the target directory. Extract concrete values (geometry, parameters, units, data
   shapes) and note each value's source, so you can cite it and ask "use the value from <source>?" if its
   applicability is uncertain. For papers, prefer the **arXiv** version and convert any PDF with a
-  scientific-PDF-to-markdown tool to save tokens (see `docs/PRINCIPLES.md` §2).
+  scientific-PDF-to-markdown tool to save tokens.
 - **Detect, do not ask, what you can check:** the compute (CPU cores, RAM, and GPU, e.g. by running
   `nvidia-smi`), the free disk space on the volume the campaign will live on, the available
   Python/toolchain, and the data files present and their shapes.
@@ -394,20 +391,19 @@ control, or training or fitting purely on real experimental data). If there is o
    either way**. A small solo campaign can skip git without losing reproducibility
    (`docs/reference/version-control.md`). Record the choice; never make git a precondition for starting.
 10. **Existing code & tools.** What runnable code or data already exists to reuse, and which libraries to
-    prefer (mature and free over from-scratch — `docs/PRINCIPLES.md` §5/§9).
+    prefer (mature and free over from-scratch).
 11. **Internet / literature level (always ask; 3 options).** This sets ongoing literature use during the
     loop: **none** (no ongoing searches; remove the literature-search rule), **only when needed** (search
     when stuck, the default), or **extensive** (proactively search at setup to seed
     `../../PROJECT.md`/`LITERATURE.md`, and periodically thereafter, not only when stuck). Independently, if the
     user provided any starting literature, summarize it in `LITERATURE.md` and keep the file, even when
-    ongoing search is *none*. For needed and extensive, prefer arXiv and convert PDFs efficiently
-    (`docs/PRINCIPLES.md` §2).
+    ongoing search is *none*. For needed and extensive, prefer arXiv and convert PDFs efficiently.
 12. **User's own ideas (always ask).** Ask the user for (a) any ideas or directions they would like you to
     try, and (b) anything that should not be tried: out of scope, known dead ends, forbidden approaches.
     Record the to-try ideas in the opening JOURNAL — ranked under `## What to try next and why`,
     attributed to the user, with the first as the **NEXT:** line — and fold the
     do-not-try items into `campaign.md` §FROZEN / out of scope. User ideas are inputs, not a ceiling; you
-    remain encouraged to propose well-founded novel ideas of your own (`docs/PRINCIPLES.md` §2).
+    remain encouraged to propose well-founded novel ideas of your own (CORE: novelty and rigor are compatible).
 13. **Multi-stage plan — propose it proactively.** Many complex tasks are best done as several sequential
     loops rather than one: validating and improving on a simpler subcase first usually yields a more
     powerful, better-validated final result. Design a staged plan and propose it.
@@ -490,7 +486,7 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   research reflexes, the hard gates, and the routing table: no kit-design rationale, no
   scaffolding-time instructions (the fresh-session launch is Step 5's handoff message to the user), and no
   commentary on how the file was produced. The reasoning behind its rules is the plugin's `docs/CORE.md`
-  and `docs/PRINCIPLES.md` — referenced at the stamped version, never inlined: reference material must
+  and the skills it routes to — referenced at the stamped version, never inlined: reference material must
   not ride in every worker's context on every turn.
 - **Stamp the kit version — the campaign's doctrine and tooling provenance.** Fill
   **`{{PHYSKIT_VERSION}}`** (it appears in `campaign.md`'s header and atop `results/logbook.md`) as

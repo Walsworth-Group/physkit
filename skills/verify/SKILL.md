@@ -71,7 +71,12 @@ Different claims fail in different ways. Lead with the check that would catch th
   the number it returns looks like evidence. Two tells: the comparison's argmin is the incumbent for every
   candidate (tautological), or the supposedly neutral arbiter reproduces one candidate's fitted parameter
   identically. Re-score under a reference that shares nothing with any candidate, or profile the shared
-  component out. Never argue that the entanglement is small.
+  component out. Never argue that the entanglement is small. Confirm too that all contenders were scored under the
+  same metric and data version: if any changed, re-score the contenders under the current one. A
+  comparison across versions is meaningless even when both numbers are individually real.
+- **A result on a published or well-known benchmark → rule out memorization before crediting it.**
+  Withhold the problem's identity where you can and re-test on synthetic instances that cannot be in
+  training data (`discovery-loop` has the full gate).
 - **A claim / comparison → falsify it with code.** Write controls: verify against known examples (inputs
   whose answer you can derive or look up), test edge/degenerate/extreme inputs, randomize inputs, search
   for counterexamples. Beat the trivial baselines (all-zeros / constant / mean / a trivial physical state)
@@ -168,8 +173,17 @@ A result is only as trustworthy as the facts it rests on and the source those fa
 - When sources conflict, resolve a load-bearing fact to the highest-authority artifact: parse the saved
   model, probe the released data, run the shipped weights. Do not resolve it to a lower-authority proxy
   (paper text, leftover code) or to a statistic you derived from the data: a correlation you computed is
-  weaker than the source it came from. The authority ladder and the
-  PINNED/REPORTED/INFERRED/RECALLED/REASONED tags are in `docs/PRINCIPLES.md` Ctx 4.
+  weaker than the source it came from. Rank the sources describing the same system: a shipped artifact
+  or an empirical probe outranks text that states the fact (paper, figure, docs), which outranks code you
+  cannot trust as the source (leftover or modified code), which outranks recollection. Tag each
+  load-bearing fact by where it came from: PINNED (authoritative artifact or probe) · REPORTED (stated in
+  text) · INFERRED (from an untrusted proxy) · RECALLED (from memory) · REASONED (your own engineering or
+  design judgment, resting on no external claim about the system). A load-bearing fact still at INFERRED
+  or RECALLED is a blocker to resolve: ask, do not default.
+- Weigh a claim by its evidence, not its source. A value the user supplies enters as REPORTED or
+  RECALLED, never PINNED, until a probe confirms it; a published value enters as REPORTED, with its
+  uncertainty; your own earlier conclusions re-enter at the confidence they were tagged with. Deference
+  that lets an error through is a verification failure, not courtesy: push back with the evidence.
 - A fact acted on at INFERRED or RECALLED is itself a claim to verify. Attempt to falsify it before it
   becomes load-bearing, and run any cheaper discriminating check that is already available. An unfalsified
   inference can otherwise carry a long series of experiments before it is caught.
@@ -411,6 +425,9 @@ The refuter's checklist differs from the positive case. Hunt the false-negative 
   incumbent? A fair kill requires comparable effort.
 - **Insufficient search** — dead after 2 configs in a large design space is a sampling statement, not a
   death certificate.
+- **Non-discriminating regime** — was the negative measured where the competing hypotheses predict the
+  same outcome? A null where the effect must vanish under either is no evidence against it; re-test where
+  they disagree.
 - **Mechanism** — a promoted negative carries why it fails, not just that it scored low. Never name a cause
   of death from resemblance (`attribute-mechanism`).
 

@@ -23,7 +23,7 @@ Three tiers, by how often each is needed:
 - CORE (always loaded): the slim spine — identity, the frozen non-negotiables, the working loop, and a
   routing table to everything else. It must stay short by design; if it grows, something in it belongs in
   a lower tier. ([`CORE.md`](../CORE.md).)
-- REFERENCE (on-demand depth): the full doctrine and the deep dives (this doc, `PRINCIPLES.md`,
+- REFERENCE (on-demand depth): the deep dives (this doc,
   `SIMULATION_VALIDATION.md`, the skills). Loaded when a trigger fires, never by default: a situation, a
   skill invocation, or a question that needs the depth.
 - METADATA (the map): the `DOCTRINE_INDEX.md` and each artifact's `load_trigger`, so the agent can find
@@ -63,7 +63,7 @@ thread never pays for the intermediate reasoning. Use sub-agents as both a speed
   survey, belongs in a sub-agent that returns the answer rather than the raw material. Summarize forward
   across agents: carry conclusions, not transcripts.
 - Independent verification is the prime use. A fresh agent that never saw the generating reasoning is the
-  mechanism-diverse checker: warrant rides on the checker, not the generator (Context 2). The `verify` and
+  mechanism-diverse checker: warrant rides on the checker, not the generator (CORE constitution). The `verify` and
   `cite-check` skills already spawn refuters and checkers this way.
 - Scope tight, return small. Give each sub-agent a precise task and require a compact, structured result.
   A sub-agent that hands back its whole transcript defeats the purpose.
@@ -80,7 +80,7 @@ thread never pays for the intermediate reasoning. Use sub-agents as both a speed
 
 ## Model tiering — spend reasoning where it counts
 Sub-agents do not all need the strongest model. Match the model to the task, the same way evaluation
-budget is matched to the question (`spend evaluations well`, Principle Context 6):
+budget is matched to the question (`spend evaluations well`, `discovery-loop`):
 - Lighter tier (mechanical, checkable): file and literature search and evidence harvest; citation
   existence and metadata checks; template and scaffold fills after the spec is frozen; the LaTeX
   compile-fix loop and figure generation from a fixed spec; journal and logbook summarize-forward; data
@@ -107,6 +107,7 @@ a trigger can pull it when relevant. Most material is the latter.
 
 ## Pointers
 CORE (the spine it governs); `DOCTRINE_INDEX.md` (the metadata layer and the `load` / `load_trigger`
-fields); PRINCIPLES Context 7, and Context 6 for the evaluation-budget analogue to model tiering; `verify`
+fields); CORE working-loop step 3 (sub-agents and model tiering) and `discovery-loop` for the
+evaluation-budget analogue; `verify`
 and `cite-check` (the sub-agent verification and fan-out pattern); `handoff`
 (cold-resume without reloading everything); the campaign logbook/journal split.

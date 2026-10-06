@@ -9,7 +9,7 @@ the campaign's OWN next action (the JOURNAL NEXT pointer + its open questions + 
 Why a hook and not an instruction: roles/worker.md already says `12. REPEAT` and CLAUDE.md already says don't
 stop prematurely, yet campaigns stopped after each completed experiment anyway. A turn ends when the model
 emits no tool call, and no prose survives that moment — this is the doctrine's own "enforce, don't exhort"
-(PRINCIPLES §9). Prose sets the intent; this hook is what makes it hold.
+(CORE, Running unattended). Prose sets the intent; this hook is what makes it hold.
 
 THE THREE WAYS A LOOP MAY END (checked in this order; anything else is blocked):
   1. `results/STOP` (or `STOP.txt`) exists          — the human's graceful stop. The agent finishes and logs
@@ -76,7 +76,7 @@ DRIVER_ALIVE = RESULTS / ".driver_alive"        # the supervisor driver's sentin
 DRIVER_ALIVE_WINDOW_MIN = float(os.environ.get("AUTORESEARCH_DRIVER_ALIVE_WINDOW_MIN", "10"))
 
 # A stop must name WHY in a closed vocabulary — "the agent decided to" is not a reason. These map onto
-# PRINCIPLES §9: escalate only a genuine fork, confirm before an irreversible act, don't stop prematurely.
+# CORE's Running unattended: escalate only a genuine fork, confirm before an irreversible act, don't stop prematurely.
 REASON_CODES = {
     "user-fork": "an ambiguous goal or a trade-off only the user can weigh",
     "irreversible-action-confirm": "waiting on the user to confirm a hard-to-reverse action",

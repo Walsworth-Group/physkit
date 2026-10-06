@@ -9,8 +9,8 @@ end). Then specialize the placeholders. The generic `campaign.md` template is th
 rigor disciplines. The hardware-in-the-loop archetype (**E**) is fundamentally different from the
 compute-only ones and needs special treatment — see its section.
 
-This cheat-sheet is the *selection guide*; the deeper doctrine lives in [`docs/PRINCIPLES.md`](../docs/PRINCIPLES.md)
-(§5 Simulation rigor & tooling, §6 Experiment & hardware, §9 Coding). Expand it freely as new
+This cheat-sheet is the *selection guide*; the deeper doctrine lives in the skills and reference docs it
+names (`docs/SIMULATION_VALIDATION.md`, `docs/reference/hardware-in-the-loop.md`, …). Expand it freely as new
 archetypes and patterns appear.
 
 > This file is **guidance for the setup skill** — it is NOT copied into a generated campaign (though
@@ -79,7 +79,7 @@ archetypes and patterns appear.
   numerical convergence (refine grid/timestep/tolerance until the answer stops moving). Before writing a
   simulator from scratch, **survey existing packages/libraries** — prefer a mature, well-tested, ideally
   free/open-source tool, and explore the options carefully before committing; reinventing a solver is
-  slow and a fresh source of bugs. Record what you chose and why. (Full checklist: `docs/PRINCIPLES.md` §5.)
+  slow and a fresh source of bugs. Record what you chose and why. (Full checklist: `docs/SIMULATION_VALIDATION.md`.)
 
 ## D. ML-model training / classifier
 - **PRIMARY metric:** a held-out test metric with EXACT labels (balanced accuracy / F1 / MSE), FROZEN.
@@ -136,7 +136,7 @@ treatment** — the "experiment" is a real measurement on real hardware, not a c
   than assumed from the fact that the acquisition completed.
   (The generic `campaign.md` carries an optional "Hardware safety & irreversibility" block for this
   archetype; full operational doctrine in `docs/reference/hardware-in-the-loop.md`, principle-level in
-  `docs/PRINCIPLES.md` §9.)
+  CORE's Running unattended.)
 
 ## F. Inverse problem / parameter estimation (with uncertainty)
 - **PRIMARY metric:** fidelity of the **recovered quantity** (a parameter, field, or distribution) to
@@ -256,7 +256,7 @@ These are settled doctrine in the generic `campaign.md` and apply regardless of 
 - **Simulation Verification & Validation** — most archetypes have a simulation component (forward models,
   synthetic data, evaluators, surrogates), so apply the V&V&UQ doctrine in `docs/SIMULATION_VALIDATION.md`;
   and **hardware safety / irreversibility** for hardware-in-the-loop campaigns
-  (`docs/reference/hardware-in-the-loop.md`; principle-level in `docs/PRINCIPLES.md` §9).
+  (`docs/reference/hardware-in-the-loop.md`; principle-level in CORE's Running unattended).
 
 ## Multi-objective / multi-stage campaigns
 Many complex goals are best done as **several sequential loops**, not one tangled campaign — optimizing

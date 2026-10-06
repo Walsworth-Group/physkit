@@ -55,5 +55,5 @@ A result is not saved until both the how-to-redo (code, config, data provenance)
 (documentation and the quicker-check artifacts) exist, with or without git.
 
 ## Pointers
-PRINCIPLES Context 7 (reproducibility is mandatory; git optional); the campaign `roles/worker.md` save-set
+CORE constitution and working-loop step 6 (reproducibility is mandatory; git optional); the campaign `roles/worker.md` save-set
 (snapshot convention); `handoff` (archive-don't-delete); `record-decision` (why a non-obvious VC choice).

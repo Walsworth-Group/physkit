@@ -26,7 +26,8 @@ Four dials decide the shape of the document. Settle them before writing; ask if 
   full) or *shareable* (plain: data, method, comparison, results). Both carry the same facts and caveats.
   Only the register differs; audience never changes what is disclosed.
 - **Stage.** *Draft* (fast, plain `article` or Markdown, structure and numbers right) · *progress* (a
-  checkpoint snapshot: what is known, what is open) · *capstone* (the polished, reproducible, shareable
+  checkpoint snapshot: what is known, what is open; on long work, one at each milestone or decision point
+  rather than everything held for the end) · *capstone* (the polished, reproducible, shareable
   deliverable). Verification (Standard 3) is mandatory before any shareable or capstone output. For an
   internal draft it can be lighter, but it is never skipped for the headline numbers.
 - **Format.** LaTeX is the default for scientific reports (REVTeX/APS for a physics capstone; see
@@ -47,7 +48,8 @@ A report is finished only when it passes all five.
    file/computation, or a citation. Quote the value or delta and where it came from. No free-floating
    assertions. If a choice has no evidence, state that plainly rather than rationalize it.
 2. **Honest.** Label every number by provenance (see below). Report the honest band and the assumption
-   that drives it, not the optimistic edge. Lead with the bad news. Surface limitations, the known
+   that drives it, placed against the field's known thresholds and named precedents so the reader can
+   judge its size; not the optimistic edge. Lead with the bad news. Surface limitations, the known
    ceiling, PROVISIONAL findings, and unresolved disputes. Give the road not taken its brief due.
 3. **Verified.** Re-check key claims and values at report time (composes `verify` and `cite-check`; see
    *Verify before you finalize*). Never put a number in a report without reconfirming it from source.

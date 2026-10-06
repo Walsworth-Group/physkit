@@ -46,7 +46,7 @@ Rules that make the inventory honest:
 - State the domain of validity and the key assumptions the model rests on.
 - Anchor load-bearing facts, not only effects. A system parameter or convention taken from a paper,
   leftover code, or memory is a description of the system, not the system. Pin each one to the
-  highest-authority artifact you can parse or run, and tag its provenance (`docs/PRINCIPLES.md` Ctx 4). An
+  highest-authority artifact you can parse or run, and tag its provenance (the ladder and tags are in `verify` §5b). An
   unpinned load-bearing fact is a risk, like an unjustified "negligible."
 - Derive implied counts from a named structure; do not take the given number on its own. When the problem
   references a named structure class (a lattice, a symmetry group, a periodic or composite geometry), that

@@ -8,8 +8,8 @@ description: >-
 
 A **Project** is one physical system investigated over many **Campaigns** (versioned attempts) and **Sessions**
 (ad-hoc work). It exists so shared data and docs live once, referenced by relative path and never copied, and
-so "what each version changed and found" lives in one index. Read §1 of the linked
-[`../../docs/PRINCIPLES.md`](../../docs/PRINCIPLES.md) for the interview stance.
+so "what each version changed and found" lives in one index. The interview stance is CORE's
+Stage 0, as applied in `new-campaign`'s "Stance for the interview".
 
 ## Every campaign lives in a project — there is no bare-campaign mode
 Two entry paths: directly, when the user starts a new line of research, or from `new-campaign`, whose

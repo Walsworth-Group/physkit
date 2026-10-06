@@ -3,7 +3,7 @@ id: simulation-validation
 kind: reference-doc
 layer: shared
 load: on-demand
-load_trigger: When a simulation, forward model, surrogate, synthetic data, or simulator-scored search is involved — the full V&V&UQ depth behind simulation-design / correctness-suite / PRINCIPLES §5.
+load_trigger: When a simulation, forward model, surrogate, synthetic data, or simulator-scored search is involved — the full V&V&UQ depth behind simulation-design / correctness-suite.
 frozen: false
 addresses: [2, 5]
 status: ported+augmented
@@ -14,7 +14,7 @@ review: living
 
 A result that relies on a simulation (a forward model, a simulator inside the metric, synthetic training
 data, a surrogate or emulator, or a generative search scored by a simulator) is only as trustworthy as that
-simulation. [`PRINCIPLES.md`](PRINCIPLES.md) §5 is the summary; `simulation-design` plans this work and
+simulation. `simulation-design` plans this work and
 `correctness-suite` executes it. This document is the fuller doctrine behind all three.
 
 > Compiled from established simulation V&V / VVUQ practice and the framework in Wikipedia's

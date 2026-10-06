@@ -118,7 +118,7 @@ Unstuck* block names the trigger conditions · `frame-problem` seeds the inherit
 `fork-campaign` if a fallen assumption invalidates standing findings · `docs/reference/pivoting.md`
 remains the sibling path for the other species of plateau (exhausted levers).
 
-`verify` §5b and PRINCIPLES Context 4 are the prospective form of this discipline: falsify an INFERRED or
+`verify` §5b is the prospective form of this discipline: falsify an INFERRED or
 RECALLED fact before it becomes load-bearing. This skill is the retrospective audit for when that gate
 was missed and a plateau is the symptom.
 
