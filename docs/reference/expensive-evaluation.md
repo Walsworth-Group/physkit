@@ -4,8 +4,6 @@ kind: reference
 layer: operating
 load: on-demand
 frozen: false
-addresses: [5, 7, 9]
-status: active
 ---
 
 # Expensive evaluations — spending the evaluation budget well

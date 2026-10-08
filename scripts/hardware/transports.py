@@ -186,7 +186,7 @@ class FileTransport(Transport):
         path = d / f"{unit_id}.order{self.ext}"
         # Redispatch gets a FRESH order identity: if this unit's order already reached a
         # terminal marker, a re-submit to the same path would be answered instantly by the
-        # stale sibling (the fast-fail found in the HW-1a acceptance run). The attempt
+        # stale sibling (a fast-fail). The attempt
         # suffix lives on the FILE name only; the unit_id inside the payload - the
         # contract's sole join key - is unchanged.
         attempt = 1

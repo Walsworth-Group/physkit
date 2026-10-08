@@ -5,8 +5,6 @@ layer: shared
 load: on-demand
 load_trigger: When an approach is failing or plateauing and you must decide whether to refine the current idea or pivot to a different one — the refine↔pivot diagnosis.
 frozen: false
-addresses: [3]
-status: new
 review: living
 ---
 

@@ -123,8 +123,7 @@ Edit `verify.preset` in `configs/loop.json` at any time. The driver logs the cha
 and the next spawn's brief carries the new preset's instructions; every result records the preset it ran
 under, so a campaign that changed presets reads as two regimes, not one. Lowering the preset never
 relabels a result already checked; raising it does not check results retroactively - run the verify skill
-for those you now want covered. `moderate` was renamed `heavy`; a loop.json still naming it is
-refused at preflight.
+for those you now want covered. A preset name outside the five is refused at preflight.
 
 ## Presets and the metric-revision dial
 

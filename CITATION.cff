@@ -1,0 +1,70 @@
+# How to cite PhysKit. The author list matches the paper's. GitHub shows this file as "Cite this
+# repository"; Zenodo reads it when it archives a release. The version is deliberately absent: each
+# tagged release is the version, and its Zenodo DOI pins it. Add the arXiv identifier to
+# preferred-citation once the preprint is posted.
+cff-version: 1.2.0
+message: >-
+  If you use PhysKit, please cite the paper below, and the software version you used (each release has
+  its own DOI on Zenodo).
+type: software
+title: "PhysKit: agent skills for rigorous research in the physical sciences"
+authors:
+  - family-names: Reed
+    given-names: Niko R.
+    affiliation: "Department of Physics, University of Maryland, College Park, Maryland 20742, USA; Quantum Technology Center, University of Maryland, College Park, Maryland 20742, USA; Joint Quantum Institute, University of Maryland, College Park, Maryland 20742, USA"
+  - family-names: Daly
+    given-names: Declan M.
+    affiliation: "Department of Physics, University of Maryland, College Park, Maryland 20742, USA"
+  - family-names: Beling
+    given-names: Andrew J.
+    affiliation: "Department of Physics, University of Maryland, College Park, Maryland 20742, USA; Quantum Technology Center, University of Maryland, College Park, Maryland 20742, USA"
+  - family-names: Giandrea
+    given-names: Jordan D.
+    affiliation: "Department of Physics, University of Maryland, College Park, Maryland 20742, USA"
+  - family-names: Walsworth
+    given-names: Ronald L.
+    affiliation: "Department of Physics, University of Maryland, College Park, Maryland 20742, USA; Quantum Technology Center, University of Maryland, College Park, Maryland 20742, USA; Joint Quantum Institute, University of Maryland, College Park, Maryland 20742, USA; Department of Electrical Engineering, University of Maryland, College Park, Maryland 20742, USA"
+  - family-names: Blanchard
+    given-names: John W.
+    affiliation: "Quantum Technology Center, University of Maryland, College Park, Maryland 20742, USA"
+  - family-names: Ang
+    given-names: Daniel
+    affiliation: "Quantum Technology Center, University of Maryland, College Park, Maryland 20742, USA"
+contact:
+  - name: Walsworth Group
+    email: walsworthgroup@gmail.com
+repository-code: "https://github.com/Walsworth-Group/physkit"
+license: MIT
+keywords:
+  - agentic research
+  - AI agents
+  - physics
+  - verification
+  - reproducibility
+  - Claude Code
+preferred-citation:
+  type: article
+  status: in-preparation
+  title: "Principles and Techniques for Agentic Research in Experimental Physics"
+  authors:
+    - family-names: Reed
+      given-names: Niko R.
+      affiliation: "Department of Physics, University of Maryland, College Park, Maryland 20742, USA; Quantum Technology Center, University of Maryland, College Park, Maryland 20742, USA; Joint Quantum Institute, University of Maryland, College Park, Maryland 20742, USA"
+    - family-names: Daly
+      given-names: Declan M.
+      affiliation: "Department of Physics, University of Maryland, College Park, Maryland 20742, USA"
+    - family-names: Beling
+      given-names: Andrew J.
+      affiliation: "Department of Physics, University of Maryland, College Park, Maryland 20742, USA; Quantum Technology Center, University of Maryland, College Park, Maryland 20742, USA"
+    - family-names: Giandrea
+      given-names: Jordan D.
+      affiliation: "Department of Physics, University of Maryland, College Park, Maryland 20742, USA"
+    - family-names: Walsworth
+      given-names: Ronald L.
+      affiliation: "Department of Physics, University of Maryland, College Park, Maryland 20742, USA; Quantum Technology Center, University of Maryland, College Park, Maryland 20742, USA; Joint Quantum Institute, University of Maryland, College Park, Maryland 20742, USA; Department of Electrical Engineering, University of Maryland, College Park, Maryland 20742, USA"
+    - family-names: Blanchard
+      given-names: John W.
+      affiliation: "Quantum Technology Center, University of Maryland, College Park, Maryland 20742, USA"
+    - family-names: Ang
+      given-names: Daniel
+      affiliation: "Quantum Technology Center, University of Maryland, College Park, Maryland 20742, USA"

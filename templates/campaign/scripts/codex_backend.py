@@ -93,7 +93,7 @@ def _auto_selection() -> Selection:
                        + ". Select --backend claude|codex (or set driver.backend).")
 
 def configure(loop_cfg: Path, cli_choice: str | None = None) -> Selection:
-    """Resolve CLI -> config -> environment; a missing legacy field retains Claude."""
+    """Resolve CLI -> config -> environment; a loop.json without a driver.backend field selects Claude."""
     cli = _choice(cli_choice, "--backend")
     configured, field_present = _configured_choice(loop_cfg)
     environment = _choice(os.environ.get("AUTORESEARCH_BACKEND"), "AUTORESEARCH_BACKEND")
@@ -106,7 +106,7 @@ def configure(loop_cfg: Path, cli_choice: str | None = None) -> Selection:
     elif os.environ.get("AUTORESEARCH_AGENT_CMD"):
         selected = "custom"
     elif not field_present:
-        selected = "claude"  # exact backward compatibility for pre-P0-1 campaigns
+        selected = "claude"  # a loop.json with no driver.backend field means claude
     else:
         selected = configured or "auto"
     if selected == "auto":
@@ -147,7 +147,7 @@ def model_errors(loop_cfg: dict, selection: Selection) -> list[str]:
     errors = []
     for role in ("worker", "verifier"):
         try:
-            section = loop_cfg.get(role) or (loop_cfg.get("planner") if role == "verifier" else None) or {}
+            section = loop_cfg.get(role) or {}
             model_for(section, selection)
             effort_for(section, selection)
         except BackendError as exc:

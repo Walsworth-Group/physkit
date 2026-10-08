@@ -30,7 +30,7 @@ things are fixed:
   any documents or paper manuscripts the user says describe their setup, data and config files in the
   target directory, and anything you can detect directly (Step 0.5). Ask the user only about genuine gaps.
 - **When a value came from a source but you are unsure it applies, ask a short question naming the
-  source** — for example, "should I use the experimental parameters described in Reed et al. for this
+  source** — for example, "should I use the experimental parameters described in Smith et al. for this
   problem?" — rather than asking the user to supply it from scratch.
 - State assumptions explicitly. Present multiple interpretations when the request is ambiguous. Push back
   when a simpler scope exists. **Co-design the metric** rather than inventing it. Narrow the purpose: a
@@ -105,34 +105,31 @@ is unconditional; there is no bare-campaign mode. A one-off costs three near-emp
 the physics, conventions, and instrument knowledge lives once in the project overview rather than
 multiplying. In exchange it
 grows into a sibling campaign, a fork, or a follow-up session with no reorganization and no path rewrites.
-- **An ancestor holds `PROJECT.md`**: use that project (the consolidated layout carries the lineage in
-  `PROJECT.md` §Lineage; a pre-consolidation project pairs it with `LINEAGE.md` — work with whichever
-  the home has). The campaign lives at
+- **An ancestor holds `PROJECT.md`**: use that project (it carries the lineage in `PROJECT.md`
+  §Lineage). The campaign lives at
   `<project>/campaigns/<NN>_<slug>/`; pick `<NN>` as the next zero-padded index after the last
   lineage row.
 - **Otherwise, run `new-project` first** to create the home, then come back here. **Carry everything you
   have already gathered**: `new-project` fills its tree from the same answers, so never re-interview. When
   `new-project` invoked you, the flow is one-way: do not call back into it. Tell the user the home is being
   created; do not ask permission for it.
-- **A pre-existing bare campaign** (imported, hand-built, or scaffolded before this default) is lifted into
+- **A pre-existing bare campaign** (imported or hand-built) is lifted into
   a project rather than left as it is: create the home around it, move it to `campaigns/01_<slug>/`, hoist
   its physics, conventions, and instrument docs into the project overview, and append its lineage row.
 
 Consequences, unconditional, with no campaign-local variant:
-1. **Physics/conventions/instrument** are referenced from the project overview (`../../PROJECT.md`;
-   old layout: `../../PROJECT_ORIENTATION.md`), never copied (design §4.1).
+1. **Physics/conventions/instrument** are referenced from the project overview (`../../PROJECT.md`),
+   never copied.
 2. **Data** is `../../data`.
-3. The campaign appends its lineage row (`PROJECT.md` §Lineage, or the old layout's `LINEAGE.md`) and
+3. The campaign appends its lineage row (`PROJECT.md` §Lineage) and
    resolves `campaign.md` §Relationship to sibling campaigns:
    keep and fill if coupled to a sibling, delete if independent. Coupling decides that one, not project
    membership.
 4. The campaign `CLAUDE.md` **project-context** block is always kept.
-5. A campaign using the managed resume gate requires managed project instructions too. For a pre-existing
-   project with one ordinary unmarked `CLAUDE.md` and no case-insensitive `AGENTS.md` or
-   `AGENTS.override.md`, prepend the inert managed marker and byte-copy the result to exact-case regular
-   `AGENTS.md`. If either candidate already exists, is non-regular, or differs, stop and have the operator
-   choose the authoritative side; never overwrite it by inference. This materializes the project perimeter
-   for the new campaign without changing any older campaign runner.
+5. A campaign's managed instructions require the project's managed `CLAUDE.md`/`AGENTS.md` pair
+   (`new-project` writes it). If the pair is missing or differs, stop and have the operator choose the
+   authoritative side, then reconcile it explicitly (`scripts/sync_agent_instructions.py --scope project
+   --from claude|agents --write`, run from the campaign); never overwrite an instruction file by inference.
 
 ## Step 0.5 — harvest sources and detect the environment (before asking anything)
 Collect what already answers the interview, so you only ask about real gaps:
@@ -288,8 +285,7 @@ control, or training or fitting purely on real experimental data). If there is o
 
    The campaign templates already link the overview by its literal relative path
    (`../../PROJECT.md`; one directory deeper, `../../../…`) — there is no path placeholder
-   to fill. (In a pre-consolidation project the driver's fallback still delivers the constraints from
-   `../../PROJECT_ORIENTATION.md`, but the prose links point at the current name.) Record anything you had to ask, so the next agent
+   to fill. Record anything you had to ask, so the next agent
    does not have to. If a `frame-problem` artifact exists, confirm its inventory rather than rebuilding it.
 4b. **Verification — capture the application-specific checks now.** Decide how a result will be known to be
    right before the loop runs: the analytic limits, invariants, convergence, independent-method parity, and
@@ -350,8 +346,7 @@ control, or training or fitting purely on real experimental data). If there is o
    (whether one unit can be independently re-executed from its config alone: seeded, not a one-shot
    measurement, not hardware-in-the-loop) — a fact a verifier reads when it chooses how to refute, not a
    trigger. There is no verification threshold to set: the preset (8b) decides each result's one check,
-   and the runner records it in each `results/checks_<NN>.json`. There is no planner cadence, plateau
-   threshold or outstanding-units cap to set: the planner and its queue are retired, and the
+   and the runner records it in each `results/checks_<NN>.json`. There is no cadence or queue to set: the
    worker chooses each unit from the JOURNAL. The harness-specific worker/verifier model
    and effort selections are topic 9. Propose the values with their reasoning; the user
    confirms them with the spec.
@@ -513,10 +508,7 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   driver's `results/.driver_alive` sentinel is fresh. Also generate **`scripts/guard_promotion.py`**, the
   PreToolUse hook that denies a mislabelled promotion write — a `configs/RECOMMENDED.json` update or a
   scoreboard edit introducing a `CONFIRMED`/`NEW BEST` token that does not carry the promoted result's
-  label exactly as its `results/checks_<NN>.json` holds it, or that promotes a result a check refuted —
-  and — in a legacy project that still carries one — a project-ledger
-  (`../../DISCOVERIES.md`) entry that does not cite its source verdict by path (fail-closed; new
-  projects have no such ledger because verified findings remain in their source campaigns). Fill **`{{PYTHON_CMD}}`** with the python
+  label exactly as its `results/checks_<NN>.json` holds it, or that promotes a result a check refuted. Fill **`{{PYTHON_CMD}}`** with the python
   invocation detected in Step 0.5 (`py -3` on Windows, `python3` on macOS/Linux) so both harness hook commands run
   on this machine.
 
@@ -535,7 +527,7 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   run and cost fields from topics 5–8. Fill **`configs/RECOMMENDED.json`**, the current-best pointer,
   mirroring exp 000 until the first promotion. Create the artifact-gate directory **`results/verdicts/`**.
 
-  Seed no queue: there is none. The user's topic-12 to-try ideas go into the opening
+  The user's topic-12 to-try ideas go into the opening
   `results/JOURNAL.md` §What to try next and why — ranked, attributed to the user, and phrased as
   **questions, never as a candidate named as the expected answer**: a setup-written first instinct is the
   one thing in the tree that carries no evidence, and a campaign has run twenty units on one. Write "does
@@ -599,11 +591,10 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   `campaign.md` §Targets, and register any new docs in the README.
 - **Project wiring — always, from Step 0.1:**
   1. Reference the canonical data as **`../../data`**; never copy it into the campaign.
-  2. **Append the lineage row** — `../../PROJECT.md` §Lineage Campaigns table (old layout:
-     `../../LINEAGE.md`): index `<NN>`, campaign name, date, the
+  2. **Append the lineage row** — `../../PROJECT.md` §Lineage Campaigns table: index `<NN>`, campaign name, date, the
      `approach` tag, the FROZEN primary metric, what changed from the predecessor (or "— (first)"),
-     headline result (leave `pending` until exp 000), verified discoveries (none yet), `@KB-key` (—), and
-     status `active`.
+     headline result (leave `pending` until exp 000), verified discoveries (none yet), and status
+     `active`.
   3. Resolve `campaign.md` §**Relationship to sibling campaigns**: keep it and fill
      `{{SIBLING_FROZEN_MUTABLE}}` and `{{CONSUMED_ARTIFACTS}}` if this campaign is coupled to a sibling
      (what it FREEZES versus MUTATES; which promoted `../../<dir>/<artifact>` it consumes); delete it if
@@ -612,8 +603,7 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   4. **Keep** the campaign `CLAUDE.md` project-context block.
   5. A verified finding that is a fact about the **system**, rather than a config that scored well, is
      later recorded in `../../PROJECT.md` §Updates from discoveries, citing its verdict artifact by
-     path — the pointer that survives fork-and-archive under the consolidated project layout (a legacy project's
-     `../../DISCOVERIES.md` stays hook-gated). Note this in the handoff so the loop agent knows the path.
+     path — the pointer that survives fork-and-archive. Note this in the handoff so the loop agent knows the path.
 - **Literature (per the topic-11 level).** The ongoing-search rule and the `LITERATURE.md` file are decided
   separately:
   - *Ongoing-search rule in `LITERATURE.md` §Literature search rule:* for **none**, resolve the
@@ -640,9 +630,7 @@ cold-reader front door; its §Setup status points at preflight). **`configs/RECO
   **sibling campaign**: its own `campaigns/<NN>_<slug>/` with its own `campaign.md` and ledger, coupled via
   `campaign.md` §Relationship to sibling campaigns and the promoted project-level artifacts
   (`../../<dir>/<artifact>_<ver>`, each with a §Lineage promotion line).
-  Scaffold each by re-running this skill in the project, with a new lineage row per sibling. The
-  retired `_<NAME>`-suffix-in-one-tree form is not an option: that was the bare-campaign fallback, and
-  every campaign now has a project home.
+  Scaffold each by re-running this skill in the project, with a new lineage row per sibling.
 - The co-designed metric IS the campaign's first metric epoch, and it needs no record of its own: the
   runner binds the scorer's hash on the first experiment, and from then on a scorer change with no new
   epoch (a `metric_version` bump plus an entry in `configs/loop.json` `campaign.metric_epochs`) refuses to
@@ -702,7 +690,7 @@ fresh session a red preflight. Sub-agents may draft; this session verifies.
 5. **Run experiment 000 now** — `python scripts/run_campaign.py --config configs/exp000_baseline.json`,
    under the same gates every unit runs under. The setup session is the best-placed agent that will ever
    see this campaign, and the floor is machinery, not direction: a fresh worker that has to establish it
-   spends its first unit on plumbing (photophysics10 spent ~30). Check the gate criteria from topic 3
+   spends its first units on plumbing. Check the gate criteria from topic 3
    (the expected floor or range; the sanity checks that prove the chain is sound - a known input maps to
    a known output, the metric collapses on a null input, units come out right); a floor you cannot trust
    makes every later delta meaningless, so STOP and debug before handing off. Then `--record` it (the
@@ -819,7 +807,7 @@ user-owned; `roles/worker.md` §Long solves, escalation, and your exit explains 
 
 **Attended work means watching and steering through the cockpit, not executing by hand.** A by-hand
 `--config` run is for debugging a single experiment; it is not a mode for running the loop. The
-interactive-executor pattern is retired, because it produced unbounded context, docs that were never
+interactive-executor pattern is not used: it produced unbounded context, docs that were never
 re-read, premature stops, and verification decay — the failure record that motivated the driver.
 - The campaign lives at `<project>/campaigns/<NN>_<slug>/` and its opening lineage row is
   `status: active`. Hand over the absolute path to the campaign dir, not the project root. Remind the loop

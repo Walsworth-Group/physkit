@@ -35,12 +35,12 @@ the approved ones to your copy of the kit.
 - **The campaign directory** — read everything in the layout the campaign actually carries. For a
   current campaign that means `CLAUDE.md` (always-on rules and routing), `campaign.md` (the signed-off
   contract, verification plan, landmines, and decision record), `roles/` (the per-spawn procedures),
-  `README.md`, `configs/`, and `results/` — especially `JOURNAL.md` §Findings, `logbook.md`,
+  `README.md`, `configs/`, and `results/` — especially `JOURNAL.md`, `logbook.md`,
   `scoreboard.tsv`, `result_*.json`, `checks_*.json`, `verdicts/`, `snapshots/`, `diagnostics/`, and
   `guard_denials.log` and `driver_state.json` (direct evidence of what the scaffolding caught).
   Project-wide physics, conventions, instrument context, standing constraints, durable decisions, and
-  lineage are in `../../PROJECT.md`. If the campaign predates the current layout, follow its own
-  `CLAUDE.md` routing table and `docs/MIGRATING.md` rather than assuming current paths.
+  lineage are in `../../PROJECT.md`. Follow the campaign's own `CLAUDE.md` routing table rather than
+  assuming paths.
 - **The raw session transcripts** — the archived `*.jsonl` (`campaign-status` snapshots them to the
   campaign's `transcripts/`; otherwise the harness's own session store, e.g. Claude Code's
   `~/.claude/projects/<slug>/`). The transcripts are where conclusion-jumping, premature certainty, and
@@ -106,7 +106,7 @@ for `improve-kit`.
 
 ## Composition
 - Feeds **`improve-kit`** through the report's keeper table, so each keeper is tracked to applied/rejected
-  and can't silently evaporate.
+  and can't silently evaporate; `docs/reference/kit-development.md` is how a keeper's change is then made.
 - Uses the **`verify` §5b** provenance vocabulary (PINNED/REPORTED/INFERRED/RECALLED/REASONED) to grade past
   decisions, and **`record-decision`** for any non-obvious judgment the review itself makes.
 - Pairs with **`handoff`** / **`campaign-status`** (state & health) — this is the post-hoc improvement lens,

@@ -6,8 +6,6 @@ load: on-demand
 load_trigger: Before launching any loop or subagent architecture that relies on doctrine; when an agent
   violates a rule assumed to be in force; when auditing how contamination could enter a rendered context.
 frozen: false
-addresses: [9, 1]
-status: new
 review: living
 ---
 
@@ -18,7 +16,8 @@ enumerable set of surfaces, and each surface has its own failure mode. Before re
 verify it is physically present in the rendered context of every agent expected to obey it, and
 re-verify after every prompt change. This is the prompt-side counterpart of *enforce, don't exhort*
 (CORE, Running unattended): that rule requires wiring the check as a gate and asserting the gate is
-present; this one requires the same of the doctrine itself.
+present; this one requires the same of the doctrine itself. `scripts/audits/audit_prompt_surface.py` runs
+the check on a campaign.
 
 ## The surfaces (and how each one fails)
 
@@ -44,8 +43,8 @@ Audit both directions: is the rule present, and is anything present that opposes
 1. **Enumerate the agent roles.** Main session, every subagent type, every SDK loop role, every scheduled
    job. An architecture diagram with one box per distinct context.
 2. **List the relied-upon rules per role.** The disciplines the design assumes each role obeys: safety
-   caps, honesty rules, method disciplines, required-key contracts. If the campaign has a charter, its
-   rules are the checklist.
+   caps, honesty rules, method disciplines, required-key contracts. The campaign definition's
+   (`campaign.md`) rules are the checklist.
 3. **Obtain each role's context as rendered.** The template is not the render. Run the renderer and
    capture what the agent actually receives, including the dynamically generated blocks.
 4. **Grep the render for each rule.** A rule not literally present, and not entailed by text that is, is

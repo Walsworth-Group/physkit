@@ -16,7 +16,7 @@ cases, randomized inputs, counterexamples.
 
 It works at two scales. General mode checks a standalone claim in any session. Campaign mode
 (further down) is the full adversarial apparatus for promoting a campaign finding: it learns the metric,
-scorer, and rules from the campaign's own charter and spawns an independent refuter. Use the depth the
+scorer, and rules from the campaign's own definition and spawns an independent refuter. Use the depth the
 stakes deserve.
 
 **A campaign worker's self-verify** is general mode run on its own result, in its own session, without
@@ -279,9 +279,7 @@ it directly.
 
 **Step 0 — learn the campaign (parametrize the check).** Read the campaign's `CLAUDE.md` and follow its
 **§Where things live** table to the campaign definition and each document below — it is that campaign's own
-map, so route through it rather than assuming a path. *A campaign scaffolded before the table existed has
-none; read `docs/charter*.md` (or `docs/program.md` in the oldest trees — lint-ok: a fallback must name
-the retired spelling) directly.* Note: the FROZEN
+map, so route through it rather than assuming a path. Note: the FROZEN
 primary metric and direction, and the FROZEN scorer path; the current metric epoch (`configs/loop.json`
 `campaign.metric_version`, its `campaign.metric_epochs` entry if any, and its standing — a result is
 judged within its epoch); the run command and the baseline (exp 000); the
@@ -303,7 +301,7 @@ adds mechanism diversity. Never use a weaker model, which yields false CONFIRMs.
 
 **On return — write the verdict ARTIFACT, then record it append-only.** First write
 `results/verdicts/<exp_id_or_slug>.json`, the machine-checkable artifact consumed by the promotion gate
-(the current-best/scoreboard surface and the project-ledger surface) and by the loop driver. Copy this
+(the current-best/scoreboard surface and the runner's project-discovery record) and by the loop driver. Copy this
 stub and fill every `<…>`; all fields are REQUIRED. Do not hand-improvise a subset:
 ```json
 {"claim": "<one line>", "exp_id": "<id>", "verdict": "CONFIRMED", "kind": "verifier",
@@ -317,8 +315,9 @@ BOTH promotion paths, so a refuterless CONFIRMED does not graduate and a dropped
 promotion. Fill the stub literally rather than reconstructing the schema from memory. `kill_tier` is set
 only for a negative or kill-claim, per *Verifying a kill-claim* below. `confounded_levers` and
 `disentangler` are set whenever more than one lever moved, per *Confounded attribution* below. A ledger
-`finding` cell must cite this file by name (the rule `campaign-status` audits), and a project-ledger
-entry must cite it by path or the hook denies the write.
+`finding` cell must cite this file by name (the rule `campaign-status` audits), and a `PROJECT.md`
+§Updates from discoveries entry (written through the runner's `--record`) must cite it, or the runner
+refuses the entry.
 
 Then put the verdict on the experiment's `**Verification**:` line (in a supervised run the driver
 stamps it from the verdict artifact; a line you write by hand is never overwritten). Log every concern the verifier raised,
@@ -448,8 +447,7 @@ Fill every `<…>` from Step 0. Omit the bracketed CODE/FORWARD block if code is
 reproduce mode by run cost.
 
 > You are an independent verifier for the campaign at `<campaign dir>`. Read its `CLAUDE.md` and follow the
-> **§Where things live** table to the metric and the rules; if it has no such table, read `docs/charter*.md`
-> directly. Assume the following result is wrong and try to refute it. Your default verdict is REFUTED
+> **§Where things live** table to the metric and the rules. Assume the following result is wrong and try to refute it. Your default verdict is REFUTED
 > unless the evidence forces CONFIRMED.
 >
 > Candidate: `<config path>`. Claimed: `<METRIC> = <value>` (`<direction>` = better; baseline exp 000 =

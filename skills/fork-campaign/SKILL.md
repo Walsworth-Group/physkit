@@ -32,9 +32,8 @@ exceeds the cost of a clean re-verification.
 
 ## Preconditions
 - The source campaign sits in its project: `campaigns/<src>/` with a `../../PROJECT.md` carrying the
-  **lineage** — `PROJECT.md` §Lineage, or the old layout's separate `LINEAGE.md`; "the lineage" below
-  means whichever this project has.
-- A legacy bare campaign is lifted into a project first (`new-campaign` Step 0.1); the archive and lineage
+  **lineage** (`PROJECT.md` §Lineage).
+- A campaign without a project home (imported or hand-built) is lifted into a project first (`new-campaign` Step 0.1); the archive and lineage
   machinery this skill needs exists nowhere else.
 - Know what broke and which findings it taints before forking. A `debug` or `verify` session that exposed the
   invalidating bug supplies that diagnosis. Do not fork on suspicion; fork on a diagnosed cause.
@@ -65,8 +64,8 @@ and a fresh JOURNAL (its template sections, empty). Carry over, deliberately and
 - the corrected infrastructure (the fixed forward model, metric, or dataset), validated before it is re-frozen.
   Run `correctness-suite`: the sign and convention round-trip plus the symmetry self-tests that would have
   caught the original bug. Add the check that failed as a standing regression gate.
-- the shared data and promoted artifacts from the project level (`../../data`, `../../models/`, …;
-  old layout: `../../shared/` <!-- lint-ok: intentional pre-consolidation path -->), unchanged: referenced, never copied.
+- the shared data and promoted artifacts from the project level (`../../data`, `../../models/`, …),
+  unchanged: referenced, never copied.
 - the FROZEN metric spec and levers, re-examined for whether the bug touched them. (A metric that was
   merely wrong, with the save-sets still valid and re-scorable, is a metric epoch inside the source
   campaign — `campaign.md` §The ONE metric — not a reason to fork; fork when the artifacts are tainted.)

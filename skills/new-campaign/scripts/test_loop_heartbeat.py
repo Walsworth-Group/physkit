@@ -4,7 +4,7 @@
 Runs the SHIPPED template (templates/campaign/scripts/loop_heartbeat.py.tmpl) in a throwaway campaign-shaped
 sandbox, so what is tested is what new-campaign actually generates. Run it after any edit to that template:
 
-    python kit/skills/new-campaign/scripts/test_loop_heartbeat.py
+    python skills/new-campaign/scripts/test_loop_heartbeat.py      # from the kit root
 """
 import json, os, subprocess, sys, shutil, tempfile
 from datetime import datetime, timezone, timedelta
@@ -131,7 +131,7 @@ write_request(utc=iso(minutes_ago=120), reason_code="user-fork", evidence="stale
 rc, out, _ = run()
 check("stale request is refused", out.get("decision") == "block" and "old (window" in out.get("reason", ""))
 
-# 9 — exhausted while holding a named untried lever (the B10 clause)
+# 9 — exhausted while holding a named untried lever (the untried-lever clause)
 reset(rows=3)
 write_request(utc=iso(), reason_code="exhausted", evidence="plateau across families",
               untried_levers=["drive amplitude"], campaign_status_utc=iso())

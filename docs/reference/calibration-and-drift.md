@@ -4,8 +4,6 @@ kind: reference
 layer: operating
 load: on-demand
 frozen: false
-addresses: [4, 5, 7]
-status: active
 ---
 
 # Calibration & drift — every measurement inherits its calibration's staleness

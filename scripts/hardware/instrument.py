@@ -16,7 +16,7 @@ Doctrine implemented here, with the reference each rule comes from:
     reason is teaching text (mechanism, number, fix), because the refusal is fed back into
     the next proposal (`hardware-in-the-loop.md` §7; contract §7e).
   * The gate runs TWICE - on the proposed settings, and again on the built payload, so a
-    serializer bug cannot silently drop a required key (Co-scientist `lab_safety` doctrine).
+    serializer bug cannot silently drop a required key.
   * APPARATUS GIVENS may be default-filled; CALIBRATIONS may not. The distinction is declared
     per experiment type (`defaults` vs `required_keys`), never inferred.
   * Liveness is batch-aware and never counts engine-written files (contract §6, §7d).
@@ -353,7 +353,7 @@ class Instrument:
                                        campaign_tag=campaign_tag, results_dir=results_dir,
                                        expected_duration_s=est)
 
-        # SECOND ENFORCEMENT (contract §7e / Co-scientist lab_safety): re-gate the settings as
+        # SECOND ENFORCEMENT (contract §7e): re-gate the settings as
         # they come back OUT of the serialized payload, not as they were proposed. Gating the
         # in-memory envelope would miss the more dangerous half: a builder can drop a key, but
         # so can an encoder, and the bytes are what the instrument acts on. Round-tripping

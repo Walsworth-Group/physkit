@@ -5,8 +5,6 @@ layer: shared
 load: on-demand
 load_trigger: When deciding what to keep loaded vs stream on demand, how to tier docs (CORE vs REFERENCE), or how to keep a long-running agent's working context lean.
 frozen: false  # unfrozen by a recorded decision — stays doctrine, but how much context helps tracks model capability
-addresses: [7]
-status: new
 review: living
 ---
 
@@ -26,8 +24,9 @@ Three tiers, by how often each is needed:
 - REFERENCE (on-demand depth): the deep dives (this doc,
   `SIMULATION_VALIDATION.md`, the skills). Loaded when a trigger fires, never by default: a situation, a
   skill invocation, or a question that needs the depth.
-- METADATA (the map): the `DOCTRINE_INDEX.md` and each artifact's `load_trigger`, so the agent can find
-  the right file without reading everything. The index is what keeps on-demand loading navigable.
+- THE MAP: CORE's routing table, the skill descriptions the harness lists, and each doc's `load_trigger`,
+  so the agent can find the right file without reading everything. The map is what keeps on-demand
+  loading navigable.
 
 The plugin mechanism makes this concrete: only a skill's `name` and `description` sit in context until it
 is invoked, and the body and assets load on demand. That is why the dual-use design works. A general
@@ -106,8 +105,7 @@ rather than deleting it. When in doubt, ask whether the material must be present
 a trigger can pull it when relevant. Most material is the latter.
 
 ## Pointers
-CORE (the spine it governs); `DOCTRINE_INDEX.md` (the metadata layer and the `load` / `load_trigger`
-fields); CORE working-loop step 3 (sub-agents and model tiering) and `discovery-loop` for the
+CORE (the spine it governs, and its routing table); each doc's `load` / `load_trigger` frontmatter; CORE working-loop step 3 (sub-agents and model tiering) and `discovery-loop` for the
 evaluation-budget analogue; `verify`
 and `cite-check` (the sub-agent verification and fan-out pattern); `handoff`
 (cold-resume without reloading everything); the campaign logbook/journal split.

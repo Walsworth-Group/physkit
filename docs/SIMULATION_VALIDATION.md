@@ -5,8 +5,6 @@ layer: shared
 load: on-demand
 load_trigger: When a simulation, forward model, surrogate, synthetic data, or simulator-scored search is involved — the full V&V&UQ depth behind simulation-design / correctness-suite.
 frozen: false
-addresses: [2, 5]
-status: ported+augmented
 review: living
 ---
 

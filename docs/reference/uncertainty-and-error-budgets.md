@@ -4,8 +4,6 @@ kind: reference
 layer: operating
 load: on-demand
 frozen: false
-addresses: [2, 5, 1]
-status: active
 ---
 
 # Uncertainty & error budgets — a number without an uncertainty is not a measurement

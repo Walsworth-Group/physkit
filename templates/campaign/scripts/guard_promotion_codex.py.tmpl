@@ -29,7 +29,6 @@ def _protected(raw: str) -> bool:
     base = str(raw).strip().strip('"').replace("\\", "/").rsplit("/", 1)[-1].upper()
     return ((base.startswith("RECOMMENDED") and base.endswith(".JSON"))
             or base == "SCOREBOARD.TSV"
-            or (base.startswith("DISCOVERIES") and base.endswith(".MD"))
             or base == "LOOP.JSON")        # the metric_revision dial + the metric_epochs record
 
 def _control_targets(command: str) -> list[str]:

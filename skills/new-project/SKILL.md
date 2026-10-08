@@ -110,9 +110,8 @@ Then also confirm:
 - `data/` is a read-only canonical copy or a `DATA_PATH.txt` pointer — not a per-campaign copy — and carries its README.
 - `campaigns/`, `sessions/`, `reports/` exist (`reports/README.md` present); no empty pre-created
   purpose dirs.
-- No stray reference to a retired doc the tree does not hold (`PROJECT_ORIENTATION.md`, `LINEAGE.md`,
-  `DISCOVERIES.md`, `shared/` <!-- lint-ok: intentional retired-layout names in this validator check -->, `SYSTEM.md`, a project-root `ENGINEERING_NOTES.md`): all of it lives in
-  `PROJECT.md` now, one section each — except verified findings, which live in the campaigns that
+- No stray reference to a doc the tree does not hold (a `SYSTEM.md`, a project-root `ENGINEERING_NOTES.md`):
+  all of it lives in `PROJECT.md`, one section each — except verified findings, which live in the campaigns that
   produced them, pointed at from §Lineage and §Updates from discoveries.
 - Report the project root, the data decision (copy vs pointer), and the first campaign created.
 

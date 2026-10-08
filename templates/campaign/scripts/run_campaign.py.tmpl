@@ -34,9 +34,9 @@ ARTIFACT GATES (enforced here, in code - hard gates are gates, not reminders):
     flagged as a probable implementation error. A check this campaign cannot supply the inputs for is
     recorded `unavailable` with what it NEEDS, never as a silent pass.
 Gate violations refuse loudly. The PROMOTE-path gates fail closed; the record-path helpers fail open
-(a liveness or logging bug must never lose an experiment). Promotion (current-best,
-scoreboard verdict tokens, the project ledger) is gated separately by scripts/guard_promotion.py on
-verdict artifacts in results/verdicts/.
+(a liveness or logging bug must never lose an experiment). Promotion (current-best, scoreboard
+verdict tokens) is gated separately by scripts/guard_promotion.py on verdict artifacts in
+results/verdicts/; a project discovery entry is written only by --record, through the same checks.
 
 Before the experiment runs, two FROZEN-infrastructure gates fire automatically: the metric self-test
 (hard-fails if the scorer is unimplemented or fails its scrambled-input null control) and the correctness
@@ -93,22 +93,9 @@ CORRECTNESS_STATE = RESULTS / "correctness_state.json"
 CHECKS = RESULTS                         # results/checks_<NN>.json - one mechanical verdict per experiment
 # Every campaign lives at <project>/campaigns/<slug>/ (no bare-campaign mode), so the project
 # overview is two levels up: PROJECT.md carries the '## Standing constraints' delivered into every
-# spawned prompt (see build_prompt). A pre-consolidation project keeps that section in
-# PROJECT_ORIENTATION.md instead, so both names are tried, new first - a new campaign
-# scaffolded into an old-layout project must still launch. The campaign's own landmines need no
-# injection: they live in campaign.md, which both roles are contractually required to re-read every
-# cycle.
-ORIENTATION_CANDIDATES = (ROOT.parent.parent / "PROJECT.md",
-                          ROOT.parent.parent / "PROJECT_ORIENTATION.md")
-
-
-def _orientation_file():
-    """The project file actually carrying '## Standing constraints'; the new-layout name when
-    neither does (so error messages point at the current convention)."""
-    for p in ORIENTATION_CANDIDATES:
-        if _md_section(p, "Standing constraints") is not None:
-            return p
-    return ORIENTATION_CANDIDATES[0]
+# spawned prompt (see build_prompt). The campaign's own landmines need no injection: they live in
+# campaign.md, which both roles are contractually required to re-read every cycle.
+PROJECT_FILE = ROOT.parent.parent / "PROJECT.md"
 
 
 class _Tee:
@@ -373,8 +360,8 @@ def assert_save_set(exp_id: str, label: str, fig: Path) -> None:
 # ZERO_EVALUATION_MODES constant)
 # live in scripts/experiment.py - the one script a campaign edits. THIS file is the kit's machinery:
 # gates, checks, the snapshot, the driver, the prompts - replaced wholesale on a kit upgrade and never
-# edited per campaign. Motivation (a colleague's audit, 2026-09): with the hooks inside this file it was
-# Read 64 times in one campaign, and every worker wrote a bespoke module rather than find them. The
+# edited per campaign. Motivation: with the hooks inside this file, workers re-read it dozens of times
+# per campaign, and each wrote a bespoke module rather than find them. The
 # import is deferred to first use so `--help` / `--show-prompt` work while experiment.py is mid-edit,
 # and preflight names an import error instead of a traceback.
 _EXPERIMENT = None
@@ -397,8 +384,8 @@ def _seam(name: str, default):
 
 def _seam_call(name: str, default, *args, **optional):
     """Call a seam with `args` plus whichever of `optional` its signature accepts, so a seam can gain a
-    keyword (`prediction`, the run_experiment payload) without every campaign's older definition
-    breaking: a three-argument campaign_scoreboard_fields keeps working, a four-argument one sees the
+    keyword (`prediction`, the run_experiment payload) without breaking a campaign's narrower
+    definition: a three-argument campaign_scoreboard_fields keeps working, a four-argument one sees the
     payload."""
     fn = _seam(name, default)
     try:
@@ -479,9 +466,9 @@ def append_scoreboard_row(row: dict) -> None:
     assert header_line, "scoreboard.tsv has no header row"
     cols = header_line.split("\t")
     # Matched CASE-INSENSITIVELY: the runner keys the primary metric by the frozen scorer's spelling
-    # and a campaign's header may declare the column in another case (photophysics10: WSSR_PAPER
-    # against wssr_paper). An exact match wrote the PRIMARY column blank on every row - a ledger that
-    # recorded no score at all, with no error (the campaign's own ledger_writer check caught it).
+    # and a campaign's header may declare the column in another case (WSSR_PAPER against wssr_paper).
+    # An exact match would write the PRIMARY column blank on every row - a ledger that records no score
+    # at all, with no error.
     lowered = {str(k).lower(): v for k, v in row.items()}
     with open(SCOREBOARD, "a", encoding="utf-8") as f:
         f.write("\t".join(str(row[c] if c in row else lowered.get(c.lower(), "")) for c in cols) + "\n")
@@ -623,8 +610,7 @@ def _column(cols: list, names: tuple) -> str | None:
 
 
 def _set_scoreboard_cell(exp_id: str, names: tuple, text: str) -> str:
-    """Set ONE cell of the row for `exp_id`: the column is the first of `names` the header has (the
-    current spelling first, an older one second). The ledger is append-only in ROWS; a narrative cell
+    """Set ONE cell of the row for `exp_id`: the column is the first of `names` the header has. The ledger is append-only in ROWS; a narrative cell
     the runner owns (note, finding, verified) is stamped in place with every other byte preserved.
     Returns the column written, or "" after printing why not."""
     try:
@@ -634,8 +620,8 @@ def _set_scoreboard_cell(exp_id: str, names: tuple, text: str) -> str:
         return ""
     col = _column(cols, names)
     if col is None:
-        print(f"ledger: results/scoreboard.tsv has no {' / '.join(names)} column - the header predates this "
-              "kit; `upgrade_campaign.py --ledger-columns` adds it (the cell was NOT written)")
+        print(f"ledger: results/scoreboard.tsv has no {' / '.join(names)} column - add it to the header row "
+              "(the kit's template results/scoreboard.tsv.tmpl names the kit's columns; the cell was NOT written)")
         return ""
     ci = cols.index(col)
     cell = " ".join(str(text).replace("\t", " ").split())
@@ -677,10 +663,10 @@ def _scoreboard_cell(exp_id: str, names: tuple) -> str | None:
     return None
 
 
-# The ledger's narrative columns, in the order the brief shows them; the second name is the older spelling.
+# The ledger's narrative columns, in the order the brief shows them (the metric column under either
+# spelling: the result key or the scoreboard's column name).
 _PROJECTION_COLS = (("exp_id",), ("tier",), ("{{PRIMARY_METRIC}}", "{{PRIMARY_METRIC_COL}}"),
-                    ("what", "description"), ("plausible", "expected_vs_found"), ("verified",), ("note", "notes"),
-                    ("finding",))
+                    ("what",), ("plausible",), ("verified",), ("note",), ("finding",))
 
 
 def _ledger_projection(n_rows: int) -> tuple[str, int]:
@@ -853,7 +839,7 @@ def _incumbent(priors: list[dict], props: dict | None = None) -> dict | None:
     With `props`, only rows scored under the CURRENT (metric_version, data_version) compete: a row from
     another metric epoch is not an incumbent it makes sense to beat (the metric-epoch design), and ranking across the
     boundary is the silent merge the epoch ledger exists to prevent. check_comparability reports how
-    many rows were set aside. Blank tags (a campaign that predates them) keep the old behaviour.
+    many rows were set aside. Blank tags filter nothing: every row competes.
     """
     tags = ((str(props.get("metric_version") or ""), str(props.get("data_version") or ""))
             if props else ("", ""))
@@ -1230,8 +1216,7 @@ def _owed_check(rows: dict, new_best: bool, checks: dict, props: dict) -> dict:
                 "why": "a new best - checked once the next unit has not beaten it, by "
                        + ("the next worker (a peer check)" if kind == "peer" else "a verifier the driver spawns")}
     # Outside the PLAUSIBLE RANGE fixed at setup - a probable implementation error, never a missed guess.
-    # `hard_bounds` is the key checks artifacts carried before the range was renamed.
-    pr = checks.get("plausible_range") or checks.get("hard_bounds") or {}
+    pr = checks.get("plausible_range") or {}
     outside = pr.get("status") == "fail"
     if sv == "every":
         return {"check": "self-verify", "when": "now",
@@ -1627,10 +1612,9 @@ def evaluate_and_record(cfg: dict, prediction, target,
         "tier": cfg.get("_tier", "Baseline" if exp_id == "000" else ""),
         # The narrative cells - the ledger IS the one-line timeline (the JOURNAL keeps no copy of it):
         # `what` (the config's one-line comment), `plausible` (the same judgement the logbook line
-        # carries; an older ledger's `expected_vs_found` column is prediction history, left blank), an
-        # optional `note` (--record --ledger-note, capped) and `finding` (--record --finding, one line
-        # citing its verdict). `description` / `notes` are the older spellings.
-        "what": cfg.get("_comment", ""), "description": cfg.get("_comment", ""),
+        # carries), an optional `note` (--record --ledger-note, capped) and `finding` (--record
+        # --finding, one line citing its verdict).
+        "what": cfg.get("_comment", ""),
         "plausible": plaus,
         # BLANK, not "0.0000", for a zero-evaluation unit: a blank cell records nothing, which is the
         # truth here; a 0 is a number every later comparison would have to be defended against.
@@ -1640,7 +1624,7 @@ def evaluate_and_record(cfg: dict, prediction, target,
         # stays kit-owned; the payload travels so a column computed from the fit needs no read-back.
         **(_seam_call("campaign_scoreboard_fields", lambda cfg, diags, score, **k: {}, cfg, diags, score,
                       prediction=prediction) or {}),
-        "note": "", "notes": "", "finding": "",
+        "note": "", "finding": "",
     })
     append_logbook(cfg, exp_id, label, score, diags, plausible=plaus)
     timing["record_s"] = round(time.monotonic() - t_record, 3)
@@ -1720,7 +1704,7 @@ def unimplemented_hooks() -> list[str]:
 
 def require_metric_selftest() -> None:
     """HARD-FAIL unless the FROZEN scorer passes its self-test. Runs automatically before every experiment
-    (was opt-in via --selftest). Doctrine: don't trust a ranking until the self-test passes - it gates
+    (it is not opt-in). Doctrine: don't trust a ranking until the self-test passes - it gates
     experiment 000. A campaign that hasn't implemented compute_metric()/_no_skill_floor() yet fails here with
     a pointer to fix, not a raw traceback; a scorer that fails its null control fails here too.
     """
@@ -1737,12 +1721,11 @@ def _suite_worker(select: str, report: str, exp: str) -> int:
     """`--suite-worker`: run tests/correctness_checks.py's CHECKS in THIS process, one at a time, timed,
     traced, and reported - the protocol behind check_correctness_suite.
 
-    The suite used to run as `python tests/correctness_checks.py`: an exit code and nothing else - no
-    check names, no per-check cost, no way to run a subset. Hosting the worker here (the suite module is
-    imported; its own main() never runs) gives the runner all three without a new file in the campaign
-    tree, and a suite with a flat CHECKS list and no declarations keeps working exactly as before (an
-    undeclared check is row 'invariants'). A suite without CHECKS at all falls back to the old exit-code
-    run. select: comma-separated check names, or ''/'all'. report: the JSON path to write. exp: the
+    Running `python tests/correctness_checks.py` gives an exit code and nothing else - no check names, no
+    per-check cost, no way to run a subset. Hosting the worker here (the suite module is imported; its own
+    main() never runs) gives the runner all three without a new file in the campaign tree, and a suite
+    with a flat CHECKS list and no declarations works as-is (an undeclared check is row 'invariants'). A
+    suite without CHECKS at all runs as an exit-code suite. select: comma-separated check names, or ''/'all'. report: the JSON path to write. exp: the
     experiment a 'gates' check (one that takes an argument) is given, or ''."""
     import importlib.util
     import inspect
@@ -2073,16 +2056,16 @@ def check_correctness_suite(metric_version: str = "", select: str = "", ran_for:
                           "to import?) - recording status=error (BLOCKS PROMOTION). Worker output:\n"
                           + (proc.stderr or "")[-1500:])
             else:
-                # A suite with its own runner and no CHECKS list: the previous kit's exit-code run.
+                # A suite with its own runner and no CHECKS list: the exit-code suite.
                 proc = subprocess.run([sys.executable, str(suite)], capture_output=True, text=True, timeout=600)
                 wall_s = time.monotonic() - t0
                 rc = proc.returncode
                 if proc.stdout:
                     print(proc.stdout.rstrip())
-                protocol = "legacy"
+                protocol = "exit-code"
                 status = {0: "green", 1: "red", 2: "empty"}.get(rc, "error")
             print(f"correctness suite: status={status} wall={wall_s:.1f}s (cap 600s)"
-                  + (" [legacy suite: exit code only]" if protocol == "legacy" else "")
+                  + (" [exit-code suite: no per-check results]" if protocol == "exit-code" else "")
                   + (f" [{why}]" if why != "experiment" else ""))
             if status == "red":
                 print("WARNING: correctness suite is RED - a check FAILED. This result is recorded, but a RED "
@@ -2150,9 +2133,9 @@ def check_correctness_suite(metric_version: str = "", select: str = "", ran_for:
 # `--supervise` runs the campaign as an orchestrated loop: a dumb, deterministic driver spawns a
 # FRESH-context worker agent per unit (cwd = campaign root, so the frozen CLAUDE.md spine auto-loads and
 # the brief carries campaign.md + roles/worker.md), enforces the artifact gates, and validates what the
-# worker left behind. There is no queue and no planner (MIGRATING: the loop without a queue): the worker chooses and
+# worker left behind. There is no queue and no planner: the worker chooses and
 # authors its own unit from the JOURNAL (the working memory the previous worker wrote) and the ledger's
-# last rows, and the record it owes is the same as before. The driver follows the gates and adds nothing
+# last rows, and it owes the full record of its unit. The driver follows the gates and adds nothing
 # of its own. Failures split by kind:
 #   * INTEGRITY (ESCALATE present · corrupt results/driver_state.json · preflight / metric-selftest failure
 #     · an UNDECLARED change to the FROZEN scorer (the epoch gate)) -> HALT LOUD. Never routed around.
@@ -2179,27 +2162,23 @@ def check_correctness_suite(metric_version: str = "", select: str = "", ran_for:
 #
 # results/driver_state.json (driver-only, atomic writes): {"accepted_units": 0, "last_accept_utc": null,
 #   "accepted": ["<exp_name>", ...], "pending_verification": [...], "consecutive_operational_failures": 0}.
-# A campaign upgraded from the queue era keeps its counters: the first launch seeds them from the
-# archived results/queue.json if no state file exists yet.
 # ======================================================================================================
 
 STATE = RESULTS / "driver_state.json"            # the driver's counters (no queue)
-QUEUE_LEGACY = RESULTS / "queue.json"          # the retired queue: read once to seed the state, never written
 ESCALATE = RESULTS / "ESCALATE.md"
 LOOPCFG = ROOT / "configs" / "loop.json"
 INBOX = RESULTS / "inbox"                    # user notes -> injected into the next spawn, then archived
 INBOX_ARCHIVE = INBOX / "archive"
 DRIVER_ALIVE = RESULTS / ".driver_alive"     # fresh mtime = a driver owns the loop (Stop hook stands down)
 # THE BRIEF - what the driver compiles INTO every worker prompt so the agent orients from the
-# prompt, never from the tree. Motivation (photophysics10, three launches, 2026-08): per spawn, workers
-# re-read campaign.md 3-9 times in chunks, roles/worker.md up to 5 times, a 2 000-line JOURNAL up to
-# 7 times, and the runner's own source up to 15 times, at 30-300 turns per unit - most of a unit's
+# prompt, never from the tree. Motivation: left to orient themselves, workers re-read campaign.md,
+# roles/worker.md, a long JOURNAL and the runner's own source several times per spawn - most of a unit's
 # tokens went to re-orientation the driver could have delivered once. A pointed-at file is read only
 # when the agent chooses (and re-read when it forgets); a delivered one is read exactly once and its
 # hash is stamped into the snapshot. Sizes are REPORTED at preflight and every spawn, never silently
 # capped: a truncated section is a loud marker in the prompt. The JOURNAL is never truncated - it is the
-# loop's only memory, and a cap the worker trimmed toward cost it turns (TA-4: one unit spent eleven
-# calls counting lines); its size is reported to the user instead, flagged past the warn line.
+# loop's only memory, and a cap the worker trimmed toward cost it turns (counting lines
+# to stay under it); its size is reported to the user instead, flagged past the warn line.
 BRIEF_JOURNAL_WARN_CHARS = 24_000  # the feed and preflight flag a JOURNAL past this; nothing is cut (~2x a field one)
 BRIEF_DIFF_CAP = 24_000         # chars: the snapshot diff inlined into the verifier's brief (the delta, by value)
 BRIEF_CONFIG_CAP = 8_000        # chars: the config template the worker writes its unit from
@@ -2352,7 +2331,7 @@ def _brief(role: str) -> str:
         else:
             add("LEDGER (last rows)", "results/scoreboard.tsv", None)
 
-        # 7. the previous units' artifacts, by SHAPE (TA-1): what each file holds, so a worker building on
+        # 7. the previous units' artifacts, by SHAPE: what each file holds, so a worker building on
         #    the last units opens a file only for the values it needs - never to print its keys
         units = _recent_units(2)
         if units:
@@ -2434,8 +2413,7 @@ def _settings_flags(listing: str, memory: str) -> list[str]:
       per-directory memory folder (~/.claude/projects/<dir>/memory/), loaded into every later session in
       the directory. Off because what one worker leaves there for the next is in no record of the
       campaign - not the JOURNAL, the ledger or a snapshot - and lives on one machine; a note worth
-      passing on goes in the JOURNAL's Traps and tooling. Evidence: the Peng-96 chain arm's workers kept
-      two notes there across four spawns (case-studies/spawn_overhead_probe_2026-09-25.md)."""
+      passing on goes in the JOURNAL's Traps and tooling."""
     if "AUTORESEARCH_AGENT_CMD" in os.environ:
         return []
     settings = {}
@@ -2568,8 +2546,7 @@ def _md_section(path: Path, heading: str) -> str | None:
 
 def _delivered_context() -> str:
     """The living context every spawned agent carries: the project's §Standing constraints
-    (PROJECT.md; a pre-consolidation project keeps it in PROJECT_ORIENTATION.md) - the one document
-    OUTSIDE the per-cycle read set that must still be guaranteed present.
+    (PROJECT.md) - the one document OUTSIDE the per-cycle read set that must still be guaranteed present.
 
     Delivered by VALUE, not by pointer: a pointed-at constraint is read only when an agent chooses
     to look, and these are the constraints that must not depend on that choice. (The campaign's own
@@ -2582,7 +2559,7 @@ def _delivered_context() -> str:
     delivery that degrades to nothing recreates the recorded-but-unread failure this mechanism
     exists to close. Preflight refuses to launch without the constraints section at all.
     """
-    src = _orientation_file()
+    src = PROJECT_FILE
     constraints = _md_section(src, "Standing constraints")
     return (f"\n\n== STANDING CONSTRAINTS (../../{src.name} - the project overview; "
             "equations, methods, instrument and durable decisions live below this section) ==\n"
@@ -2689,9 +2666,6 @@ VERIFY_PRESET_ROWS = {
 }
 VERIFY_PRESET_EXTRAS = {"intensive": {"blinded": True}}
 VERIFY_PRESET_DEFAULT = "minimal"
-# Names a loop.json may still carry, refused with what replaced them (no campaign ran them for
-# its result, so there is no silent mapping).
-VERIFY_PRESET_RENAMED = {"moderate": "heavy"}
 
 
 def _verify_rows(loop_cfg: dict) -> dict:
@@ -2722,15 +2696,7 @@ def verify_problems(loop_cfg: dict) -> tuple[list[str], list[str]]:
     if loop_cfg.get("verify") is not None and not isinstance(loop_cfg.get("verify"), dict):
         return ["configs/loop.json verify must be an object"], notes
     r = _verify_rows(loop_cfg)
-    c = loop_cfg.get("campaign") if isinstance(loop_cfg.get("campaign"), dict) else {}
-    if c.get("verification"):
-        problems.append(f"configs/loop.json campaign.verification={c.get('verification')!r} is retired - set "
-                        "verify.preset (" + " | ".join(VERIFY_PRESETS) + ") and delete the old key "
-                        "(docs/MIGRATING.md)")
-    if r["preset"] in VERIFY_PRESET_RENAMED:
-        problems.append(f"configs/loop.json verify.preset {r['preset']!r} was renamed "
-                        f"{VERIFY_PRESET_RENAMED[r['preset']]!r} - set the new name")
-    elif r["preset"] not in VERIFY_PRESETS:
+    if r["preset"] not in VERIFY_PRESETS:
         problems.append(f"configs/loop.json verify.preset is {r['preset']!r}; expected one of "
                         + " | ".join(VERIFY_PRESETS) + " (the physkit plugin's docs/reference/verification-presets.md). "
                         "No default is substituted for a misspelt preset.")
@@ -2754,9 +2720,9 @@ METRIC_REVISION_RESERVED = ("semi-autonomous",)   # named in the design, rules n
 def _campaign_props(loop_cfg: dict | None = None) -> dict:
     """This campaign's two properties + their numeric companions, with code defaults.
 
-    The defaults reproduce the pre-V0 behaviour EXACTLY (a required numeric range; a stochastic campaign),
-    so a loop.json written before this block existed keeps working unchanged - the same additive contract
-    _driver_knobs() uses for the driver section.
+    The defaults are a required numeric range and a stochastic campaign, so a loop.json that omits a key
+    gets the conservative behaviour - the same additive contract _driver_knobs() uses for the driver
+    section.
 
     An unrecognized VALUE is not silently defaulted here: it is normalized to whatever was written and
     rejected by campaign_props_problems(), which both preflight and validate_campaign.py run. A typo'd
@@ -2809,7 +2775,7 @@ def _campaign_props(loop_cfg: dict | None = None) -> dict:
         "tolerance": _num("tolerance"),
         "metric_version": str(c.get("metric_version") or "").strip(),
         "data_version": str(c.get("data_version") or "").strip(),
-        # Absent (an older loop.json): a hardware-in-the-loop campaign (configs/instrument.json) is
+        # Absent from loop.json: a hardware-in-the-loop campaign (configs/instrument.json) is
         # not re-executable from a config; anything else is assumed to be. A fact the verifier reads when
         # it chooses how to refute, not a trigger.
         "reproducible": (bool(c["reproducible"]) if isinstance(c.get("reproducible"), bool)
@@ -2899,7 +2865,7 @@ def _free_disk_mb() -> float | None:
 
 def _unit_disk_mb(loop_cfg: dict) -> float:
     """Estimated MB one unit adds to results/. 0 or absent = not estimated, which DISABLES the check
-    rather than guessing a floor that could refuse a healthy launch (older campaigns lack the field)."""
+    rather than guessing a floor that could refuse a healthy launch (the field is optional)."""
     try:
         return float((loop_cfg.get("unit_cost") or {}).get("typical_disk_mb", 0) or 0)
     except (TypeError, ValueError):
@@ -2916,10 +2882,9 @@ def _mb(x: float) -> str:
 
 
 def _verifier_section(loop_cfg: dict) -> dict:
-    """The loop.json block whose model/effort drive the verifier and the capstone: "verifier" (the
-    template since the planner's retirement), else the retired "planner" block an older file still
-    carries, else the worker's."""
-    for key in ("verifier", "planner", "worker"):
+    """The loop.json block whose model/effort drive the verifier and the capstone: "verifier", else the
+    worker's."""
+    for key in ("verifier", "worker"):
         sec = loop_cfg.get(key)
         if isinstance(sec, dict) and sec:
             return sec
@@ -2927,16 +2892,15 @@ def _verifier_section(loop_cfg: dict) -> dict:
 
 
 def _driver_knobs(loop_cfg: dict) -> dict:
-    """Driver-section knobs with code-side defaults: an older loop.json without a "driver" section keeps
-    working unchanged (these knobs are additive). The template ships these as literals - no placeholders,
+    """Driver-section knobs with code-side defaults: a loop.json without a "driver" section (or a key in
+    it) gets the default. The template ships these as literals - no placeholders,
     no setup interview; hand-edit configs/loop.json to change them (the driver hot-reloads it)."""
     d = loop_cfg.get("driver") or {}
     w = loop_cfg.get("worker") or {}
     return {
         "max_consecutive_failures": int(d.get("max_consecutive_failures", 3)),
-        # A verifier that returns ok having written no artifact is retried on its own count; an older
-        # loop.json without the key inherits planner_retries, which is what governed it before.
-        "verifier_retries": int(d.get("verifier_retries", d.get("planner_retries", 1))),
+        # A verifier that returns ok having written no artifact is retried on its own count.
+        "verifier_retries": int(d.get("verifier_retries", 1)),
         "stream": str(d.get("stream", "auto")).strip().lower(),
         "inbox_max_chars": int(d.get("inbox_max_chars", 20000)),
         "feed_chars": int(d.get("feed_line_chars", 160)),
@@ -2964,9 +2928,8 @@ def _driver_knobs(loop_cfg: dict) -> dict:
                         or str(d.get("mcp_servers", "none"))).strip() or "none",
         # A spawn that dies in its first turn within seconds is the model's usage/rate limit, not the
         # unit: the driver waits (doubling from limit_wait_first_s, up to limit_wait_max_min in total)
-        # and relaunches instead of spending a retry and halting SYSTEMIC. Evidence: three of three
-        # halts in one field campaign, one of four in another, were one-second deaths counted as
-        # failures. AUTORESEARCH_LIMIT_WAIT_FIRST_S shortens the first wait (tests).
+        # and relaunches instead of spending a retry and halting SYSTEMIC: counted as failures, these
+        # one-second deaths were the commonest cause of a halt. AUTORESEARCH_LIMIT_WAIT_FIRST_S shortens the first wait (tests).
         "limit_wait_max_s": float(d.get("limit_wait_max_min", 90)) * 60,
         "limit_wait_first_s": float(os.environ.get("AUTORESEARCH_LIMIT_WAIT_FIRST_S") or 300),
         "limit_death_s": 15.0,
@@ -3109,13 +3072,6 @@ def _append_spawn_row(start_utc: str, end_utc: str, label: str, status: str, ela
         p = DIAG / "spawns.tsv"
         if not p.is_file():
             p.write_text(header, encoding="utf-8")
-        else:
-            # An older ledger (no usage columns): the header is brought up to date; its earlier rows keep
-            # their ten cells - a reader pads by column name, never by position past the tenth.
-            old = p.read_text(encoding="utf-8")
-            first = old.split("\n", 1)[0]
-            if first.startswith("start_utc\t") and "cost_usd" not in first:
-                p.write_text(header + old.split("\n", 1)[1] if "\n" in old else header, encoding="utf-8")
 
         def cell(v) -> str:
             if v is None or v == "":
@@ -3141,7 +3097,7 @@ def _spawn_with_backoff(prompt: str, model: str, label: str, k: dict, saved_prob
     A spawn that the harness kills in its first turn within seconds (`ok=False turns=1 dur=1s`), or
     whose result names a usage/rate limit, is the environment refusing to serve - not the unit and not
     the campaign. Counting it as an operational or verification failure burned the retry on the next
-    one-second death and halted the loop SYSTEMIC (three of three halts in one field campaign). So:
+    one-second death and halted the loop SYSTEMIC. So:
     wait, doubling from limit_wait_first_s, up to driver.limit_wait_max_min in total, relaunch the same
     prompt, and say so in the log; past the budget the death is returned as the failure it then is."""
     waited, wait_s = 0.0, max(0.0, k.get("limit_wait_first_s", 300.0))
@@ -3362,25 +3318,11 @@ def _spawn_agent(prompt: str, model: str, label: str, k: dict, saved_probe=None,
 
 
 def _read_state() -> dict:
-    """results/driver_state.json, strictly: ABSENT -> seeded from the retired results/queue.json when one is
-    still on disk (an upgraded campaign keeps its counters), else fresh; EXISTS-BUT-UNPARSEABLE -> HARD
-    HALT (integrity). The state is the driver's only memory of what it accepted and what verification it
+    """results/driver_state.json, strictly: ABSENT -> fresh; EXISTS-BUT-UNPARSEABLE -> HARD HALT (integrity). The state is the driver's only memory of what it accepted and what verification it
     owes - a corrupt file must never be mistaken for an empty one."""
     default = {"accepted_units": 0, "last_accept_utc": None, "accepted": [], "pending_verification": [],
                "consecutive_operational_failures": 0}
     if not STATE.is_file():
-        legacy = _read_json(QUEUE_LEGACY, None) if QUEUE_LEGACY.is_file() else None
-        if isinstance(legacy, dict):
-            seeded = dict(default)
-            seeded["accepted_units"] = int(legacy.get("accepted_units", 0) or 0)
-            seeded["last_accept_utc"] = legacy.get("last_accept_utc")
-            seeded["pending_verification"] = [e for e in (legacy.get("pending_verification") or [])
-                                              if isinstance(e, dict)]
-            print(f"[supervise] results/driver_state.json seeded from the retired results/queue.json "
-                  f"(accepted_units={seeded['accepted_units']}, pending verification "
-                  f"{len(seeded['pending_verification'])}); the queue itself is not read again - its open "
-                  "ideas belong in the JOURNAL (upgrade_campaign.py --retire-queue moves them)")
-            return seeded
         return default
     try:
         q = json.loads(STATE.read_text(encoding="utf-8-sig"))   # BOM-tolerant (hand-edits on Windows)
@@ -3671,9 +3613,9 @@ def preflight(smoke: bool = False) -> list[str]:
                         else:
                             ok(f"correctness suite: {suite_status}; every-set {cost:.1f}s of {budget:.1f}s "
                                f"budget ({len(members)} check(s) per unit)")
-                    elif st_now.get("protocol") == "legacy":
+                    elif st_now.get("protocol") == "exit-code":
                         w = st_now.get("wall_s")
-                        ok(f"correctness suite: {suite_status} in {float(w or 0):.1f}s (legacy suite: no "
+                        ok(f"correctness suite: {suite_status} in {float(w or 0):.1f}s (exit-code suite: no "
                            f"per-check cost, so the {budget:.1f}s budget cannot be metered; migrate it to a "
                            "CHECKS list with @check rows)")
                     else:
@@ -3698,8 +3640,7 @@ def preflight(smoke: bool = False) -> list[str]:
         except json.JSONDecodeError as exc:
             bad(f"configs/loop.json is not valid JSON ({exc}). Fix: repair it (check trailing commas).")
 
-    # 3. the driver's state file parses (absent is fine - the first launch creates it); a retired
-    #    queue.json still on disk is named, so its open ideas are not silently forgotten
+    # 3. the driver's state file parses (absent is fine - the first launch creates it)
     if STATE.is_file():
         try:
             ss = json.loads(STATE.read_text(encoding="utf-8-sig"))
@@ -3709,10 +3650,6 @@ def preflight(smoke: bool = False) -> list[str]:
         except Exception as exc:
             bad(f"results/driver_state.json is corrupt ({exc}). Fix: repair the JSON by hand - it holds the "
                 "accept counters and the verification owed; do not delete it.")
-    if QUEUE_LEGACY.is_file():
-        print("preflight note: results/queue.json is the retired queue - the driver no longer "
-              "reads it; run `python <plugin>/skills/new-campaign/scripts/upgrade_campaign.py --retire-queue` "
-              "to archive it and move its open ideas into the JOURNAL's 'What to try next'.")
 
     # 3b. the brief a worker would receive NOW: its size is paid on every spawn, so a bloated journal
     #     window or a truncated section is named here, before the night is spent on it.
@@ -3764,11 +3701,9 @@ def preflight(smoke: bool = False) -> list[str]:
     # 4a. the delivered context: every spawn carries the project's Standing constraints by value, so a
     # launch without them would run the whole night on prompts missing the constraints the project
     # recorded - the recorded-but-unread failure, mechanized. Refuse instead.
-    if _md_section(_orientation_file(), "Standing constraints") is None:
-        bad("../../PROJECT.md is missing or has no '## Standing constraints' section (also tried the "
-            "pre-consolidation ../../PROJECT_ORIENTATION.md) - that section is delivered into every "
-            "spawned worker prompt. Fix: author it (new-project generates it; an older "
-            "project layout migrates via the kit's docs/MIGRATING.md).")
+    if _md_section(PROJECT_FILE, "Standing constraints") is None:
+        bad("../../PROJECT.md is missing or has no '## Standing constraints' section - that section is "
+            "delivered into every spawned worker prompt. Fix: author it (new-project generates it).")
 
     # 4b. disk budget: a launch that cannot hold a few units of artifacts will fail mid-night
     free_mb = _free_disk_mb()
@@ -4008,8 +3943,7 @@ def _supervise_unlocked(smoke: bool = False):
                           if d in ("Write", "Edit", "MultiEdit", "Bash", "PowerShell", "NotebookEdit")]
                 if denied:
                     # The permission mode refused the worker its tools (CLI 2.1.267 denies a headless
-                    # `auto` spawn its Write and Bash - the measurement pass after the queue's retirement lost every arm
-                    # to it). Not a unit failure and not the environment's: the mode. Halt with the fix.
+                    # `auto` spawn its Write and Bash). Not a unit failure and not the environment's: the mode. Halt with the fix.
                     _write_state(q)
                     _halt(f"supervise: HALT - the worker's tool calls were DENIED by the permission mode "
                           f"({', '.join(denied)}; mode={k['permission_mode']}). No unit can run this way. Fix: "
@@ -4023,7 +3957,7 @@ def _supervise_unlocked(smoke: bool = False):
                 if contract_met:
                     # The worker did its job and found no unit it could run (a blocker it escalated, a
                     # judgement it wrote into the JOURNAL): a second spawn against the same state would
-                    # meet the same wall (the measurement pass's live arm spent $10 on the retry). No retry.
+                    # meet the same wall and spend the retry for nothing. No retry.
                     print(f"[supervise] no unit saved, but the worker met its exit contract ({contract_met}) - "
                           "not retried; the loop top decides")
                     break
@@ -4462,8 +4396,7 @@ def _recommended_follows(stem: str, label: str) -> None:
 
 def _verification_backlog(q: dict) -> list[list[dict]]:
     """Groups from driver_state.json's pending_verification that are ready - every entry, as soon as it is
-    owed, one spawn per unit (there are no blocks without a queue: a "block" trigger from an older preset
-    table verifies the unit at once, and the verifier's label is the unit's exp name)."""
+    owed, one spawn per unit (the verifier's label is the unit's exp name)."""
     return [[e] for e in (q.get("pending_verification") or []) if isinstance(e, dict)]
 
 
@@ -4522,7 +4455,7 @@ def _service_verification(k: dict, model: str, vfail: int, effort: str = "") -> 
             def _verdicts_probe(ms=tuple(missing)) -> bool:
                 return all(_fresh(s) for s in ms)
 
-            retries = int(k.get("verifier_retries", k.get("planner_retries", 1)))
+            retries = int(k.get("verifier_retries", 1))
             for attempt in range(1 + retries):
                 before = list(missing)
                 st = _spawn_with_backoff(prompt, model, f"verifier[{label}]", k, saved_probe=_verdicts_probe,
@@ -4704,7 +4637,7 @@ def _record_cli(exp: str, analysis: str, next_line: str, note: str, finding: str
             problems.append(f"the ledger note holds at most {NOTE_CAP} characters ({len(cell)} given, "
                             f"{len(cell) - NOTE_CAP} over): the narrative belongs in the Analysis, and "
                             "anything larger in results/JOURNAL.md")
-        elif _set_scoreboard_cell(eid, ("note", "notes"), cell):
+        elif _set_scoreboard_cell(eid, ("note",), cell):
             wrote.append(f"ledger note ({len(cell)} chars)")
     if finding:
         cell = _one_line(finding)
@@ -4732,8 +4665,8 @@ def _record_cli(exp: str, analysis: str, next_line: str, note: str, finding: str
     return 1 if problems else 0
 
 
-# ---- side-document entries the RUNNER places (TA-6) ----
-# The Peng-96 turn audit: a worker spent up to seven calls a unit finding WHERE an entry goes (a landmine
+# ---- side-document entries the RUNNER places ----
+# Without this, a worker spent several calls a unit finding WHERE an entry goes (a landmine
 # row in campaign.md, a discovery in PROJECT.md) and then spliced it with a Bash + Python string replace
 # that no Write/Edit hook sees. The runner owns the anchor and applies the entry's rule; a gotcha has no
 # key - it goes in the JOURNAL's Traps and tooling (PROJECT.md's gotchas are GUARDED, the user's).
@@ -4797,7 +4730,7 @@ def _append_landmine(label: str, item) -> tuple:
 
 def _append_discovery(label: str, item) -> tuple:
     """(done, problem): an entry appended to the project's §Updates from discoveries - only when the
-    cited verdict clears the bar the guard puts on the project ledger, through the guard's OWN functions
+    cited verdict clears the promotion bar, through the guard's OWN functions
     (scripts/guard_promotion.py: _check_verdict, correctness_blocks_promotion, green_is_stale), never a
     re-derived copy: CONFIRMED, a graduating kill tier if any, a named independent refuter, and this
     campaign's correctness suite green on the code on disk. A preset that runs no verifier has no verdict
@@ -4823,7 +4756,7 @@ def _append_discovery(label: str, item) -> tuple:
         reason = f"the gate in scripts/guard_promotion.py could not validate it ({type(exc).__name__}: {exc})"
     if reason:
         return None, f"discovery: {reason}"
-    proj = _orientation_file()
+    proj = PROJECT_FILE
     if not proj.is_file():
         return None, f"discovery: no project file at {proj}"
     try:
@@ -4911,7 +4844,7 @@ def _self_verify_record(exp: str, sv: dict) -> int:
 
 
 # ---- a CONTEST: the worker disputes its own result's gate outcome, and does not decide it -----------
-# The failure this answers (the V_B- level-structure test campaign, exp017 / exp019): two results met every
+# The failure this answers: two results met every
 # written promotion condition and were set aside by the worker's judgement, recorded as "refused", with no
 # decision-record entry and no second opinion - the same context that produced the doubt confirmed it. A
 # set-aside is a claim like any other. The record file's `contest` key files the objection as a falsifiable charge with the artifacts
@@ -5160,10 +5093,6 @@ def _record_from_file(exp: str, path: str, flags: dict) -> int:
                 rc = max(rc, 1)
             else:
                 print(f"record -> {done}")
-    if rec.get("propose") or rec.get("decline"):
-        print("--record: there is no queue to propose to or decline from - a follow-up idea goes "
-              "in the JOURNAL's 'What to try next and why'; a unit not worth running is simply not run")
-        rc = max(rc, 1)
     if rec.get("journal"):
         print("--record: the JOURNAL is not part of the record file - write results/JOURNAL.md anew with the "
               "Write tool (the previous one is in your brief and in results/journal_archive/)")
@@ -5246,7 +5175,7 @@ def _card_comparisons(res: dict, eid: str) -> list[str]:
 
 
 # ---- the artifact digest: the SHAPE of every file a unit wrote, so nobody prints keys to learn it ----
-# The Peng-96 turn audit (TA-1): ~5 calls a unit went to `print(list(d.keys()))`, `head -c`, `z.files`
+# Without it, several calls a unit went to `print(list(d.keys()))`, `head -c`, `z.files`
 # over artifacts - three in four of them an EARLIER unit's (verdicts, checks, records, candidate files,
 # screens, diagnostic scripts) - because no brief carried their shape. The runner writes the shape once.
 DIGEST_BRIEF_CAP = 4_000        # chars of the previous units' digest delivered in the worker's brief
@@ -5387,7 +5316,7 @@ def _digest_cli(exp: str) -> int:
 
 def _save_set_line(exp: str) -> str:
     """What the unit's save-set holds right now - printed after --record, so no worker lists the tree
-    to confirm what landed (the Peng-96 turn audit, TA-7: every post-record `ls` found nothing wrong)."""
+    to confirm what landed (a post-record listing finds nothing the record did not already say)."""
     stem = Path(exp).stem if exp.endswith(".json") else exp
     eid = exp_id_for(stem)
     res = _read_json(RESULTS / f"result_{eid}.json", None) if eid else None
@@ -5436,7 +5365,7 @@ def _card(exp: str) -> str:
     lines.append(head)
     if res.get("guardrail") is not None:
         lines.append(f"guardrail: {res.get('guardrail')}")
-    pr = checks.get("plausible_range") or checks.get("hard_bounds") or {}
+    pr = checks.get("plausible_range") or {}
     if pr:
         lines.append(f"plausible range: {pr.get('status', '?')} - {pr.get('detail', '')}")
     if res.get("solve_wall_clock_s") is not None:
@@ -5497,7 +5426,7 @@ def _self_check_cli(exp: str, ran: list, changes: list, estimate: str, note: str
         print(f"--self-check: no results/checks_{eid or '?'}.json for {exp!r} - record the experiment first")
         return 2
     # Validate every field first and report ALL problems at once - a record with several format issues
-    # rejects once, not one round-trip per issue (TA-3).
+    # rejects once, not one round-trip per issue.
     problems, entries, considered = [], [], []
     for item in ran or []:
         head, _, detail = item.partition(":")
@@ -5615,7 +5544,7 @@ def main():
     g.add_argument("--supervise", action="store_true",
                    help="run the orchestrated loop: a fresh worker agent per unit, which the worker chooses")
     g.add_argument("--preflight", action="store_true",
-                   help="run the supervisor launch checks (agent CLI, loop.json, queue.json, metric "
+                   help="run the supervisor launch checks (agent CLI, loop.json, driver state, metric "
                         "selftest) and exit - no spend")
     g.add_argument("--show-prompt", choices=("worker", "verifier", "capstone"), metavar="ROLE",
                    help="print the literal prompt this driver would spawn ROLE with, plus its size "
@@ -5717,7 +5646,7 @@ def main():
         else:
             rc = _record_cli(args.record, args.analysis or "", args.next_line or "", args.ledger_note or "",
                              args.finding or "", bool(args.replace))
-        if rc < 2:                         # the confirmation: what the save-set holds now (TA-7)
+        if rc < 2:                         # the confirmation: what the save-set holds now
             print(_save_set_line(args.record))
         sys.exit(rc)
 
@@ -5772,7 +5701,7 @@ def main():
         supervise(smoke=args.smoke)   # the driver only orchestrates; each worker's run fires the gates below
         return
 
-    # FROZEN-infrastructure gates, automatic before every experiment (no longer opt-in via --selftest):
+    # FROZEN-infrastructure gates, automatic before every experiment:
     # Cheapest refusal first: a typo in a campaign property is a string comparison, and it must not cost
     # the correctness suite's 600 s timeout to discover.
     t_run = time.monotonic()               # the per-unit timing record starts with the gates

@@ -12,9 +12,9 @@ Campaigns differ in how they store things, so read the campaign's own structure 
 filenames. Campaigns scaffolded by this kit answer that from one place: the campaign's `CLAUDE.md` and
 its **§Where things live** table, which names the campaign definition, `results/scoreboard.tsv`,
 `results/JOURNAL.md` (working memory; the ledger's `finding` cells are the settled record), the project
-background doc, and the verdict artifacts. The per-experiment configs (`configs/`, `configs*/exp*.json`)
-and the figures (`results*/images/`) are not table rows; read them from the tree. A campaign scaffolded
-before that table existed has none: fall back to `docs/charter*.md`. So do non-kit campaigns. The roles to find:
+background doc, and the verdict artifacts. The per-experiment configs (`configs/exp*.json`) and the
+figures (`results/images/`) are not table rows; read them from the tree. A non-kit campaign has no such
+table: read its own structure. The roles to find:
 
 - **The campaign definition** (`campaign.md`): the goal, the primary metric, what is FROZEN (physics,
   geometry, data, the metric itself and, if it was revised, its epochs), which levers were explored. The
@@ -26,12 +26,12 @@ before that table existed has none: fall back to `docs/charter*.md`. So do non-k
 - **The journal / narrative** (`results/logbook.md`; often a `JOURNAL*.md` elsewhere): the reasoning
   behind each experiment. Mine it for why a lever was tried and how a choice was reached, and for the
   `Disputes & responses` lines (verifier and user challenges) and how they were resolved.
-- **The verified findings** (the ledger's `finding` cells; often a `DISCOVERIES*.md` in older or non-kit
+- **The verified findings** (the ledger's `finding` cells; often a `DISCOVERIES*.md` in non-kit
   campaigns): the results that survived verification. Cite their verification status and metric epoch.
-- **The configs** (`configs*/exp*.json`): the exact knob settings per experiment.
+- **The configs** (`configs/exp*.json`): the exact knob settings per experiment.
 - **The literature file** (`LITERATURE.md`, optional): the curated references, usually mapped to levers.
   The bibliography seed; every entry still goes through `cite-check`.
-- **The figures** (`results*/images/` or per-experiment output dirs), optional.
+- **The figures** (`results/images/` or per-experiment output dirs), optional.
 - **The project overview** (`../../PROJECT.md`): the governing physics, conventions, rig and sample
   parameters. Pull definitions and derivations from it rather than reconstructing them.
 

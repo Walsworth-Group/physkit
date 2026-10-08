@@ -276,4 +276,4 @@ simple; (2) design a protocol the user runs to measure their real magnets' imper
 the arrangement of the *imperfect* magnets, building on (1) and the data from (2).
 
 The setup skill plans and proposes the staging; each loop becomes a **sibling campaign** in the project —
-its own `campaigns/<NN>_<slug>/` with its own charter, ledger, and lineage row (`PROJECT.md` §Lineage).
+its own `campaigns/<NN>_<slug>/` with its own `campaign.md`, ledger, and lineage row (`PROJECT.md` §Lineage).

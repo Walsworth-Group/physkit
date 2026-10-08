@@ -216,8 +216,7 @@ would make you revisit it (mirrors the `record-decision` skill).
 
 The project's master index: every campaign and session, what changed, and what it found, in one
 place. Archived campaigns stay listed. A resuming agent or colleague reads this first to find past
-work; each row's `@key` links to its knowledge-base resource, and the *Verified findings* column
-points into the campaign's own record (the `finding` cells of `results/scoreboard.tsv` + `results/verdicts/`), where
+work; the *Verified findings* column points into the campaign's own record (the `finding` cells of `results/scoreboard.tsv` + `results/verdicts/`), where
 the evidence lives.
 
 ### Campaigns
@@ -226,9 +225,9 @@ the evidence lives.
 `sims`, `fit`). A fork is an invalidating update, defined in the project `CLAUDE.md`. It archives
 the source campaign and starts a fresh one. Both appear here, with the fork noted.
 
-| # | Campaign | Date | Approach | Frozen metric | What changed from predecessor | Headline result | Verified findings | @KB-key | Status |
-|---|---|---|---|---|---|---|---|---|---|
-| 01 | {{CAMPAIGN_1_NAME}} | {{CAMPAIGN_1_DATE}} | {{CAMPAIGN_1_APPROACH}} | {{CAMPAIGN_1_METRIC}} | — (first) | {{CAMPAIGN_1_RESULT}} | {{CAMPAIGN_1_DISCOVERIES}} | {{CAMPAIGN_1_KBKEY}} | active |
+| # | Campaign | Date | Approach | Frozen metric | What changed from predecessor | Headline result | Verified findings | Status |
+|---|---|---|---|---|---|---|---|---|
+| 01 | {{CAMPAIGN_1_NAME}} | {{CAMPAIGN_1_DATE}} | {{CAMPAIGN_1_APPROACH}} | {{CAMPAIGN_1_METRIC}} | — (first) | {{CAMPAIGN_1_RESULT}} | {{CAMPAIGN_1_DISCOVERIES}} | active |
 
 ### Sessions (ad-hoc / non-campaign)
 
@@ -236,8 +235,8 @@ One-off exploration, debugging, or analysis with no frozen metric. The campaign-
 in the project `CLAUDE.md`. Record findings at their true rigor tier: a session finding is not a
 verified finding unless it passed `verify`.
 
-| Date | Session (`sessions/<date>_<slug>/`) | What it did | What it found (+ tier) | @KB-key | Promoted to |
-|---|---|---|---|---|---|
+| Date | Session (`sessions/<date>_<slug>/`) | What it did | What it found (+ tier) | Promoted to |
+|---|---|---|---|---|
 
 _— none yet —_
 

@@ -4,15 +4,19 @@ Every kit-owned file in a campaign was rendered from a template at the kit commi
 `campaign.md` ("Scaffolded by physkit vX.Y.Z (<hash>, <date>)"). So the upgrade is a THREE-WAY MERGE per
 file - base = the template the campaign was rendered from, ours = the campaign's file (with its own
 edits: hooks, checks, decisions), theirs = the current template - which keeps every campaign-side edit
-and conflicts only where both sides changed the same lines. Files the old kit did not ship are copied.
-Placeholders never need re-answering: where a template line still reads `{{X}}` on both sides, the
-campaign's rendered value wins by construction.
+and conflicts only where both sides changed the same lines. A kit-only file the campaign lacks is
+created. Placeholders never need re-answering: where a template line still reads `{{X}}` on both sides,
+the campaign's rendered value wins by construction.
 
-    python <kit>/skills/new-campaign/scripts/upgrade_campaign.py <campaign_dir> --preset none|minimal|light|heavy|intensive
+Supported sources: campaigns scaffolded by (or last upgraded to) physkit v0.12.1 or newer. A campaign
+from an older kit keeps running on the kit version stamped in it.
+
+    python <kit>/skills/new-campaign/scripts/upgrade_campaign.py <campaign_dir>
+        [--preset none|minimal|light|heavy|intensive]  default: keep the campaign's verify.preset
         [--base-git <kit repo path>[@<ref>]]       base templates from a kit git checkout (ref defaults to the stamped hash)
-        [--base-dir <old kit>/templates/campaign]  base templates from an older plugin version's cache
+        [--base-dir <kit>/templates/campaign]      base templates from the stamped plugin version's cache
         [--new-dir <kit>/templates/campaign]       current templates (default: this script's own kit)
-        [--reproducible true|false] [--dry-run] [--no-validate]
+        [--dry-run] [--no-validate]
 
 Writes a backup `<file>.pre_upgrade_<UTC>` beside every file it changes, an upgrade log under
 results/diagnostics/, and a provenance line in campaign.md and results/logbook.md. Exits 2 when merges
@@ -33,11 +37,11 @@ from pathlib import Path
 HERE = Path(__file__).resolve()
 KIT = HERE.parents[3]                                   # <kit>/skills/new-campaign/scripts/ -> <kit>
 STAMP_RE = re.compile(r"Scaffolded by physkit (v[\w.\-]+) \(([0-9a-f]{6,40}), ([0-9-]{10})\)")
-# The line stamp() writes; older upgrades wrote the version without its "v".
+# The line stamp() writes (the version's leading "v" is optional).
 UPGRADE_STAMP_RE = re.compile(r"Upgraded in place to physkit (v?[\w.\-]+) \(([0-9a-f]{6,40}), ([0-9-]{10})\)")
 
-# (campaign-relative path, template-relative path). MERGE: exists in both old and new kits and the
-# campaign edits it. COPY: kit-only files an older kit may not have shipped (never campaign-edited).
+# (campaign-relative path, template-relative path). MERGE: kit files the campaign edits. COPY: kit-only
+# files (never campaign-edited), replaced with the current version; created when absent.
 MERGE = [
     ("scripts/guard_promotion.py", "scripts/guard_promotion.py.tmpl"),
     ("scripts/frozen_core.py", "scripts/frozen_core.py.tmpl"),
@@ -50,8 +54,8 @@ MERGE = [
     (".claude/settings.json", ".claude/settings.json.tmpl"),
 ]
 COPY = [
-    # The runner is the kit's machinery since the split (kit >= v0.11.1): replaced wholesale. A campaign
-    # that edited it is reported by split_runner below, with the backup to port from.
+    # The runner is the kit's machinery: replaced wholesale (a campaign edit is merged three-way below,
+    # with the backup to port from). The campaign's own code lives in scripts/experiment.py.
     ("scripts/run_campaign.py", "scripts/run_campaign.py.tmpl"),
     ("scripts/codex_backend.py", "scripts/codex_backend.py"),
     ("scripts/codex_verifier.py", "scripts/codex_verifier.py.tmpl"),
@@ -65,24 +69,27 @@ COPY = [
 # `raise NotImplementedError`).
 CREATE = [
     ("scripts/experiment.py", "scripts/experiment.py.tmpl"),
-    # The contract in the role files (kit >= v0.12.0): the verifier's and the capstone's roles, and the
-    # reference the worker's contract points at. Rendered with the values the upgrade recovers; a
-    # placeholder it cannot recover is left literal and named in the log - the campaign's old
-    # roles/worker.md (backed up beside it) carries the rendered text to copy from.
+    # The verifier's and the capstone's roles, and the reference the worker's contract points at.
+    # Rendered with the values the upgrade recovers; a placeholder it cannot recover is left literal and
+    # named in the log.
     ("roles/verifier.md", "roles/verifier.md.tmpl"),
     ("roles/capstone.md", "roles/capstone.md.tmpl"),
     ("roles/REFERENCE.md", "roles/REFERENCE.md.tmpl"),
 ]
-HOOKS = ("validate_method", "run_experiment", "load_target", "guardrail", "save_figure")
 PRESETS = ("none", "minimal", "light", "heavy", "intensive")
+OLDEST_SOURCE = (0, 12, 1)       # the oldest kit version this script upgrades from
+
+
+def _version_tuple(v: str) -> tuple | None:
+    m = re.match(r"v?(\d+)\.(\d+)\.(\d+)", v or "")
+    return tuple(int(x) for x in m.groups()) if m else None
 
 
 def stamp_of(campaign: Path) -> tuple[str, str, str] | None:
     """The kit the campaign's kit-owned files were LAST rendered/merged from: the newest 'Upgraded in
     place' line this script wrote (it says it supersedes the scaffold pin), else the scaffold pin. A
     second upgrade that merged against the scaffold's templates instead treated every change the first
-    upgrade brought in as a campaign edit (photophysics10 test copy, 2026-09-09: 105 definitions and 14
-    kit functions flagged against v0.10.0; 32 and 7 against the 0.10.4 it was actually at)."""
+    upgrade brought in as a campaign edit, flagging several times the real number of conflicts."""
     try:
         text = (campaign / "campaign.md").read_text(encoding="utf-8", errors="replace")
     except OSError:
@@ -136,8 +143,8 @@ def recover_values(campaign: Path) -> dict:
     """The few placeholder values the COPIED kit-only files need, read back from rendered files."""
     vals = {}
     try:
-        runner = (campaign / "scripts" / "run_campaign.py").read_text(encoding="utf-8", errors="replace")
-        m = re.search(r"run (\S+) in campaign mode", runner)
+        verifier = (campaign / "roles" / "verifier.md").read_text(encoding="utf-8", errors="replace")
+        m = re.search(r"run (\S+) in campaign mode", verifier)
         if m:
             vals["VERIFY_SKILL"] = m.group(1)
     except OSError:
@@ -152,18 +159,14 @@ def recover_values(campaign: Path) -> dict:
         pass
     # The metric names and the title: a current-template line the campaign never had (e.g. a new f-string
     # naming {{PRIMARY_METRIC}}) is rendered with the campaign's values or it ships as a literal
-    # placeholder (the replay arm's card printed "{PRIMARY_METRIC} = None", 2026-09-11). Read back from
+    # placeholder (a card printing "{PRIMARY_METRIC} = None"). Read back from
     # the campaign's own rendered runner and campaign.md.
     try:
         runner = (campaign / "scripts" / "run_campaign.py").read_text(encoding="utf-8", errors="replace")
         m = re.search(r'score = float\(d\["([A-Za-z0-9_]+)"\]\)', runner)     # _prior_results: the result key
         if m:
             vals.setdefault("PRIMARY_METRIC", m.group(1))
-        m = re.search(r"\*\*Result\*\*: ([A-Za-z0-9_]+) = \{score:\.4f\}; ([A-Za-z0-9_]+) = \{diags\}", runner)
-        if m:
-            vals.setdefault("PRIMARY_METRIC", m.group(1))
-            vals.setdefault("GUARDRAIL_METRIC", m.group(2))
-        m = re.search(r"; ([A-Za-z0-9_]+) = \{diags\}", runner)                   # a campaign-edited Result line
+        m = re.search(r"; ([A-Za-z0-9_]+) = \{diags\}", runner)                   # the logbook's Result line
         if m:
             vals.setdefault("GUARDRAIL_METRIC", m.group(1))
         m = re.search(r'description="Experiment runner for (.+?)"\)', runner)
@@ -292,180 +295,20 @@ def auto_resolve(merged: str, vals: dict) -> tuple[str, int, dict]:
     return "\n".join(out), left, learned
 
 
-def _top_level(tree: "ast.Module") -> dict:
-    """name -> node for every top-level definition, assignment and import alias of a module."""
-    import ast
-    out = {}
-    for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            out[node.name] = node
-        elif isinstance(node, ast.Assign):
-            for t in node.targets:
-                if isinstance(t, ast.Name):
-                    out[t.id] = node
-        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            out[node.target.id] = node
-        elif isinstance(node, (ast.Import, ast.ImportFrom)):
-            for a in node.names:
-                out["import:" + (a.asname or a.name)] = node
-    return out
-
-
-def _shape(node) -> str:
-    """A node's structure with every string constant blanked: rendered placeholders ({{PRIMARY_METRIC}}
-    became a name), reworded messages and docstrings do not count as a campaign edit; an injected call,
-    a new branch, a changed signature do."""
-    import ast
-    import copy
-    n = copy.deepcopy(node)
-    for sub_node in ast.walk(n):
-        if isinstance(sub_node, ast.Constant) and isinstance(sub_node.value, str):
-            sub_node.value = ""
-    return ast.dump(n)
-
-
-_SPLIT_CREATED: set = set()
-
-
-def split_runner(campaign: Path, base, new_dir: Path, vals: dict, log: list, dry: bool) -> list:
-    """A pre-split campaign keeps its hooks (and its helpers) inside scripts/run_campaign.py. Extract
-    everything the campaign added - every top-level name absent from the runner template it was
-    scaffolded from, plus the five hooks - into scripts/experiment.py, in source order, under the
-    current experiment template's header. Kit-owned functions the campaign edited IN PLACE cannot be
-    carried into a file it does not own: they are named here as conflicts, with the backup the COPY
-    step leaves (scripts/run_campaign.py.bak_*), for the campaign to port into the seams
-    (campaign_scoreboard_fields / campaign_checks / residual / baseline_config). Returns the conflicts."""
-    import ast
-    runner = campaign / "scripts" / "run_campaign.py"
-    target = campaign / "scripts" / "experiment.py"
-    if target.is_file():
-        return []
-    src = runner.read_text(encoding="utf-8", errors="replace") if runner.is_file() else ""
-    if "def run_experiment(" not in src:
-        return []                                   # nothing to split (already split, or no runner)
-    base_t = base.read("scripts/run_campaign.py.tmpl")
-    tmpl = (new_dir / "scripts" / "experiment.py.tmpl").read_text(encoding="utf-8")
-    if base_t is None or not tmpl:
-        log.append("- scripts/experiment.py: NOT created - no base runner template to diff against "
-                   "(pass --base-git/--base-dir); the hooks stay in run_campaign.py until then")
-        return [("scripts/experiment.py", 1)]
-    new_t = (new_dir / "scripts" / "run_campaign.py.tmpl").read_text(encoding="utf-8")
-    try:
-        ours, theirs = ast.parse(src), ast.parse(render(base_t, vals))
-        current = ast.parse(render(new_t, vals))
-    except SyntaxError as exc:
-        log.append(f"- scripts/experiment.py: NOT created - the runner does not parse ({exc})")
-        return [("scripts/run_campaign.py", 1)]
-    ours_names, base_names, new_names = _top_level(ours), _top_level(theirs), _top_level(current)
-    campaign_nodes, edited_kit = [], []
-    for name, node in ours_names.items():
-        if name.startswith("import:"):
-            if name not in base_names:
-                campaign_nodes.append(node)
-            continue
-        if name in HOOKS or name not in base_names:
-            campaign_nodes.append(node)
-        elif isinstance(node, (ast.FunctionDef, ast.ClassDef)) and isinstance(base_names[name], type(node)):
-            # A campaign edit is a function that matches NEITHER the template it was scaffolded from NOR
-            # the current one (a kit change between versions matches the current template).
-            mine = _shape(node)
-            if mine != _shape(base_names[name]) and (name not in new_names or mine != _shape(new_names[name])):
-                edited_kit.append(name)
-    seen, ordered = set(), []
-    for node in sorted(campaign_nodes, key=lambda n: n.lineno):
-        if id(node) in seen:
-            continue
-        seen.add(id(node))
-        ordered.append(ast.get_source_segment(src, node) or "")
-    head = render(tmpl[:tmpl.index("def validate_method(")], vals)
-    have = set(ours_names)
-    seams = tmpl[tmpl.index("# ---- optional seams"):]
-    seam_defs = [d for d in ("residual", "campaign_scoreboard_fields", "campaign_result_fields", "campaign_checks",
-                             "campaign_comparand", "campaign_card_fields", "baseline_config")
-                 if d not in have]
-    body = "\n\n\n".join(ordered) + "\n"
-    text = head + body + ("\n" + seams if seam_defs else "")
-    if not dry:
-        target.write_text(text, encoding="utf-8", newline="\n")
-    _SPLIT_CREATED.add(target)
-    log.append(f"- scripts/experiment.py: created from the campaign's runner - {len(ordered)} top-level "
-               f"definition(s)/import(s) moved (the five hooks + everything the campaign added)")
-    if edited_kit:
-        log.append("- scripts/run_campaign.py: the campaign EDITED these kit-owned functions in place - "
-                   + ", ".join(edited_kit) + ". The runner is replaced by the current kit file; port those "
-                   "edits into experiment.py's seams (campaign_scoreboard_fields / campaign_checks / "
-                   "residual / baseline_config) from the backup the upgrade leaves beside it.")
-        return [("scripts/run_campaign.py (edited kit functions: " + ", ".join(edited_kit) + ")", len(edited_kit))]
-    return []
-
-
-def edit_loop_json(campaign: Path, preset: str, reproducible: bool | None, log: list, dry: bool) -> None:
+def edit_loop_json(campaign: Path, preset: str | None, log: list, dry: bool) -> None:
+    """Set verify.preset when --preset names one; without it (None) the campaign's preset is kept. Every
+    other key in configs/loop.json is the campaign's."""
     p = campaign / "configs" / "loop.json"
     cfg = json.loads(p.read_text(encoding="utf-8-sig"))
-    camp = cfg.setdefault("campaign", {})
     verify = cfg.setdefault("verify", {})
-    changes = []
-    if verify.get("preset") != preset:
-        changes.append(f"verify.preset: {verify.get('preset')!r} -> {preset!r}")
-        verify["preset"] = preset
-    for k in ("verification", "verification_reason"):
-        if k in camp:
-            changes.append(f"campaign.{k} removed (retired; verify.preset replaces it; was {camp[k]!r})")
-            camp.pop(k)
-    if reproducible is None:
-        reproducible = not (campaign / "configs" / "instrument.json").is_file()
-    if not isinstance(camp.get("reproducible"), bool):
-        camp["reproducible"] = reproducible
-        changes.append(f"campaign.reproducible: {reproducible}")
-    drv = cfg.setdefault("driver", {})
-    if "verifier_retries" not in drv:
-        drv["verifier_retries"] = int(drv.get("planner_retries", 1))
-        changes.append(f"driver.verifier_retries: {drv['verifier_retries']}")
-    if "planner_retries" in drv:
-        drv.pop("planner_retries")
-        changes.append("driver.planner_retries removed (the planner is retired,")
-    # The planner is retired : its model/effort block becomes the verifier's (the verifier and
-    # the capstone were driven by it); the plateau and queue knobs had no reader left.
-    if "verifier" not in cfg and isinstance(cfg.get("planner"), dict):
-        pl = cfg["planner"]
-        cfg["verifier"] = {"_doc": "The independent-check agents the driver spawns (the verifier the preset owes a unit; "
-                                   "the claim-audit capstone at the end). Carried over from the retired planner block.",
-                           **{k: pl[k] for k in ("model", "claude_effort", "codex_model", "codex_reasoning_effort") if k in pl}}
-        changes.append("verifier block created from the planner's model/effort")
-    for block in ("planner", "plateau", "queue"):
-        if block in cfg:
-            cfg.pop(block)
-            changes.append(f"{block} block removed (no reader since")
-    if "full_reproduction_threshold_s" in verify:
-        verify.pop("full_reproduction_threshold_s")
-        changes.append("verify.full_reproduction_threshold_s removed (re-execution is no longer a preset "
-                       "axis; the verifier chooses how to refute)")
-    if not changes:
-        log.append("configs/loop.json: already current")
+    if preset is None or verify.get("preset") == preset:
+        log.append(f"configs/loop.json: verify.preset {verify.get('preset')!r} kept")
         return
-    log.append("configs/loop.json: " + "; ".join(changes))
+    log.append(f"configs/loop.json: verify.preset {verify.get('preset')!r} -> {preset!r}")
+    verify["preset"] = preset
     if not dry:
         backup(p)
         p.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
-
-
-def edit_recommended(campaign: Path, log: list, dry: bool) -> None:
-    p = campaign / "configs" / "RECOMMENDED.json"
-    if not p.is_file():
-        return
-    try:
-        rec = json.loads(p.read_text(encoding="utf-8-sig"))
-        cfg = json.loads((campaign / "configs" / "loop.json").read_text(encoding="utf-8-sig"))
-    except Exception as exc:
-        log.append(f"configs/RECOMMENDED.json: not edited ({exc})")
-        return
-    mv = str((cfg.get("campaign") or {}).get("metric_version") or "")
-    if isinstance(rec, dict) and "_metric_version" not in rec and mv:
-        rec["_metric_version"] = mv
-        log.append(f"configs/RECOMMENDED.json: _metric_version {mv!r} added (the metric epoch the current-best was promoted under)")
-        if not dry:
-            backup(p)
-            p.write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
 
 
 _UTC = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -473,275 +316,6 @@ _UTC = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 def backup(p: Path) -> None:
     shutil.copy2(p, p.with_name(p.name + f".pre_upgrade_{_UTC}"))
-
-
-# ---- the record (kit >= v0.11.1, 2026-09-11): the ledger's narrative columns, the JOURNAL as working memory
-NOTE_CAP, FINDING_CAP = 200, 300
-LEDGER_RENAME = {"description": "what", "notes": "note"}
-JOURNAL_SECTIONS = ("Where we stand", "Live hypotheses", "What to try next and why", "Traps and tooling",
-                    "Open questions", "Anything else")
-
-
-def ledger_columns(campaign: Path, log: list, dry: bool) -> None:
-    """results/scoreboard.tsv gains the runner-written narrative columns: `description` -> `what`,
-    `notes` -> `note` (an essay in a note cell is trimmed to the cap with a marker - the full text is the
-    logbook entry), `plausible` before `verified`, `finding` last. Rows are padded; every other byte kept;
-    a backup beside the file. A header that already has the columns is left alone. An older
-    `expected_vs_found` column is kept as it is: it holds the retired per-experiment prediction's
-    verdicts, which are history, not plausible-range verdicts."""
-    p = campaign / "results" / "scoreboard.tsv"
-    if not p.is_file():
-        return
-    with open(p, encoding="utf-8", errors="replace", newline="") as f:
-        lines = f.read().splitlines(keepends=True)
-    hi = next((i for i, L in enumerate(lines) if L.strip() and not L.startswith("#")), None)
-    if hi is None:
-        return
-    nl = "\r\n" if lines[hi].endswith("\r\n") else "\n"
-    cols = lines[hi].rstrip("\r\n").split("\t")
-    new_cols = [LEDGER_RENAME.get(c, c) for c in cols]
-    renamed = [f"{c} -> {LEDGER_RENAME[c]}" for c in cols if c in LEDGER_RENAME]
-    added = []
-    if "plausible" not in new_cols:
-        at = new_cols.index("verified") if "verified" in new_cols else len(new_cols)
-        new_cols.insert(at, "plausible")
-        added.append("plausible")
-    for c in ("verified", "note", "finding"):
-        if c not in new_cols:
-            new_cols.append(c)
-            added.append(c)
-    if not renamed and not added:
-        log.append("- results/scoreboard.tsv: the narrative columns are present")
-        return
-    old_by_name = {c: i for i, c in enumerate(cols)}
-    trimmed = 0
-    out = lines[:hi] + ["\t".join(new_cols) + nl]
-    for L in lines[hi + 1:]:
-        if L.startswith("#") or not L.strip():
-            out.append(L)
-            continue
-        end = "\r\n" if L.endswith("\r\n") else ("\n" if L.endswith("\n") else "")
-        cells = L.rstrip("\r\n").split("\t")
-        row = []
-        for c in new_cols:
-            src = next((o for o, n in LEDGER_RENAME.items() if n == c), c)
-            i = old_by_name.get(src, old_by_name.get(c))
-            v = cells[i] if i is not None and i < len(cells) else ""
-            if c == "note" and len(v) > NOTE_CAP:
-                v = v[:NOTE_CAP - 12].rstrip() + " [trimmed]"
-                trimmed += 1
-            if c == "plausible" and not v.strip():
-                v = _plausible_from_checks(campaign, cells[0].strip() if cells else "")
-            row.append(v)
-        out.append("\t".join(row) + end)
-    log.append("- results/scoreboard.tsv: narrative columns " + (f"renamed {', '.join(renamed)}; " if renamed else "")
-               + (f"added {', '.join(added)}; " if added else "")
-               + (f"{trimmed} note cell(s) over {NOTE_CAP} chars trimmed (the full text is the logbook entry); " if trimmed else "")
-               + "rows padded; backup beside the file")
-    if not dry:
-        backup(p)
-        with open(p, "w", encoding="utf-8", newline="") as f:
-            f.write("".join(out))
-
-
-def _plausible_from_checks(campaign: Path, exp_id: str) -> str:
-    """The plausible-range judgement for one row, read back from results/checks_<NN>.json (its
-    `checks.plausible_range` entry - `hard_bounds` in an artifact written before the rename - is the same
-    judgement the runner writes into the logbook line and the ledger cell), rendered the way the runner
-    renders it; "" when the artifact or the entry is absent. (Called by ledger_columns for a row whose new
-    cell is empty.)"""
-    try:
-        art = json.loads((campaign / "results" / f"checks_{exp_id}.json").read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):
-        return ""
-    ck = (art.get("checks") or {}) if isinstance(art, dict) else {}
-    pc = ck.get("plausible_range") or ck.get("hard_bounds")
-    if not isinstance(pc, dict):
-        return ""
-    head = {"pass": "inside - ", "fail": "FLAGGED - ", "unavailable": "no range - "}.get(str(pc.get("status")), "")
-    return (head + str(pc.get("detail") or "")).strip()
-
-
-def _set_ledger_cell(campaign: Path, exp_id: str, col: str, text: str) -> bool:
-    p = campaign / "results" / "scoreboard.tsv"
-    with open(p, encoding="utf-8", errors="replace", newline="") as f:
-        lines = f.read().splitlines(keepends=True)
-    hi = next((i for i, L in enumerate(lines) if L.strip() and not L.startswith("#")), None)
-    cols = lines[hi].rstrip("\r\n").split("\t") if hi is not None else []
-    if col not in cols:
-        return False
-    ci = cols.index(col)
-    for i in range(hi + 1, len(lines)):
-        L = lines[i]
-        if L.startswith("#") or not L.strip():
-            continue
-        cells = L.rstrip("\r\n").split("\t")
-        if cells[0].strip() != exp_id:
-            continue
-        if ci < len(cells) and cells[ci].strip():
-            return False                                    # never overwrite a finding already there
-        end = "\r\n" if L.endswith("\r\n") else ("\n" if L.endswith("\n") else "")
-        while len(cells) < len(cols):
-            cells.append("")
-        cells[ci] = " ".join(text.split())[:FINDING_CAP]
-        lines[i] = "\t".join(cells) + end
-        with open(p, "w", encoding="utf-8", newline="") as f:
-            f.write("".join(lines))
-        return True
-    return False
-
-
-def journal_restructure(campaign: Path, new_dir: Path, vals: dict, log: list, dry: bool) -> None:
-    """results/JOURNAL.md becomes the bounded working memory: the old file is archived whole to
-    results/journal_archive/, its NEXT line kept, its §Open threads / §Findings / §Strategy notes moved
-    under the new sections with a 'migrated' heading, and every verdict-cited Findings line ALSO written
-    into the ledger's `finding` cell of the experiment it names (the settled record's new home). A JOURNAL
-    that already has the new sections is left alone."""
-    j = campaign / "results" / "JOURNAL.md"
-    if not j.is_file():
-        return
-    text = j.read_text(encoding="utf-8-sig", errors="replace")
-    if "## Where we stand" in text:
-        log.append("- results/JOURNAL.md: already the working-memory layout")
-        return
-    tmpl = new_dir / "results" / "JOURNAL.md.tmpl"
-    if not tmpl.is_file():
-        return
-    sections, head, buf = {}, "", []
-    for line in text.splitlines():
-        if line.startswith("## "):
-            sections[head] = "\n".join(buf).strip()
-            head, buf = line[3:].strip(), []
-        else:
-            buf.append(line)
-    sections[head] = "\n".join(buf).strip()
-    nxt = next((L for L in sections.get("", "").splitlines() if L.startswith("**NEXT")), "")
-
-    def section(prefix: str) -> str:
-        return next((b for h, b in sections.items() if h.lower().startswith(prefix)), "")
-    findings, findings_to_cells = section("findings"), 0
-    exp_re = re.compile(r"\bexp[s]?\s*([0-9]{3}[a-z]?)", re.I)
-    for line in findings.splitlines():
-        if not line.lstrip().startswith("-") or "verdicts/" not in line:
-            continue
-        for eid in exp_re.findall(line):
-            if dry or _set_ledger_cell(campaign, eid, "finding", line.lstrip("- ").strip()):
-                findings_to_cells += 1               # in a dry run: the candidates
-    # The campaign's title from the old file's H1 (`# JOURNAL — <title> (...)`), so the rendered header is
-    # the campaign's; any placeholder the upgrade cannot recover is blanked rather than shipped literally.
-    m = re.match(r"#\s*JOURNAL\s*[—-]+\s*(.+?)\s*(\(.*)?$", text.splitlines()[0] if text else "")
-    jvals = dict(vals, CAMPAIGN_TITLE=(m.group(1).strip() if m else vals.get("CAMPAIGN_TITLE", "this campaign")))
-    rendered = re.sub(r"\{\{[A-Z0-9_]+\}\}", "", render(tmpl.read_text(encoding="utf-8"), jvals))
-    body = rendered.split("**NEXT:**", 1)[0] + (nxt or "**NEXT:** (set from the migrated notes below)") + "\n"
-
-    def block(title: str, migrated: str, placeholder: str) -> str:
-        mig = f"\n\n### migrated from the previous JOURNAL §{migrated} (trim to what still steers)\n{section(migrated.lower())}" \
-            if section(migrated.lower()) else ""
-        return f"\n## {title}\n- {placeholder}{mig}\n"
-    body += block("Where we stand", "Findings", "(established / ruled out, with confidence and the ledger id or verdict)")
-    body += block("Live hypotheses", "Open threads", "(the current mental model; what would change your mind)")
-    body += block("What to try next and why", "Strategy notes", "(ranked, with the reasoning; what to stop)")
-    body += "\n## Traps and tooling\n- (pitfalls hit, gotchas, things that wasted time)\n"
-    body += block("Open questions", "Inbox", "(what you could not settle; notes from the user acknowledged)")
-    body += "\n## Anything else\n- (whatever else the next worker should know)\n"
-    log.append("- results/JOURNAL.md: restructured into the working-memory layout (the old file is archived whole in "
-               f"results/journal_archive/; §Findings / §Open threads / §Strategy notes carried under 'migrated' headings; "
-               f"{findings_to_cells} verdict-cited finding(s) also written to the ledger's finding cells). "
-               "Trim the migrated blocks to what still steers - the file is delivered whole every spawn")
-    if not dry:
-        arch = campaign / "results" / "journal_archive"
-        arch.mkdir(parents=True, exist_ok=True)
-        (arch / f"journal_{_UTC}_pre_upgrade.md").write_text(text, encoding="utf-8", newline="\n")
-        backup(j)
-        j.write_text(body, encoding="utf-8", newline="\n")
-
-
-def retire_queue(campaign: Path, log: list, dry: bool) -> None:
-    """The planner and its queue are retired : results/queue.json is archived to
-    results/queue_archive/, its open `next` entries (and the shelf) are folded into the JOURNAL's
-    'What to try next and why' under a migrated heading - one line each, so the next worker can re-rank
-    or drop them from evidence - and roles/planner.md and results/queue_drop/ move to the archive too.
-    No-op on a campaign without a queue."""
-    res = campaign / "results"
-    q = res / "queue.json"
-    planner = campaign / "roles" / "planner.md"
-    drop = res / "queue_drop"
-    if not (q.is_file() or planner.is_file() or drop.is_dir()):
-        return
-    arch = res / "queue_archive"
-    ideas = []
-    if q.is_file():
-        try:
-            qq = json.loads(q.read_text(encoding="utf-8-sig"))
-        except ValueError as exc:
-            log.append(f"- results/queue.json: not valid JSON ({exc}); archived unread - fold its ideas by hand")
-            qq = {}
-        for u in (qq.get("next") or []) if isinstance(qq, dict) else []:
-            if not isinstance(u, dict):
-                continue
-            cfg = str(u.get("config") or "?")
-            why = str(u.get("hypothesis") or u.get("rationale") or "").strip().replace("\n", " ")
-            ideas.append(f"- {cfg}: {why[:240]}" + ("..." if len(why) > 240 else "")
-                         + (f" (declined: {'; '.join(map(str, u['declined']))[:120]})" if u.get("declined") else ""))
-        shelved = [u for u in ((qq.get("shelved") or []) if isinstance(qq, dict) else []) if isinstance(u, dict)]
-        if shelved:
-            kinds = sorted({str(u.get("kind") or "?") for u in shelved})
-            ideas.append(f"- ({len(shelved)} shelved unit(s) - {', '.join(kinds)} - stay in the archive, "
-                         f"results/queue_archive/queue_{_UTC}.json; revive one only from evidence)")
-    j = res / "JOURNAL.md"
-    folded = 0
-    if ideas and j.is_file():
-        text = j.read_text(encoding="utf-8-sig", errors="replace")
-        head = "## What to try next and why"
-        block = (f"\n\n### migrated from the retired queue ({_dt.date.today().isoformat()}) - re-rank from the evidence, "
-                 "drop what no longer steers; a unit you run leaves this list, its ledger row is its record\n"
-                 + "\n".join(ideas) + "\n")
-        if head in text:
-            i = text.index(head)
-            j_end = text.find("\n## ", i + len(head))
-            j_end = len(text) if j_end < 0 else j_end
-            text = text[:j_end].rstrip("\n") + block + text[j_end:]
-        else:
-            text = text.rstrip("\n") + "\n\n" + head + block
-        folded = len(ideas)
-        if not dry:
-            backup(j)
-            j.write_text(text, encoding="utf-8", newline="\n")
-    log.append(f"- the retired queue: results/queue.json {'archived' if q.is_file() else 'absent'}"
-               + (f", {folded} open idea(s) folded into the JOURNAL's 'What to try next and why' (migrated heading)" if folded else "")
-               + (", roles/planner.md archived" if planner.is_file() else "")
-               + (", results/queue_drop/ archived" if drop.is_dir() else "")
-               + f" -> results/queue_archive/ (the worker chooses its unit; driver_state.json holds the counters)")
-    if dry:
-        return
-    arch.mkdir(parents=True, exist_ok=True)
-    if q.is_file():
-        q.replace(arch / f"queue_{_UTC}.json")
-    if planner.is_file():
-        planner.replace(arch / "planner.md")
-    if drop.is_dir():
-        shutil.move(str(drop), str(arch / f"queue_drop_{_UTC}"))
-
-
-DUAL_MARKER = "<!-- physkit-dual-instructions:v1 -->"   # sync_agent_instructions.MARKER
-
-
-def materialize_project_pair(project: Path, log: list, dry: bool) -> None:
-    """A project root with exactly one ordinary, unmarked CLAUDE.md and no AGENTS.md (any case) gets the
-    marker prepended and the result byte-copied to AGENTS.md. Anything else is left for the operator."""
-    claude = project / "CLAUDE.md"
-    names = {p.name.lower() for p in project.iterdir()} if project.is_dir() else set()
-    if not claude.is_file() or claude.is_symlink() or "agents.md" in names or "agents.override.md" in names:
-        return
-    raw = claude.read_bytes()
-    if DUAL_MARKER.encode() in raw:
-        return
-    log.append(f"- project {project.name}/CLAUDE.md: unmarked, no AGENTS.md - marker prepended and byte-copied to "
-               f"AGENTS.md (the twin the current runner requires)")
-    if not dry:
-        backup(claude)
-        claude.write_bytes(DUAL_MARKER.encode() + b"\n" + raw)
-        shutil.copyfile(claude, project / "AGENTS.md")
 
 
 def stamp(campaign: Path, version: str, commit: str, log: list, dry: bool) -> None:
@@ -777,35 +351,26 @@ def main() -> int:
             pass
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("campaign", type=Path)
-    ap.add_argument("--preset", required=False, choices=PRESETS,
-                    help="the verification preset for this campaign (an explicit choice, like the interview's; "
-                         "docs/reference/verification-presets.md; 'moderate' was renamed 'heavy')")
+    ap.add_argument("--preset", choices=PRESETS,
+                    help="set the campaign's verification preset (docs/reference/verification-presets.md); "
+                         "default: keep the one configs/loop.json names")
     ap.add_argument("--base-git", help="<kit repo>[@<ref>]; ref defaults to the hash stamped in campaign.md")
-    ap.add_argument("--base-dir", type=Path, help="an older kit's templates/campaign directory (e.g. the previous plugin version's cache)")
+    ap.add_argument("--base-dir", type=Path, help="the stamped kit version's templates/campaign directory (e.g. that plugin version's cache)")
     ap.add_argument("--new-dir", type=Path, default=KIT / "templates" / "campaign")
-    ap.add_argument("--reproducible", choices=("true", "false"))
-    ap.add_argument("--retire-queue", action="store_true",
-                    help="only archive the retired results/queue.json (+ roles/planner.md, results/queue_drop/) into "
-                         "results/queue_archive/ and fold its open ideas into the JOURNAL, then exit ")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--no-validate", action="store_true")
     args = ap.parse_args()
 
     campaign = args.campaign.resolve()
-    if args.retire_queue:
-        # The one-step form the driver's preflight and the validator point at: no merge, no stamp.
-        log: list = []
-        retire_queue(campaign, log, args.dry_run)
-        print("\n".join(log) if log else "- no retired queue, planner role or drop directory here: nothing to do")
-        return 0
-    if not args.preset:
-        ap.error("--preset is required (the verification preset for this campaign)")
     if not (campaign / "campaign.md").is_file() or not (campaign / "scripts" / "run_campaign.py").is_file():
         sys.exit(f"{campaign} is not a campaign root (no campaign.md / scripts/run_campaign.py)")
     st = stamp_of(campaign)
     if st is None and not (args.base_git or args.base_dir):
         sys.exit("campaign.md carries no 'Scaffolded by physkit vX (hash, date)' stamp - pass --base-git <repo>@<ref> "
                  "or --base-dir explicitly")
+    if st is not None and (_version_tuple(st[0]) is None or _version_tuple(st[0]) < OLDEST_SOURCE):
+        sys.exit(f"stamped at physkit {st[0]}: this script upgrades campaigns from v0.12.1 or newer. Keep running "
+                 f"this campaign on the kit version stamped in it ({st[0]}), or scaffold a new campaign.")
     if not args.base_git and not args.base_dir:
         sys.exit(f"stamped at physkit {st[0]} ({st[1]}): pass --base-git <kit repo path> (the ref defaults to {st[1]}) "
                  "or --base-dir <that version's templates/campaign>")
@@ -816,29 +381,23 @@ def main() -> int:
     version, commit = kit_version(new_dir.parents[1]), kit_commit(new_dir.parents[1])
     vals = recover_values(campaign)
     # The copied runner stamps its own kit version into every snapshot manifest (kit_version:), the
-    # machinery's provenance since the split left it out of the core hash. Same form as campaign.md's pin.
+    # machinery's provenance (the runner is outside the frozen-core hash). Same form as campaign.md's pin.
     vals["PHYSKIT_VERSION"] = f"v{version.lstrip('v')} ({commit}, {_UTC[:4]}-{_UTC[4:6]}-{_UTC[6:8]})"
     log = [f"# Upgrade of {campaign.name}", "",
            f"- from: {st[0] if st else '?'} ({st[1] if st else '?'}, {st[2] if st else '?'}) base = {base.describe()}",
            f"- to: physkit {version} ({commit}) templates = {new_dir}",
-           f"- preset: {args.preset}; recovered placeholders: {vals}", f"- utc: {_UTC}", ""]
+           f"- preset: {args.preset or '(kept)'}; recovered placeholders: {vals}", f"- utc: {_UTC}", ""]
     conflicts = []
     print(f"upgrade: {campaign}\n  base {base.describe()} -> physkit {version} ({commit})" + ("  [dry run]" if args.dry_run else ""))
 
-    # The split (kit >= v0.11.1): the campaign's code leaves the runner before the runner is replaced.
-    conflicts += split_runner(campaign, base, new_dir, vals, log, args.dry_run)
     for rel, tmpl in CREATE:
         dst, srcp = campaign / rel, new_dir / tmpl
-        if dst.is_file() or dst in _SPLIT_CREATED or not srcp.is_file():
+        if dst.is_file() or not srcp.is_file():
             continue
         rendered = render(srcp.read_text(encoding="utf-8"), vals)
         left = sorted(set(re.findall(r"\{\{[A-Z0-9_]+\}\}", rendered)))
-        if rel.startswith("roles/"):
-            log.append(f"- {rel}: created from the template"
-                       + (f"; fill by hand: {', '.join(left)} (the rendered text is in your old roles/worker.md "
-                          "backup beside it)" if left else ""))
-        else:
-            log.append(f"- {rel}: created from the template (fill its hooks; preflight refuses stubs)")
+        log.append(f"- {rel}: created from the template (it was absent)"
+                   + (f"; fill by hand: {', '.join(left)}" if left else ""))
         if not args.dry_run:
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_text(rendered, encoding="utf-8", newline="\n")
@@ -903,23 +462,15 @@ def main() -> int:
                 backup(dst)
                 dst.write_text(merged, encoding="utf-8", newline="\n")
         else:
-            log.append(f"- {rel}: copied (the scaffold's kit did not ship it)")
+            log.append(f"- {rel}: created (it was absent)")
             if not args.dry_run:
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 dst.write_text(render(src.read_text(encoding="utf-8"), vals), encoding="utf-8", newline="\n")
-    edit_loop_json(campaign, args.preset, None if args.reproducible is None else args.reproducible == "true", log, args.dry_run)
-    edit_recommended(campaign, log, args.dry_run)
-    # The record (kit >= v0.11.1): the ledger's narrative columns and the JOURNAL as working memory. Both
-    # keep a backup and an archive; both are no-ops on a campaign that already has the shapes.
-    ledger_columns(campaign, log, args.dry_run)
-    journal_restructure(campaign, new_dir, vals, log, args.dry_run)
-    retire_queue(campaign, log, args.dry_run)       # no queue, no planner (no-op without one)
+    edit_loop_json(campaign, args.preset, log, args.dry_run)
     stamp(campaign, version, commit, log, args.dry_run)
 
-    # The instruction twins (CLAUDE.md <-> AGENTS.md) the current runner requires at both roots. A
-    # project scaffolded before the twins has one unmarked CLAUDE.md and no AGENTS.md: the documented
-    # migration (new-campaign, project membership) is to prepend the inert marker and byte-copy it.
-    materialize_project_pair(campaign.parent.parent, log, args.dry_run)
+    # The instruction twins (CLAUDE.md <-> AGENTS.md) at both roots: re-derive AGENTS.md from the merged
+    # CLAUDE.md.
     sync = campaign / "scripts" / "sync_agent_instructions.py"
     if sync.is_file() and not args.dry_run and not conflicts:
         for scope in ("campaign", "project"):
@@ -931,16 +482,12 @@ def main() -> int:
                    "python scripts/sync_agent_instructions.py --scope campaign --from claude --write, then --scope project)")
 
     log += ["", "## Next",
-            "1. Resolve any file marked CONFLICTS (the markers name the three sides: campaign, scaffold-template, current-template). "
-            "If the upgrade split your runner: read scripts/experiment.py once (your hooks and helpers, moved verbatim) and port "
-            "any edit it reports you made inside a kit-owned runner function into the seams there.",
-            "2. Declare rows in tests/correctness_checks.py: @check(row='machinery') on analytic-limit / parity / convergence "
-            "checks, row='gates' on per-result gates (they then take the experiment as their argument); undeclared checks "
-            "stay 'invariants' and run every unit inside the budget. Fill the four contract checks or record tests/CORRECTNESS_NA.md.",
+            "1. Resolve any file marked CONFLICTS (the markers name the three sides: campaign, scaffold-template, "
+            "current-template), then run the instruction sync named above if it was skipped.",
+            "2. Read the CHANGELOG entries between the two kit versions for anything that asks a campaign-side "
+            "change (a new contract check, a new seam in scripts/experiment.py).",
             "3. python <kit>/skills/new-campaign/scripts/validate_campaign.py <campaign>, then, with the campaign's own "
-            "interpreter (the one .claude/settings.json names), scripts/run_campaign.py --preflight. Preflight runs the whole "
-            "suite once, timed: an every-set over budget is refused by name - declare the named checks machinery or gates.",
-            "4. Read the new HARD GATE 1 in CLAUDE.md and the presets doc: each result gets one check, and the current-best pointer carries its label."]
+            "interpreter (the one .claude/settings.json names), scripts/run_campaign.py --preflight."]
     text = "\n".join(log) + "\n"
     if not args.dry_run:
         (campaign / "results" / "diagnostics").mkdir(parents=True, exist_ok=True)

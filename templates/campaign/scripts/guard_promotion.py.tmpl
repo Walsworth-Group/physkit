@@ -10,25 +10,18 @@ results/verdicts/<id>.json:
 For a NEGATIVE (kill-claim) finding, "kill_tier" is "REFUTED" or "EVIDENCE_AGAINST" (an "INCONCLUSIVE"
 kill never graduates - it queues a fix-and-rerun unit instead).
 
-Two promotion surfaces, two strictness tiers. The citation rule and the surface/recency rule are
-independent and complementary - a write must satisfy both, not either:
-  * RECOMMENDED*.json (current-best) writes and scoreboard writes that INTRODUCE a `CONFIRMED` /
-    `NEW BEST` token - SUBJECT-MATCHED + FAIL-OPEN-LOGGED: the pointer follows the true best at once
-   , so the write must carry the promoted experiment's HONEST LABEL - exactly the one its
-    checks artifact holds (results/checks_<NN>.json `label`: unverified, self-checked, self-verified,
-    <VERDICT>/peer, <VERDICT>/verifier), never a stronger one - and a result a check refuted never
-    promotes. An experiment whose checks artifact predates the one-check rule (no `verification.owed`)
-    keeps the established rule: the verdict artifact FOR THAT EXPERIMENT (matched by the exp id/name the written content carries) must
-    be CONFIRMED with a NAMED INDEPENDENT REFUTER and a graduating kill tier if any. These files are
-    recoverable, so a guard *error* here allows BUT logs to results/gate_failures.log (campaign-status
-    hard-fails on a non-empty log); a wrong label or an unmatched verdict is a clean, recoverable DENY.
-  * the PROJECT ledger <project>/DISCOVERIES.md - SUBJECT-MATCHED + FAIL-CLOSED: promoting a
-    system-level finding upward must cite the SOURCE campaign's verdict artifact by name
-    (campaigns/<slug>/results/verdicts/<id>.json); the artifact must be CONFIRMED with a named refuter
-    and a graduating kill tier, and the source campaign's correctness suite must be an affirmative,
-    non-stale GREEN. Any guard error on this surface DENIES - the project ledger is the record that
-    survives fork-and-archive, the one unrecoverable write.
-The campaign surface also requires an AFFIRMATIVE GREEN correctness suite (results/correctness_state.json,
+The promotion surface - RECOMMENDED*.json (current-best) writes and scoreboard writes that INTRODUCE a
+`CONFIRMED` / `NEW BEST` token - is SUBJECT-MATCHED + FAIL-OPEN-LOGGED: the pointer follows the true best
+at once, so the write must carry the promoted experiment's HONEST LABEL - exactly the one its checks
+artifact holds (results/checks_<NN>.json `label`: unverified, self-checked, self-verified,
+<VERDICT>/peer, <VERDICT>/verifier), never a stronger one - and a result a check refuted never promotes.
+An experiment whose checks artifact carries no `verification.owed` (absent, malformed, or written outside
+the one-check rule) falls back to the strict rule: the verdict artifact FOR THAT EXPERIMENT (matched by
+the exp id/name the written content carries) must be CONFIRMED with a NAMED INDEPENDENT REFUTER and a
+graduating kill tier if any. These files are recoverable, so a guard *error* here allows BUT logs to
+results/gate_failures.log (campaign-status hard-fails on a non-empty log); a wrong label or an unmatched
+verdict is a clean, recoverable DENY.
+The promotion surface also requires an AFFIRMATIVE GREEN correctness suite (results/correctness_state.json,
 written by run_campaign) - not merely 'not red'. RED, EMPTY (a freshly-scaffolded all-skip suite: zero
 active checks), ERROR, ABSENT, and a never-run (no state file) all block, because none is evidence the
 machinery is right - deleting/never-finishing the suite was the trivial silent bypass. ABSENT/EMPTY are
@@ -60,15 +53,16 @@ has none. It is configs/loop.json, and it carries two rules:
     it, and only as 'pending'; a standing change (pending -> ratified | rolled-back) is the user's, from an
     attended session, and a resolved epoch is final. FAIL-CLOSED for the block - every epoch label rests
     on it. The scorer hash an epoch is bound to is the runner's (results/correctness_state.json).
-  * A promotion (surface 2) additionally requires the current metric_version to be a declared (or the
+  * A promotion (the RECOMMENDED / scoreboard surface) additionally requires the current metric_version to be a declared (or the
     implicit first), non-rolled-back epoch; a PENDING epoch promotes (promote-and-label: the row carries its
     metric_version, the declaration the standing).
 
 SCOPE (gaps campaign-status backstops): the scoreboard signal is token-based - a promotion phrased
 without those tokens slips past (verified-column check is the backstop); the hook only fires if THIS
-tree wired it (.claude/settings.json) - campaign-status asserts the wiring - and it is wired per
-CAMPAIGN, so a session rooted at the project level writes the project ledger unhooked (the promotion
-path runs from inside a campaign, where it is hooked).
+tree wired it (.claude/settings.json) - campaign-status asserts the wiring. A system-level finding for
+the project's PROJECT.md §Updates from discoveries is written through `--record` (the record file's
+`discovery` key), which applies the same verdict and correctness checks before it writes; a direct edit
+of PROJECT.md is not hooked - campaign-status's uncited-entry audit is the backstop.
 """
 from __future__ import annotations
 import json
@@ -138,40 +132,6 @@ def _env_campaign_root() -> Path | None:
         return None
     p = Path(d)
     return p if (p / "scripts").is_dir() and (p / "configs").is_dir() else None
-
-
-def _is_project_ledger(fp: Path | None) -> bool:
-    """True for the PROJECT-level `DISCOVERIES*.md` - basename-matched, parent must BE a project root
-    (PROJECT.md beside the written file; LINEAGE.md is NOT required, because the consolidated layout
-    absorbed it into PROJECT.md).
-
-    New projects no longer scaffold a DISCOVERIES ledger at all (findings live
-    in the campaign that produced them, pointed at from PROJECT.md §Lineage / §Updates from
-    discoveries). This surface stays so a LEGACY or imported ledger remains gated rather than
-    silently fail-open - and detection must therefore not key on LINEAGE.md, which a consolidated
-    project holding an imported old ledger will not have.
-
-    The campaign-level results*/DISCOVERIES.md surface this hook once guarded no longer exists: settled
-    findings live in the ledger's `finding` cells (runner-written), and the file dissolved (V6). What remains
-    ledger-shaped is the project record, which the old guard could never validate (its `_campaign_root`
-    cannot resolve above a campaign, so every project-level write hit an unsatisfiable deny). This
-    predicate knows about project roots, closing that deliberately deferred gap.
-    """
-    if fp is None or not fp.name.upper().endswith(".MD"):
-        return False
-    if not fp.name.upper().startswith("DISCOVERIES"):
-        return False
-    parent = fp.parent
-    try:
-        return (parent / "PROJECT.md").is_file()
-    except OSError:
-        return False
-
-
-def _find_project_verdict(project_root: Path, name: str) -> Path | None:
-    """The cited verdict artifact anywhere under the project's campaigns (incl. campaigns/_archive)."""
-    hits = sorted(project_root.glob(f"campaigns/**/verdicts/{name}"))
-    return hits[0] if hits else None
 
 
 def _spawned_role() -> str:
@@ -551,7 +511,7 @@ def green_is_stale(root: Path | None) -> bool:
         return False                       # non-green is owned by correctness_blocks_promotion, not staleness
     recorded = st.get("core_hash")
     if not recorded:
-        return False                       # an older state carries no hash -> cannot judge staleness
+        return False                       # a state with no hash -> cannot judge staleness
     current = _current_core_hash(root)
     if not current:
         return False                       # cannot hash the core now -> do not enforce
@@ -602,7 +562,7 @@ def promotion_subject_problem(root: Path | None, ti) -> str | None:
     Subject-matched: the written content names its experiment (RECOMMENDED.json carries its config
     path; a scoreboard token lands on its experiment's row), and the gate demands THAT experiment's
     verdict - CONFIRMED, graduating kill tier if any, named independent refuter (`_check_verdict`,
-    the same bar the project-ledger surface applies). Where the campaign's verification preset owes a
+    the same bar a `--record` discovery entry must meet). Where the campaign's verification preset owes a
     unit an independent check, that experiment carries its own verdict artifact, so an unmatched
     subject means the experiment was never verified, not that a window expired."""
     if root is None:
@@ -647,8 +607,8 @@ def promotion_row_problem(root: Path | None, ti) -> str | None:
     holds back for a promotion candidate) run only after the solve of a candidate unit, and the runner
     records which experiment each ran for (results/correctness_state.json, per check: ran_for). A
     promotion of a unit those checks never ran for would be a green suite certifying nothing about the
-    thing being promoted. Inactive for a legacy suite (no per-check state) and for an experiment whose
-    checks artifact predates the presets (no verification.rows)."""
+    thing being promoted. Inactive for an exit-code suite (no per-check state) and for an experiment whose
+    checks artifact carries no verification.rows."""
     if root is None:
         return None
     st = _read_correctness(root)
@@ -700,8 +660,8 @@ def verification_gate_problem(root: Path | None, ti) -> tuple:
     which would be a twin). So the write must carry THAT label (RECOMMENDED.json: "verification_label";
     a scoreboard token: the label on the row) - never a stronger one - and a result a check refuted
     (`REFUTED/...`, `self-refuted`) never promotes. `relaxed` (the none / minimal presets): only a RED
-    suite blocks, since such a promotion never claimed a green. An experiment whose artifact predates
-    the one-check rule (no `verification.owed`) gets the established rule: its CONFIRMED verdict (needs_verdict)."""
+    suite blocks, since such a promotion never claimed a green. An experiment whose artifact is absent,
+    malformed or carries no `verification.owed` gets the strict rule: its CONFIRMED verdict (needs_verdict)."""
     if root is None:
         return None, True, False
     text = _written_text(ti)
@@ -718,7 +678,7 @@ def verification_gate_problem(root: Path | None, ti) -> tuple:
             continue
         ver = ck.get("verification") if isinstance(ck, dict) else None
         if not isinstance(ver, dict) or "owed" not in ver:
-            needs_verdict, relaxed = True, False     # predates the established verdict rule
+            needs_verdict, relaxed = True, False     # no owed check recorded: the strict verdict rule
             continue
         if str(ver.get("preset") or "") not in RELAXED_PRESETS:
             relaxed = False
@@ -822,46 +782,7 @@ def main():
         _allow()
         return
 
-    # ---- surface 1: the PROJECT ledger <project>/DISCOVERIES.md - subject-matched, FAIL-CLOSED ----
-    if _is_project_ledger(fp):
-        try:
-            refs = sorted(set(VERDICT_REF_RE.findall(_written_text(ti))))
-            if not refs:
-                _deny("project-ledger gate: the entry cites no verdict artifact. Promoting a finding to "
-                      "the project DISCOVERIES ledger requires citing the SOURCE campaign's verdict by "
-                      "path (campaigns/<slug>/results/verdicts/<id>.json) - run the verify skill in that "
-                      "campaign, get CONFIRMED, then cite the file. CLAUDE.md hard gate #1.")
-                return
-            problems = []
-            for name in refs:
-                found = _find_project_verdict(fp.parent, name)
-                if found is None:
-                    problems.append(f"cited verdict artifact not found under campaigns/**/verdicts/: {name}")
-                    continue
-                reason = _check_verdict(found, name)
-                if reason:
-                    problems.append(reason)
-                    continue
-                src_root = found.parent.parent.parent   # <campaign>/results/verdicts/<file>
-                suite_reason = correctness_blocks_promotion(src_root)
-                if suite_reason:
-                    problems.append(f"source campaign '{src_root.name}': {suite_reason}")
-                elif green_is_stale(src_root):
-                    problems.append(f"source campaign '{src_root.name}': its correctness green was "
-                                    "recorded against a DIFFERENT version of its FROZEN/core code than "
-                                    "what is on disk now - re-run its suite before promoting the finding "
-                                    "upward")
-            if problems:
-                _deny("project-ledger gate: " + " | ".join(problems))
-                return
-            _allow()
-        except Exception as exc:
-            _deny(f"project-ledger gate (fail-closed): could not validate the promotion ({exc}). Fix the "
-                  "verdict citation or the guard input and retry; the project ledger is the record that "
-                  "survives fork-and-archive - the one unrecoverable write.")
-        return
-
-    # ---- surface 2: RECOMMENDED / scoreboard-token writes - recency-checked, FAIL-OPEN-LOGGED ----
+    # ---- surface 1: RECOMMENDED / scoreboard-token writes - recency-checked, FAIL-OPEN-LOGGED ----
     try:
         is_promo = "RECOMMENDED" in fp_str.upper() or scoreboard_promotion(ti)
         if not is_promo:
@@ -869,7 +790,7 @@ def main():
             return
         # The promoted experiment's own checks artifact decides what this promotion needs: its
         # honest label, carried in the write; no refuted result; under none / minimal only a RED suite
-        # blocks. An artifact from before the one-check rule keeps the established rule (its CONFIRMED verdict).
+        # blocks. An artifact with no owed check recorded falls back to the strict rule (its CONFIRMED verdict).
         gate_reason, needs_verdict, relaxed = verification_gate_problem(root, ti)
         suite_reason = correctness_blocks_promotion(root, relaxed=relaxed)
         if suite_reason:

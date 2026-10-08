@@ -9,8 +9,6 @@ load_trigger: Implementing either side of the PhysKit-instrument coupling — wr
   files, then this for the bytes. §11 covers non-file transports and the durability properties
   each must re-earn.
 frozen: false
-addresses: [4, 6, 8, 9]
-status: new
 review: living
 ---
 

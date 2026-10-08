@@ -5,8 +5,6 @@ layer: shared
 load: on-demand
 load_trigger: When a project uses (or should consider) git — branch/commit etiquette, .gitignore, archive-don't-delete. Conditional, not day-one mandatory.
 frozen: false
-addresses: [7]
-status: new
 review: living
 ---
 

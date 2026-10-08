@@ -6,51 +6,38 @@ The target is auto-detected:
   * a campaign tree                               -> campaign validation.
 
 EVERY campaign lives inside a project (<project>/campaigns/<name>/ with ../../PROJECT.md); there is
-no standalone/bare-campaign mode. Two project layouts exist (ADR-0015) and both validate:
-  * NEW (consolidated): PROJECT.md is THE overview - mission, "## Standing constraints" (what the
-    campaign driver delivers into every spawned prompt), system knowledge, durable decisions, and
-    "## Lineage" (the index of every campaign/session) - beside a short README.md and CLAUDE.md.
-  * OLD (five-file): PROJECT.md + PROJECT_ORIENTATION.md (carrying the constraints section) +
-    LINEAGE.md + DISCOVERIES.md + CLAUDE.md + shared/.
-The layout is probed by where "## Standing constraints" lives; the project background is REFERENCED
-by campaigns and never copied, under either layout.
+no standalone/bare-campaign mode. PROJECT.md is THE project overview - mission, "## Standing
+constraints" (what the campaign driver delivers into every spawned prompt), system knowledge, durable
+decisions, and "## Lineage" (the index of every campaign/session) - beside a short README.md and
+CLAUDE.md. Campaigns REFERENCE the project background and never copy it.
 
 Campaign validation fails (exit 1) on anything new-campaign left unresolved:
   * a literal {{PLACEHOLDER}} token, a dangling [[OPTIONAL … block, a stray [PROPOSED] or [[KEEP tag,
   * an un-stripped .tmpl file,
   * a missing required file (campaign.md, the role files, README, the ledgers, config template, the
-    code stubs),
+    code: scripts/experiment.py, the runner and its helper scripts),
+  * a CLAUDE.md/AGENTS.md pair (campaign or project) that is unmarked, missing a twin, or drifted, a
+    runner not wired to the instruction checker, or a .codex/hooks.json that does not route Codex's
+    apply_patch through scripts/guard_promotion_codex.py,
   * an illegal campaign property in configs/loop.json "campaign" - an out-of-enum noise_model (mirrors
     the runner's preflight),
   * no project home above the campaign, or no "## Standing constraints" section in the project's
-    PROJECT.md (new layout) or PROJECT_ORIENTATION.md (old layout) - the section the driver
-    delivers (a pre-merge project - one still carrying shared/PHYSICS.md - is named as such, with
-    the migration pointer),
-  * a LOCAL copy of the project background in the campaign's docs/ (under the current name or a
-    retired shared-doc name) - it must be referenced, never copied (design §4.1),
+    PROJECT.md - the section the driver delivers,
+  * a campaign-local docs/PHYSICS.md - the project background is referenced, never copied,
   * a hook whose interpreter does not RUN on this machine — a wired-but-dead gate is worse than an
     absent one, because it looks like coverage (bare `python` is the Store alias stub on stock Windows),
-  * a dangling row in CLAUDE.md's §Where things live table — live skills route through it instead of
-    naming a campaign path, and a wrong row misdirects them quietly (the agent guesses rather than
-    erroring). A campaign with no such table predates it and is skipped, not failed.
-Legacy trees using the retired multi-stage suffix (charter_<NAME>.md / configs_<NAME>/ / results_<NAME>/) still
-validate — the required-file checks glob — but new stages are scaffolded as sibling campaigns, not suffixes.
+  * a missing or dangling row in CLAUDE.md's §Where things live table — live skills route through it
+    instead of naming a campaign path, and a wrong row misdirects them quietly (the agent guesses rather
+    than erroring),
+  * a campaign.md §Known landmines row that names no source.
 
 Project-tree validation fails (exit 1) if the project home is malformed:
-  * a missing required file/dir for its layout (new: README.md, PROJECT.md - with its "## Standing
-    constraints" and "## Lineage" sections - CLAUDE.md, data/, campaigns/, sessions/, reports/;
-    old: additionally PROJECT_ORIENTATION.md, LINEAGE.md, DISCOVERIES.md, shared/),
-  * a NEW-layout project still carrying a retired root doc whose content PROJECT.md now owns
-    (PROJECT_ORIENTATION.md, LINEAGE.md - two authorities for the same content is a fork) or a
-    leftover shared/ (its artifacts belong in purpose-named project dirs). A legacy imported
-    DISCOVERIES.md is tolerated: it is an append-only historical ledger, still hook-gated, that
-    PROJECT.md does not duplicate,
-  * a leftover {{PLACEHOLDER}}/[[OPTIONAL/[PROPOSED]/[[KEEP in a project-root or shared/ doc,
-  * a campaign in campaigns/ (or campaigns/_archive/) NOT indexed in the lineage (PROJECT.md
-    "## Lineage" in the new layout; LINEAGE.md in the old),
-  * a campaign carrying a LOCAL copy of the project background (docs/PROJECT_ORIENTATION.md, or a
-    retired shared-doc name: docs/PHYSICS.md|CONVENTIONS.md|INSTRUMENT.md) — it must reference
-    the project overview, never copy (design §4.1),
+  * a missing required file/dir (README.md, PROJECT.md - with its "## Standing constraints" and
+    "## Lineage" sections - CLAUDE.md, data/, campaigns/, sessions/, reports/), or a managed
+    CLAUDE.md/AGENTS.md pair that is unmarked, missing a twin, or drifted,
+  * a leftover {{PLACEHOLDER}}/[[OPTIONAL/[PROPOSED]/[[KEEP in a project-root doc,
+  * a campaign in campaigns/ (or campaigns/_archive/) NOT indexed in PROJECT.md "## Lineage",
+  * a campaign carrying a local docs/PHYSICS.md (see above),
   * an ABSOLUTE path hard-coded in a config JSON (the portability breaker; prose docs are exempt because
     they legitimately carry example paths — the invariant is that the tree relocates as one unit, the only
     absolute path being the resolved data_path pointer in PROJECT.md / data/DATA_PATH.txt).
@@ -66,61 +53,57 @@ import subprocess
 import sys
 from pathlib import Path
 
+# The kit-version stamp and the oldest supported kit have one definition, in the upgrade script.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    from upgrade_campaign import OLDEST_SOURCE, STAMP_RE, UPGRADE_STAMP_RE, _version_tuple
+except ImportError:                                   # a copy of this file without its sibling
+    OLDEST_SOURCE = None
+
 TEXT_EXT = {".md", ".py", ".json", ".tsv", ".txt", ".cfg", ".ini", ".yaml", ".yml"}
 # Kit placeholders are UPPER_SNAKE (start with a letter/underscore). Matching only those avoids
 # false positives on legitimate LaTeX (\frac{{a}}, x_{{ij}}) and Python f-string ({{...}}) braces.
 PLACEHOLDER = re.compile(r"\{\{[A-Z_][A-Z0-9_]*\}\}")
 LEAK_LITERALS = ("[[OPTIONAL", "[PROPOSED]", "[[KEEP")
-DUAL_INSTRUCTION_MARKER = "<!-- physkit-dual-instructions:v1 -->"
 # Windows drive-letter (C:\ or C:/) or UNC (\\server) absolute paths — the realistic portability breaker
 # for this Windows/shared-drive project. Applied to CONFIG files only (not prose, which has legit examples).
 ABS_PATH = re.compile(r"(?:[A-Za-z]:[\\/])|(?:\\\\[A-Za-z0-9_.$-]+\\)")
 
-CAMPAIGN_REQUIRED_GLOBS = [
+CAMPAIGN_REQUIRED = [
     ("campaign definition", "campaign.md"),
     ("worker role", "roles/worker.md"),
     ("verifier role", "roles/verifier.md"),
     ("capstone role", "roles/capstone.md"),
     ("role reference", "roles/REFERENCE.md"),
     ("front door + setup status", "README.md"),
-    ("scoreboard ledger", "results*/scoreboard.tsv"),
-    ("logbook", "results*/logbook.md"),
-    ("journal", "results*/JOURNAL*.md"),
-    ("config template", "configs*/_template.json"),
+    ("scoreboard ledger", "results/scoreboard.tsv"),
+    ("logbook", "results/logbook.md"),
+    ("journal", "results/JOURNAL.md"),
+    ("config template", "configs/_template.json"),
     ("metric scorer", "scripts/metric.py"),
     ("runner", "scripts/run_campaign.py"),
+    ("campaign code", "scripts/experiment.py"),
     ("frozen-core manifest", "scripts/frozen_core.py"),
     ("correctness suite", "tests/correctness_checks.py"),
     ("always-on doctrine", "CLAUDE.md"),
     ("promotion guard hook", "scripts/guard_promotion.py"),
     ("loop heartbeat hook", "scripts/loop_heartbeat.py"),
     ("hook settings", ".claude/settings.json"),
-    ("loop knobs", "configs*/loop.json"),
-    ("verdicts dir", "results*/verdicts"),
+    ("supervisor ownership lock", "scripts/supervisor_lock.py"),
+    ("Claude/Codex instruction checker", "scripts/sync_agent_instructions.py"),
+    ("Codex launch adapter", "scripts/codex_backend.py"),
+    ("Codex verifier policy", "scripts/codex_verifier.py"),
+    ("Codex promotion adapter", "scripts/guard_promotion_codex.py"),
+    ("loop knobs", "configs/loop.json"),
+    ("verdicts dir", "results/verdicts"),
 ]
 
-# Per-layout requirements (ADR-0015). The overview's constraints section is owned by
-# check_orientation(), which also names a pre-merge layout instead of reporting generic damage.
-PROJECT_REQUIRED_FILES = {
-    "new": ["README.md", "PROJECT.md", "CLAUDE.md"],
-    "old": ["PROJECT.md", "LINEAGE.md", "CLAUDE.md", "DISCOVERIES.md"],
-}
-PROJECT_REQUIRED_DIRS = {
-    "new": ["data", "campaigns", "sessions", "reports"],
-    "old": ["data", "shared", "campaigns", "sessions", "reports"],
-}
-# Root docs a NEW-layout project must NOT still carry: PROJECT.md owns their content now, so a
-# surviving copy is two authorities for the same record - a fork. (DISCOVERIES.md is deliberately
-# absent from this list: a legacy imported ledger is append-only history, still hook-gated, and
-# PROJECT.md does not duplicate its entries.)
-NEW_LAYOUT_FORK_DOCS = ("PROJECT_ORIENTATION.md", "LINEAGE.md")
-# The project background lives ONCE in the project overview and is referenced; a campaign-local copy
-# is a fork (design §4.1). The retired shared-doc names are checked too, because a copy under any
-# layout's name forks the same content.
-LOCAL_COPY_DOCS = ("PROJECT_ORIENTATION.md", "PHYSICS.md", "CONVENTIONS.md", "INSTRUMENT.md")
-# The section the campaign driver delivers into every spawned prompt - in PROJECT.md (new layout) or
-# PROJECT_ORIENTATION.md (old). Its absence is checked here AND by the driver's preflight, so it is
-# caught at scaffold time, not at 3 a.m.
+PROJECT_REQUIRED_FILES = ["README.md", "PROJECT.md", "CLAUDE.md"]
+PROJECT_REQUIRED_DIRS = ["data", "campaigns", "sessions", "reports"]
+# The project background lives ONCE in PROJECT.md and is referenced; a campaign-local copy is a fork.
+LOCAL_COPY_DOC = "PHYSICS.md"
+# The section the campaign driver delivers into every spawned prompt, in PROJECT.md. Its absence is
+# checked here AND by the driver's preflight, so it is caught at scaffold time, not at 3 a.m.
 CONSTRAINTS_HEADING = "standing constraints"
 LINEAGE_HEADING = "lineage"
 
@@ -171,13 +154,6 @@ def _md_section_text(path: Path, heading: str) -> str:
     return "\n".join(out)
 
 
-def project_layout(root: Path) -> str:
-    """'new' = the consolidated single-overview layout (ADR-0015: PROJECT.md carries the delivered
-    constraints section); 'old' = the five-file layout. Probed by content, not by file census, so a
-    half-migrated tree is judged by which file actually feeds the driver."""
-    return "new" if _md_has_section(root / "PROJECT.md", CONSTRAINTS_HEADING) else "old"
-
-
 def scan_leftovers(paths, base: Path, errors: list[str]) -> None:
     """Flag leftover placeholders / OPTIONAL blocks / PROPOSED and KEEP tags / un-stripped .tmpl in `paths`."""
     for path in paths:
@@ -201,52 +177,18 @@ def scan_leftovers(paths, base: Path, errors: list[str]) -> None:
                     errors.append(f"unresolved {lit} {rel}:{i}: {line.strip()[:100]}")
 
 
-def _local_copy_error(rel: str, doc: str) -> str:
-    """The right message for a campaign-level background doc: which one it is decides the fix.
-
-    A campaign-level PROJECT_ORIENTATION.md is usually the pre-merge campaign file that DISSOLVED,
-    not a copy - telling someone "never copy" invites deleting it, which loses the goal and task
-    content the migration moves into campaign.md and the JOURNAL. Name the actual fix."""
-    if doc == "PROJECT_ORIENTATION.md":
-        return (f"campaign-level {rel} - this file dissolved in the one-background-document merge; "
-                "migrate its content (goal -> campaign.md, tasks -> the JOURNAL's What to try next + NEXT, field "
-                "positioning -> the project overview) per the kit's docs/MIGRATING.md, then "
-                "delete it. Do not delete it unmigrated.")
+def _local_copy_error(rel: str) -> str:
     return (f"campaign carries a LOCAL copy of the project background (must reference the project "
-            f"overview - ../../PROJECT.md, or ../../PROJECT_ORIENTATION.md in an old-layout "
-            f"project - never copy): {rel}")
+            f"overview, ../../PROJECT.md - never copy): {rel}")
 
 
 def check_orientation(proj_root: Path, errors: list[str]) -> None:
-    """The project overview carries the section the driver delivers every spawn - in PROJECT.md
-    (new layout) or PROJECT_ORIENTATION.md (old layout), the same resolution order the driver uses.
-
-    A project still carrying the retired four-document layout (shared/PHYSICS.md et al.) is named as
-    pre-merge with the migration pointer, not reported as generic damage: an agent told only "file
-    missing" will fabricate one, and a fabricated background document is worse than a named gap.
-    """
-    if _md_has_section(proj_root / "PROJECT.md", CONSTRAINTS_HEADING):
-        return                                    # new layout: PROJECT.md feeds the driver
-    old = proj_root / "PROJECT_ORIENTATION.md"
-    if old.is_file():
-        if not _md_has_section(old, CONSTRAINTS_HEADING):
-            errors.append(
-                "PROJECT_ORIENTATION.md has no '## Standing constraints' section - that section is "
-                "what the campaign driver delivers into every spawned prompt, so without it the "
-                "delivery is silently empty. Add the section (see the project template)."
-            )
-        return
-    if (proj_root / "shared" / "PHYSICS.md").is_file():
+    """PROJECT.md carries the section the driver delivers every spawn."""
+    if not _md_has_section(proj_root / "PROJECT.md", CONSTRAINTS_HEADING):
         errors.append(
-            "the project home predates the one-background-document merge: it has shared/PHYSICS.md "
-            "and no delivered-constraints doc. Migrate it with the kit's docs/MIGRATING.md; do not "
-            "author a new background document from scratch."
-        )
-    else:
-        errors.append(
-            "no '## Standing constraints' anywhere the driver looks: PROJECT.md does not carry the "
-            "section and there is no PROJECT_ORIENTATION.md. That section is delivered into every "
-            "spawned prompt; author it in PROJECT.md (see the project template)."
+            "PROJECT.md has no '## Standing constraints' section - that section is delivered into every "
+            "spawned prompt, so without it the delivery is silently empty. Author it in PROJECT.md (see "
+            "the project template)."
         )
 
 
@@ -263,8 +205,7 @@ def project_root_of(campaign: Path) -> Path | None:
         cand = campaign.parent.parent.parent
     else:
         return None
-    # PROJECT.md alone marks the home: the old layout pairs it with LINEAGE.md, the consolidated
-    # layout (ADR-0015) absorbed that index into PROJECT.md §Lineage.
+    # PROJECT.md marks the home.
     return cand if (cand / "PROJECT.md").is_file() else None
 
 
@@ -276,7 +217,6 @@ def project_root_of(campaign: Path) -> Path | None:
 NOISE_MODELS = ("stochastic", "deterministic")
 VERIFY_PRESETS = ("none", "minimal", "light", "heavy", "intensive")
 VERIFY_ROWS = ("invariants", "machinery", "gates", "self_check", "self_verify", "independent", "capstone")
-VERIFY_PRESET_RENAMED = {"moderate": "heavy"}
 METRIC_REVISION_MODES = ("cautious", "autonomous")
 AGENT_BACKENDS = ("auto", "claude", "codex", "custom")
 VERIFY_STRATEGIES = ("auto", "legacy-nested", "driver-direct")
@@ -288,7 +228,7 @@ def check_loop_files(root: Path, errors: list[str]) -> None:
     """The driver's config/ledger must PARSE, not merely exist: a loop.json missing a hard-dereferenced
     key passes an existence glob and then crashes supervise() at launch (or worse, mid-night). Mirrors
     the runner's own preflight so the gap is caught at scaffold time too."""
-    loop_files = list(root.glob("configs*/loop.json"))
+    loop_files = list(root.glob("configs/loop.json"))
     if loop_files:
         text = _read_text(loop_files[0])
         try:
@@ -311,15 +251,9 @@ def check_loop_files(root: Path, errors: list[str]) -> None:
             preset = verify_block.get("preset")
             if preset is not None:
                 p = str(preset).strip().lower()
-                if p in VERIFY_PRESET_RENAMED:
-                    errors.append(f"loop.json verify.preset {p!r} was renamed {VERIFY_PRESET_RENAMED[p]!r} "
-                                  " - set the new name")
-                elif p not in VERIFY_PRESETS:
+                if p not in VERIFY_PRESETS:
                     errors.append(f"loop.json verify.preset is {p!r}; expected one of "
                                   + " | ".join(VERIFY_PRESETS) + " (docs/reference/verification-presets.md)")
-            if camp.get("verification"):
-                errors.append(f"loop.json campaign.verification={camp.get('verification')!r} is retired - set "
-                              "verify.preset (" + " | ".join(VERIFY_PRESETS) + ") and delete the old key")
             rmode = str(camp.get("metric_revision") or "cautious").strip().lower()
             if rmode not in METRIC_REVISION_MODES:
                 errors.append(f"loop.json campaign.metric_revision is {rmode!r}; expected one of "
@@ -350,9 +284,6 @@ def check_loop_files(root: Path, errors: list[str]) -> None:
                                       + " | ".join(allowed))
         except Exception as exc:
             errors.append(f"loop.json does not parse as JSON ({exc})")
-    if list(root.glob("results*/queue.json")):
-        print("note: results/queue.json is the retired queue: the driver no longer reads it - run "
-              "upgrade_campaign.py --retire-queue to archive it and move its open ideas into the JOURNAL")
     metric_text = _read_text(root / "scripts" / "metric.py") or ""
     if re.search(r"^PLAUSIBILITY_BOUNDS\s*=\s*None\b", metric_text, re.M):
         print("note: scripts/metric.py sets PLAUSIBILITY_BOUNDS = None - no plausible range, so the "
@@ -366,10 +297,8 @@ def check_routing_table(root: Path, errors: list[str]) -> None:
     Live skills route through that table instead of naming a campaign path, so a dangling row misdirects
     the whole skills layer — and it misdirects QUIETLY, because a wrong path degrades (the agent guesses
     and moves on) rather than erroring. The template says "Keep it true", which is an exhortation; the
-    kit's own rule is enforce, don't exhort.
-
-    A campaign with no table is NOT an error: it was scaffolded before the table existed and is frozen
-    that way by design. Its skills fall back to `docs/charter*.md`, which is a required glob above.
+    kit's own rule is enforce, don't exhort. A campaign with no table fails too: the skills have nowhere
+    to route.
     """
     text = _read_text(root / "CLAUDE.md")
     if text is None:
@@ -389,7 +318,9 @@ def check_routing_table(root: Path, errors: list[str]) -> None:
             section = cells[-1].split("§", 1)[1].strip().strip("`") if "§" in cells[-1] else ""
             rows.append((cells[0], m.group(1), section))
     if not rows:
-        return                                   # pre-table campaign; the charter glob still gates it
+        errors.append("CLAUDE.md has no '## Where things live' routing table (or it has no rows) - the "
+                      "skills route through it; restore it from the campaign template.")
+        return
 
     for label, rel, section in rows:
         target = root / rel
@@ -453,7 +384,7 @@ def check_hook_wiring(root: Path, errors: list[str]) -> None:
 
 
 def check_codex_hook_wiring(root: Path, errors: list[str]) -> None:
-    """New managed campaigns must expose the shared promotion policy to canonical apply_patch."""
+    """A campaign exposes the shared promotion policy to Codex's canonical apply_patch."""
     settings = root / ".codex" / "hooks.json"
     text = _read_text(settings)
     if text is None:
@@ -519,7 +450,7 @@ def check_metric_epochs(root: Path, errors: list[str]) -> None:
     """loop.json campaign.metric_epochs (the metric-epoch record) - absent while the campaign is on its
     co-designed first metric; once present, an object keyed by metric_version whose entries carry a legal
     kind and status, naming the current metric_version, and not pointing it at a rolled-back epoch."""
-    loop_files = list(root.glob("configs*/loop.json"))
+    loop_files = list(root.glob("configs/loop.json"))
     if not loop_files:
         return
     try:
@@ -542,7 +473,7 @@ def check_metric_epochs(root: Path, errors: list[str]) -> None:
             errors.append(f"loop.json campaign.metric_epochs[{vid!r}]: status must be " + " | ".join(EPOCH_STATUSES))
     mv = str(camp.get("metric_version") or "").strip()
     bound = {}
-    for state in root.glob("results*/correctness_state.json"):
+    for state in root.glob("results/correctness_state.json"):
         try:
             bound = (json.loads(_read_text(state) or "") or {}).get("scorer_hash_by_version") or {}
         except Exception:
@@ -562,15 +493,16 @@ def check_landmine_sources(root: Path, errors: list[str]) -> None:
     """Every row of campaign.md §Known landmines names its source in the fourth column (the user, a
     ledger id, a sibling campaign's verdict). A landmine nobody can source is a guess, and a guessed
     landmine steers a campaign away from a path nobody tested - the failure that motivated the rule
-    (the brief trim; MIGRATING has the story). A campaign scaffolded before the source column (a three-column table) is frozen that
-    way by design and is not checked."""
+    (the brief trim). A table without the source column fails as a whole."""
     text = _md_section_text(root / "campaign.md", LANDMINE_HEADING)
     rows = [L for L in (text or "").splitlines() if L.startswith("|")]
     if len(rows) < 2:
         return
     header = [c.strip().lower() for c in rows[0].strip().strip("|").split("|")]
     if len(header) < 4 or "source" not in header[-1]:
-        return                                   # pre-source-column campaign
+        errors.append("campaign.md §Known landmines: the table has no source column (the fourth, last "
+                      "column) - add it and source every row (the user, a ledger id, a verdict).")
+        return
     for line in rows[2:]:
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if not any(cells) or cells[0].startswith("<"):
@@ -585,50 +517,26 @@ def validate_campaign(root: Path) -> list[str]:
     errors: list[str] = []
 
     # Every campaign lives inside a project, so the background is SHARED in the project overview
-    # (../../PROJECT.md; old layout: ../../PROJECT_ORIENTATION.md) — referenced, never copied
-    # (design §4.1). There is no standalone mode to detect.
+    # (../../PROJECT.md) — referenced, never copied. There is no standalone mode to detect.
     proj_root = project_root_of(root)
 
-    # 1. Required files present (glob-based; tolerates the retired _<NAME> suffix in legacy trees).
-    for label, pattern in CAMPAIGN_REQUIRED_GLOBS:
-        if not list(root.glob(pattern)):
-            errors.append(f"missing {label}: no file matches '{pattern}'")
+    # 1. Required files present.
+    for label, rel in CAMPAIGN_REQUIRED:
+        if not (root / rel).exists():
+            errors.append(f"missing {label}: {rel}")
 
-    # New runners import this helper; legacy Claude runners predate it and remain valid.
     runner = root / "scripts" / "run_campaign.py"
     runner_text = _read_text(runner) or ""
-    # The campaign's code is scripts/experiment.py (kit >= v0.11.1); a pre-split runner that still
-    # defines the hooks itself is a legacy campaign, valid until it is upgraded.
-    if runner.is_file() and "def run_experiment(" not in runner_text \
-            and not (root / "scripts" / "experiment.py").is_file():
-        errors.append("missing campaign code: scripts/experiment.py (the runner calls its hooks; "
-                      "upgrade_campaign.py extracts them from a pre-split runner)")
-    managed_instructions = DUAL_INSTRUCTION_MARKER in (
-        (_read_text(root / "CLAUDE.md") or "") + (_read_text(root / "AGENTS.md") or ""))
-    if (runner.is_file()
-            and "import supervisor_lock as _supervisor_lock"
-            in runner_text
-            and not (root / "scripts" / "supervisor_lock.py").is_file()):
-        errors.append("missing supervisor ownership lock: scripts/supervisor_lock.py")
-    instruction_import = "import sync_agent_instructions as _agent_instructions" in runner_text
-    codex_backend_import = "import codex_backend as _codex_backend" in runner_text
-    if managed_instructions and not instruction_import:
-        errors.append("managed Claude/Codex instructions require runner checker wiring")
-    if instruction_import or managed_instructions:
-        if not (root / "scripts" / "sync_agent_instructions.py").is_file():
-            errors.append("missing Claude/Codex instruction checker: scripts/sync_agent_instructions.py")
-        check_agent_instructions(root, errors, chain=True)
-    if codex_backend_import and not (root / "scripts" / "codex_backend.py").is_file():
-        errors.append("missing Codex launch adapter: scripts/codex_backend.py")
-    if "import codex_verifier" in runner_text and not (root / "scripts" / "codex_verifier.py").is_file():
-        errors.append("missing Codex verifier policy: scripts/codex_verifier.py")
-    if managed_instructions:
-        if not (root / "scripts" / "guard_promotion_codex.py").is_file():
-            errors.append("missing Codex promotion adapter: scripts/guard_promotion_codex.py")
-        check_codex_hook_wiring(root, errors)
+    # The runner's helpers are required files (CAMPAIGN_REQUIRED); the runner must also be wired to the
+    # instruction checker, and the Claude/Codex instruction pair and the Codex promotion hook are checked.
+    if runner.is_file() and "import sync_agent_instructions as _agent_instructions" not in runner_text:
+        errors.append("managed Claude/Codex instructions require runner checker wiring "
+                      "(scripts/run_campaign.py does not import sync_agent_instructions)")
+    check_agent_instructions(root, errors, chain=True)
+    check_codex_hook_wiring(root, errors)
 
-    # 1b. The project home + its background doc. A campaign with no home is a legacy bare tree — lift it
-    #     into a project (new-campaign Step 0.1) rather than authoring campaign-local physics/conventions.
+    # 1b. The project home + its background doc. A campaign with no home is lifted into a project
+    #     (new-campaign Step 0.1) rather than given campaign-local physics/conventions.
     if proj_root is None:
         errors.append(
             "no project home: expected <project>/campaigns/<slug>/ with ../../PROJECT.md — "
@@ -638,9 +546,8 @@ def validate_campaign(root: Path) -> list[str]:
         check_orientation(proj_root, errors)
 
     # 1c. No campaign-local copy of the project background (validate_project runs the same check tree-wide).
-    for doc in LOCAL_COPY_DOCS:
-        if (root / "docs" / doc).is_file():
-            errors.append(_local_copy_error(f"docs/{doc}", doc))
+    if (root / "docs" / LOCAL_COPY_DOC).is_file():
+        errors.append(_local_copy_error(f"docs/{LOCAL_COPY_DOC}"))
 
     # (README's §Setup status is a static pointer to --preflight, the authoritative setup check; the
     # CLAUDE.md routing-table check below already verifies the section exists for the row that names it.)
@@ -660,50 +567,26 @@ def validate_campaign(root: Path) -> list[str]:
 
 def validate_project(root: Path) -> list[str]:
     errors: list[str] = []
-    layout = project_layout(root)
 
-    # 1. Required project files + dirs for this layout, and the delivered-constraints section.
-    for rel in PROJECT_REQUIRED_FILES[layout]:
+    # 1. Required project files + dirs, and PROJECT.md's delivered-constraints and lineage sections.
+    for rel in PROJECT_REQUIRED_FILES:
         if not (root / rel).is_file():
-            errors.append(f"missing required project file ({layout} layout): {rel}")
-    for rel in PROJECT_REQUIRED_DIRS[layout]:
+            errors.append(f"missing required project file: {rel}")
+    for rel in PROJECT_REQUIRED_DIRS:
         if not (root / rel).is_dir():
-            errors.append(f"missing required project dir ({layout} layout): {rel}/")
+            errors.append(f"missing required project dir: {rel}/")
     check_orientation(root, errors)
-    if DUAL_INSTRUCTION_MARKER in ((_read_text(root / "CLAUDE.md") or "")
-                                   + (_read_text(root / "AGENTS.md") or "")):
-        check_agent_instructions(root, errors, chain=False)
+    if not _md_has_section(root / "PROJECT.md", LINEAGE_HEADING):
+        errors.append("PROJECT.md has no '## Lineage' section - the campaign/session index lives there "
+                      "(see the project template).")
+    check_agent_instructions(root, errors, chain=False)       # the managed CLAUDE.md/AGENTS.md pair
 
-    # 1b. New layout: PROJECT.md must carry the §Lineage index, and the retired root docs whose
-    #     content it now owns must be GONE - a surviving LINEAGE.md or PROJECT_ORIENTATION.md is a
-    #     second authority for the same record, the fork the single-source rule names. shared/ is
-    #     retired too: promoted artifacts live in purpose-named project dirs (ADR-0015). A legacy
-    #     imported DISCOVERIES.md is tolerated (append-only history, still hook-gated).
-    if layout == "new":
-        if not _md_has_section(root / "PROJECT.md", LINEAGE_HEADING):
-            errors.append("PROJECT.md has no '## Lineage' section - the consolidated layout keeps "
-                          "the campaign/session index there (see the project template).")
-        for rel in NEW_LAYOUT_FORK_DOCS:
-            if (root / rel).is_file():
-                errors.append(f"consolidated project still carries {rel} - PROJECT.md owns that "
-                              "content now; two authorities fork. Merge any unabsorbed content into "
-                              "PROJECT.md and delete the file (docs/MIGRATING.md).")
-        if (root / "shared").is_dir():
-            errors.append("consolidated project still has shared/ - promoted artifacts live in "
-                          "purpose-named project dirs (scripts/, models/, ...) with a PROJECT.md "
-                          "§Lineage promotion line. Move them and delete shared/ (docs/MIGRATING.md).")
+    # 2. No leftover tokens in the project-root docs (campaigns validate separately; skip data/).
+    scan_leftovers(sorted(root.glob("*.md")), root, errors)
 
-    # 2. No leftover tokens in the project-root docs + shared/ (campaigns validate separately; skip data/).
-    root_docs = [p for p in root.glob("*.md")]
-    shared_docs = list((root / "shared").glob("*.md")) if (root / "shared").is_dir() else []
-    scan_leftovers(sorted(root_docs + shared_docs), root, errors)
-
-    # 3. Every campaign (incl. archived) is indexed in the lineage - PROJECT.md §Lineage (new) or
-    #    LINEAGE.md (old); no campaign carries a LOCAL shared-doc copy.
-    if layout == "new":
-        lineage, lineage_name = _md_section_text(root / "PROJECT.md", LINEAGE_HEADING), "PROJECT.md §Lineage"
-    else:
-        lineage, lineage_name = _read_text(root / "LINEAGE.md") or "", "LINEAGE.md"
+    # 3. Every campaign (incl. archived) is indexed in PROJECT.md §Lineage; no campaign carries a local
+    #    copy of the project background.
+    lineage, lineage_name = _md_section_text(root / "PROJECT.md", LINEAGE_HEADING), "PROJECT.md §Lineage"
     campaigns_dir = root / "campaigns"
     if campaigns_dir.is_dir():
         camp_dirs = [d for d in campaigns_dir.iterdir() if d.is_dir() and not d.name.startswith(".") and d.name != "_archive"]
@@ -715,12 +598,11 @@ def validate_project(root: Path) -> list[str]:
             slug_noidx = re.sub(r"^\d+[_-]", "", slug)   # 01_cnn-inverse -> cnn-inverse
             if slug not in lineage and slug_noidx not in lineage:
                 errors.append(f"campaign not indexed in {lineage_name}: campaigns/{('_archive/' if d.parent.name=='_archive' else '')}{slug}")
-            for local_doc in LOCAL_COPY_DOCS:
-                if (d / "docs" / local_doc).is_file():
-                    errors.append(_local_copy_error(f"campaigns/{slug}/docs/{local_doc}", local_doc))
+            if (d / "docs" / LOCAL_COPY_DOC).is_file():
+                errors.append(_local_copy_error(f"campaigns/{slug}/docs/{LOCAL_COPY_DOC}"))
 
     # 4. Portability: no absolute path hard-coded in a config JSON (prose docs are exempt — legit examples).
-    for cfg in root.glob("campaigns/**/configs*/*.json"):
+    for cfg in root.glob("campaigns/**/configs/*.json"):
         text = _read_text(cfg) or ""
         for i, line in enumerate(text.splitlines(), 1):
             if ABS_PATH.search(line):
@@ -731,25 +613,6 @@ def validate_project(root: Path) -> list[str]:
             if ABS_PATH.search(line):
                 errors.append(f"absolute path in session config (breaks portability) {cfg.relative_to(root)}:{i}: {line.strip()[:100]}")
     return errors
-
-
-def legacy_layout(root: Path) -> str | None:
-    """Name the pre-restructure file if this is a pre-PR-9 campaign, else None.
-
-    PR-9 replaced `docs/charter.md` with `campaign.md` + `roles/`. A campaign scaffolded before that
-    is not broken; it is an older layout. Run the normal checks against it and EVERY required-path
-    rule fires at once, which reads as damage rather than as a version difference -- and an agent
-    that believes the damage will "repair" a frozen tree to make the validator happy. That is a named
-    risk in the plan ("An agent mutates a frozen campaign to satisfy the new validator"), so the
-    probe has to come BEFORE the first per-path error, not be inferred from a wall of them.
-    """
-    if (root / "campaign.md").is_file():
-        return None                                     # post-restructure (or mid-migration): proceed
-    for old in ("docs/charter.md", "docs/program.md"):  # program.md is the oldest naming
-        if (root / old).is_file():
-            return old
-    hits = sorted(root.glob("docs/charter*.md"))        # the retired multi-stage suffix
-    return hits[0].relative_to(root).as_posix() if hits else None
 
 
 def _say(line: str) -> None:
@@ -767,6 +630,28 @@ def _say(line: str) -> None:
         print(line.encode(enc, "backslashreplace").decode(enc, "replace"))
 
 
+def older_kit_stamp(root: Path) -> str | None:
+    """The kit version a campaign is stamped with, when that kit is older than the oldest this validator
+    supports (or unreadable); else None. A tree scaffolded by an older kit is laid out the way that kit
+    expected, so checking it here would report every difference as damage - and an agent told its campaign
+    is broken may "repair" a frozen record. Such a tree is validated with the kit version stamped in it."""
+    if OLDEST_SOURCE is None:
+        return None
+    for rel in ("campaign.md", "results/logbook.md"):
+        try:
+            text = (root / rel).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        upgrades = UPGRADE_STAMP_RE.findall(text)
+        m = STAMP_RE.search(text)
+        version = upgrades[-1][0] if upgrades else (m.group(1) if m else None)
+        if version is None:
+            continue
+        t = _version_tuple(version)
+        return version if t is None or t < OLDEST_SOURCE else None
+    return None
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: python validate_campaign.py <target_dir>", file=sys.stderr)
@@ -776,21 +661,16 @@ def main() -> int:
         print(f"ERROR: not a directory: {root}", file=sys.stderr)
         return 2
 
-    # PROJECT.md + campaigns/ marks a project root in both layouts (the old one also has LINEAGE.md,
-    # but keying on it would misread a consolidated project as a campaign - ADR-0015).
+    # PROJECT.md + campaigns/ marks a project root.
     is_project = (root / "PROJECT.md").is_file() and (root / "campaigns").is_dir()
     kind = "PROJECT" if is_project else "CAMPAIGN"
 
     if not is_project:
-        old = legacy_layout(root)
-        if old:
-            print(f"REFUSING TO VALIDATE - {root}\n")
-            print(f"  This campaign predates the PR-9 restructure: it has {old} and no campaign.md.")
-            print("  That is a layout difference, not a defect, and this validator only knows the")
-            print("  current one (campaign.md + roles/worker.md). Checking it")
-            print("  anyway would report every required path as missing and read as damage.\n")
-            print("  Migrate with kit/docs/MIGRATING.md, or validate it with the kit version that")
-            print("  scaffolded it. Do NOT edit this tree to satisfy this check.")
+        old = older_kit_stamp(root)
+        if old is not None:
+            _say(f"REFUSING: this campaign is stamped physkit {old}, older than this validator supports "
+                 f"(v{'.'.join(map(str, OLDEST_SOURCE))}+).")
+            _say("  Validate it with the kit version stamped in it. Do NOT edit this tree to satisfy this check.")
             return 3
 
     errors = validate_project(root) if is_project else validate_campaign(root)
@@ -799,7 +679,8 @@ def main() -> int:
         _say(f"{kind} VALIDATION FAILED - {len(errors)} issue(s):\n")
         for e in errors:
             _say(f"  - {e}")
-        _say(f"\nResolve every item above; a {kind.lower()} with an unresolved issue is not done.")
+        _say(f"\nResolve every item above; a {kind.lower()} with an unresolved issue is not done. If this tree was")
+        _say("scaffolded by an older kit, validate it with that kit instead; never edit a frozen tree to satisfy this check.")
         return 1
 
     print(f"{kind} VALIDATION PASSED - {root}")

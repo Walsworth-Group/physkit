@@ -5,8 +5,6 @@ layer: shared
 load: on-demand
 load_trigger: When the `dimensional-analysis` skill needs depth — the π-theorem, nondimensionalization procedure, scaling laws, asymptotics, and similarity solutions.
 frozen: false
-addresses: [4, 5]
-status: new
 review: living
 ---
 

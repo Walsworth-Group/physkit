@@ -36,7 +36,8 @@ def _json_loads(text: str) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------------------
-# coscientist_yaml_v1 - the dialect the NV-NMR lab GUI's QueueWatcher already parses.
+# coscientist_yaml_v1 - a YAML order dialect an existing instrument queue parses; the name is part
+# of the wire contract, so it stays as is.
 #
 # This is the payload half of the "PhysKit joins an existing lab program with zero lab-side
 # edits" claim, and it is worth being precise about what the lab side requires, because each

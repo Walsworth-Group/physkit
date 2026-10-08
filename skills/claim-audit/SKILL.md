@@ -61,7 +61,7 @@ and spend top-down within the budget:
    independent), a finding that cites no verdict, a claimed effect with no change behind it in the unit's
    `changes` block. A gate outcome set aside by judgement — a result that met every written promotion
    condition and was written up as "refused" with no `results/contests/` entry and no decision-record
-   amendment — is a defect to name (the V_B⁻ test campaign's exp017 / exp019), as is a contest filed
+   amendment — is a defect to name, as is a contest filed
    and never resolved.
 5. **Search adequacy.** Was a serious attempt made to beat the current-best before calling it the answer:
    an orthogonal lever tried, or a reasoned argument that further gain is non-physical

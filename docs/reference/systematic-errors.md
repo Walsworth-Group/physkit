@@ -4,8 +4,6 @@ kind: reference
 layer: operating
 load: on-demand
 frozen: false
-addresses: [2, 4, 1]
-status: active
 ---
 
 # Systematic errors — hunting the biases that don't average down

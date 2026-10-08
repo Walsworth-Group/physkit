@@ -4,8 +4,6 @@ kind: reference
 layer: operating
 load: on-demand
 frozen: false
-addresses: [4, 8, 9]
-status: active
 ---
 
 # Hardware-in-the-loop operation — patterns from a qualified loop

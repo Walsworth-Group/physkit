@@ -31,8 +31,8 @@ from pathlib import Path
 
 # Roles are DISCOVERED from the campaign's own driver, never hardcoded.
 #
-# v0.10.0 added a third role (`verifier`) to a driver that had two. A hardcoded pair would have
-# kept passing while auditing none of it - and the verifier is the honesty check, so it is the
+# A driver that gains a role (the `verifier` beside the worker, say) would leave a hardcoded list
+# passing while auditing none of the new role - and the verifier is the honesty check, so it is the
 # worst role to silently skip. This is the failure class the audits exist to catch, so the
 # audits do not get to commit it. `KNOWN_ROLES` is only a probe fallback; the source scan is
 # what generalizes to a role nobody here has heard of.
@@ -49,7 +49,7 @@ def norm(text: str) -> str:
 
     Line wraps break substring matches, and every prompt file here is hard-wrapped - without
     this an audit reports a rule missing because the renderer put a newline in the middle of
-    it. Ported verbatim from the Co-scientist's `_norm`, which learned this the same way.
+    it.
     """
     return " ".join(text.lower().split())
 
@@ -124,7 +124,7 @@ def named_files(campaign: Path, spawn_text: str, role: str) -> list[Path]:
         if cand.is_file() and cand not in out:
             out.append(cand)
     # Fallback for a role whose file the prose names in a form the regex misses. NOT every role
-    # has one - v0.10's verifier is spawn-only by design - so absence is legitimate here and is
+    # has one - a spawn-only role carries its contract in the spawn string - so absence is legitimate here and is
     # reported as a thinner surface rather than treated as an error.
     rf = campaign / "roles" / f"{role}.md"
     if rf.is_file() and rf not in out:

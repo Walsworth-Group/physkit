@@ -4,8 +4,6 @@ kind: reference
 layer: operating
 load: on-demand
 frozen: false
-addresses: [5, 4, 2]
-status: active
 ---
 
 # Noise & sensitivity — know the floor before you burn the hours

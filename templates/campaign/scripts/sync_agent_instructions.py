@@ -81,7 +81,7 @@ def _first_difference(left: str, right: str) -> int:
 
 
 def check_pair(root: Path, *, required: bool = False) -> str | None:
-    """Return the normalized pair hash, or None for an unmarked legacy root."""
+    """Return the normalized pair hash, or None for an unmarked root (no managed pair)."""
     root = Path(root)
     managed = required or _marked_candidates(root)
     if not managed:
@@ -158,7 +158,8 @@ def reconcile(root: Path, source: str, *, write: bool = False) -> None:
     target_path = _exact_regular(root, target_name, may_be_missing=True)
     raw = source_path.read_bytes()
     if not _has_marker(_normalized(source_path)):
-        raise InstructionError("unmarked legacy instructions require an explicit migration, not reconciliation")
+        raise InstructionError("unmarked instructions: reconciliation copies a marked twin only - put the "
+                               "managed marker on line 1 of the authoritative file first")
     action = f"{source_name} -> {target_name} at {root}"
     if not write:
         print(f"DRY RUN: would copy {action}")
@@ -206,8 +207,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--write/--scope require --from agents|claude")
         fingerprint = check_chain(campaign)
         print((f"OK: managed instruction chain sha256={fingerprint[:12]}"
-               if fingerprint else "LEGACY: incomplete/unmarked chain; Claude behavior is unchanged, "
-                                   "but Codex requires migration"))
+               if fingerprint else "UNMANAGED: incomplete/unmarked chain; the driver requires the managed "
+                                   "CLAUDE.md/AGENTS.md pairs"))
     return 0
 
 

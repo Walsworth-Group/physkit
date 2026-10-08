@@ -46,7 +46,7 @@ is the driver's job.
 ## Step 0 — learn the campaign
 Read the active harness's instruction twin and follow its **§Where things live** table to the loop contract this
 cockpit operates (`roles/worker.md` §Long solves, escalation, and your exit, and its HARD GATE 5
-for how the loop ends; no table means the campaign predates it — read `docs/charter*.md` directly), `configs/loop.json`
+for how the loop ends), `configs/loop.json`
 (the knobs: timeouts, retries, `driver.*`, user-owned and hot-reloaded by the driver), and the current
 state: `results/JOURNAL.md` (the **NEXT:** line and §What to try next and why — the campaign's only
 forward-looking record, and what the next worker chooses its unit from) and

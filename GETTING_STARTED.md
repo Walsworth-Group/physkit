@@ -21,77 +21,32 @@ setup beyond installing the plugin; the full list is at the bottom.
 
 ## 1. Install the kit
 
-`<KIT_DIR>` below is the full path to the `kit` folder; quote it if the path contains spaces. Campaigns
-need the full plugin package—not a copy of `skills/` alone—because scaffolding reads bundled templates,
-doctrine, scripts, and validators.
+Install the full plugin; campaigns need its templates, docs, scripts, and validators, not just the skills.
 
-### Codex
-
-Register the local marketplace and install the full package:
-
+Claude Code:
 ```
-codex plugin marketplace add "<KIT_DIR>"
+/plugin marketplace add Walsworth-Group/physkit
+/plugin install physkit@physkit
+```
+Codex (then start a new session):
+```
+codex plugin marketplace add Walsworth-Group/physkit
 codex plugin add physkit@physkit
 ```
+The README's [Install](README.md#install) section covers scopes, the desktop app and VS Code, updating,
+pinning a version, and loading a modified copy.
 
-Confirm with `codex plugin list`, then start a new Codex task so it loads the refreshed plugin. The
-skills-only `~/.agents/skills` projection is suitable for general science work but is not a
-campaign-capable install.
+**Make the doctrine always-on for everyday work (recommended).** The plugin makes the skills available
+but does not inject the doctrine into an ordinary project. Copy the body of `docs/CORE.md` into the
+project's `CLAUDE.md` (Claude Code) or `AGENTS.md` (Codex); if the project is used with both, keep the two
+files identical. `CORE.md` is the single source for the spine, so refresh the copy when you update.
 
-After changing or updating the local package, rerun `codex plugin add physkit@physkit`, confirm with
-`codex plugin list --marketplace physkit`, and start another new task. Marketplace registration is only
-needed the first time.
-
-### Claude Code
-
-Installing the plugin makes its skills available as `/physkit:<skill>` in every Claude Code session on
-that machine. Pick the option that fits your setup.
-
-Option A — quick test, no install, per session. It reads the files live and needs no marketplace,
-which suits iterating on the kit:
-```
-claude --plugin-dir "<KIT_DIR>"
-```
-Re-run `/reload-plugins` after editing the kit. Coexists with `--dangerously-skip-permissions`.
-
-Option B — persistent install from GitHub, for several machines. Same command everywhere, no
-shared-drive dependency:
-```
-/plugin marketplace add <OWNER>/<REPO>
-/plugin install physkit@physkit
-```
-
-Option C — persistent install from a local or shared-drive copy. Use it when the machine can see the
-`kit` folder directly, including one unzipped from a distributed `physkit-kit.zip` (extract to a
-short local path first, for example `C:\physkit\kit`):
-```
-/plugin marketplace add "<KIT_DIR>"
-/plugin install physkit@physkit
-```
-The install is cached: after editing the kit, run `/plugin marketplace update physkit` to pull the
-changes. Option A always reads live and avoids this step.
-
-> Run the B and C commands separately. `marketplace add`, `install`, and `reload-plugins` are three
-> distinct steps; run them one at a time, not pasted together. If `/plugin marketplace add` opens an
-> "Enter marketplace source:" box, type only the path, with no quotes and nothing after it, then
-> press Enter. The quoted form works only when the whole `/plugin marketplace add "…"` line is typed
-> at once.
-
-Confirm a Claude install with `/plugin list`, then `/reload-plugins` to activate immediately.
-`/physkit:new-campaign` and the other skills are then available in all projects.
-
-Make the doctrine always-on (recommended for everyday use). The plugin makes the skills available, but
-does not automatically inject the doctrine docs into an ordinary project. In Claude Code, put the spine
-in `CLAUDE.md`: either add `@<path-to-kit>/docs/CORE.md`, or copy the body of `docs/CORE.md`. In Codex,
-copy that body into `AGENTS.md`. If the project is used with both harnesses, author once and materialize
-identical `CLAUDE.md` and `AGENTS.md` files; a scaffolded campaign does this and checks consistency for
-you. `CORE.md` is the single source for the spine.
-Campaigns work the other way round: `new-campaign` stamps the kit **version** into the campaign
-(`campaign.md`'s header and the top of `results/logbook.md`) — its doctrine and tooling provenance,
-since every release is tagged and the pin recovers the whole kit, not a live import (see §4). The
-campaign's own `CLAUDE.md`/`AGENTS.md` twins stay light: always-on carries what binds a turn (the integrity core, the
-reflexes, the hard gates, the file map), and the reasoning behind those rules is the plugin's
-`docs/CORE.md` at the stamped version rather than in every turn's context.
+Campaigns work the other way round: `new-campaign` writes the campaign's own `CLAUDE.md`/`AGENTS.md` and
+stamps the kit **version** into the campaign (`campaign.md`'s header and the top of
+`results/logbook.md`) — its doctrine and tooling provenance, since every release is tagged and the pin
+recovers the whole kit (see §4). The campaign's always-on files stay light: they carry what binds a turn
+(the integrity core, the reflexes, the hard gates, the file map), and the reasoning behind those rules is
+the plugin's `docs/CORE.md` at the stamped version rather than in every turn's context.
 
 ## 2. Start a campaign — the interview
 
@@ -252,11 +207,11 @@ run `/hooks` once to review and trust the campaign hook, then invoke:
 In Claude Code, start the established trusted session:
 
 ```
-cd "E:\path\to\your\campaign"
+cd "<path-to-your-campaign>"
 claude --dangerously-skip-permissions
 ```
-If you used the per-session `--plugin-dir` method instead of installing, add
-`--plugin-dir "<KIT_DIR>"` to this command too.
+If you load a local copy of the kit with `--plugin-dir` instead of installing it, add
+`--plugin-dir "<path-to-your-copy>"` to this command too.
 
 The fresh session is required, not optional. Starting Claude inside the campaign folder auto-loads
 the campaign's `CLAUDE.md` (the always-on doctrine and the hard gates) and activates the enforcement

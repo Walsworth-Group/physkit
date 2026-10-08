@@ -23,24 +23,21 @@ edits the scoreboard, results, configs, or anything FROZEN.
 ## Two scopes — campaign checkpoint (default) vs project checkpoint
 Every campaign lives inside a project, so both scopes are always available. Which one to run follows from the
 directory of invocation and from how far back the user asks to step.
-- **Inside a campaign** (`CLAUDE.md` present, alongside `results*/scoreboard.tsv` — a campaign scaffolded
-  before the §Where things live table existed has the former but not the table, and is still a campaign)
+- **Inside a campaign** (`CLAUDE.md` present, alongside `results/scoreboard.tsv`)
   → the per-campaign checkpoint (the rest of this skill, the default).
-- **At the project root** (`PROJECT.md` + `campaigns/`; the old layout also has `LINEAGE.md`) → the cross-campaign checkpoint in
+- **At the project root** (`PROJECT.md` + `campaigns/`) → the cross-campaign checkpoint in
   *Project mode* (next section). Asked for both, or ambiguous → project pass first, then descend into the
   active campaign.
 
 ## Project mode — the cross-campaign checkpoint
 At a project root, step back over the whole investigation, not one loop:
-1. **Read the lineage** — `PROJECT.md` §Lineage (old layout: `LINEAGE.md`), the index of every campaign
+1. **Read the lineage** — `PROJECT.md` §Lineage, the index of every campaign
    and session. Report, per campaign: its status
    (active / superseded / archived(forked) / done), the headline result, its current-best's verification
    label, and its verified findings. Flag any `active` row whose result is blank or stale.
 2. **Cross-campaign FROZEN/MUTABLE consistency.** For each coupled pair, taken from each campaign's
-   *Relationship to sibling campaigns* block (route to it via that campaign's own `CLAUDE.md` — siblings
-   may not share a layout), confirm the declarations are mutually consistent. What campaign
-   A freezes and promotes to a project-level purpose dir (`../../models/`, …; old layout:
-   `../../shared/` <!-- lint-ok: intentional pre-consolidation path -->), campaign B must treat as fixed and must consume from that promoted copy — with
+   *Relationship to sibling campaigns* block (route to it via that campaign's own `CLAUDE.md`), confirm the declarations are mutually consistent. What campaign
+   A freezes and promotes to a project-level purpose dir (`../../models/`, …), campaign B must treat as fixed and must consume from that promoted copy — with
    its lineage promotion line — never from A's working folder. **Flag a consumed artifact that has no
    promotion line**: without the mark, promoted and working files are indistinguishable. A lever A
    froze must not be mutated by B. Surface any
@@ -48,9 +45,8 @@ At a project root, step back over the whole investigation, not one loop:
    change invalidates a sibling's results without anyone noticing (the `fork-campaign` trigger).
 3. **Promotion and provenance hygiene.** Verified system-level findings from a campaign's ledger
    `finding` cells are recorded in `PROJECT.md` §Updates from discoveries, each citing its verdict
-   artifact by path — check for uncited entries (an old-layout project promotes to `DISCOVERIES.md`
-   instead, hook-gated). Durable decisions live in `PROJECT.md` §Durable decisions
-   (old layout: `PROJECT_ORIENTATION.md`), and **the guarded overview sections (§Mission, §Standing
+   artifact by path — check for uncited entries. Durable decisions live in `PROJECT.md` §Durable decisions,
+   and **the guarded overview sections (§Mission, §Standing
    constraints) change only with a matching §Durable decisions entry** — flag a change with no trail
    (project `CLAUDE.md` rule 7). Archived(forked) campaigns
    carry a `FROZEN.md` and stay listed in the lineage.
@@ -80,14 +76,13 @@ At a project root, step back over the whole investigation, not one loop:
 ## Step 0 — learn the campaign
 Read the campaign's `CLAUDE.md` and follow its **§Where things live** table — that campaign's own map — to
 the primary metric and direction, the guardrail, the baseline/floor, the levers, the checkpoint cadence N
-(a step of the Experiment Loop, not a `loop.json` knob), and whether literature search is enabled. *No
-table means the campaign predates it: read `docs/charter*.md` directly.* The checkpoint procedure it
+(a step of the Experiment Loop, not a `loop.json` knob), and whether literature search is enabled. The
+checkpoint procedure it
 points to is this skill; the per-unit iteration contract is in `roles/worker.md`. (The JOURNAL check
-is step 3 of this skill; it no longer has a separate protocol file.)
+is step 3 of this skill.)
 Also read `campaign.md` §Mission (goal, the decision served, done-criteria) and §Verification, and the
 JOURNAL's §Live hypotheses (the campaign's expectations live there now, as questions). The checkpoint re-checks orientation against these, not
-only against the metric. *(A pre-merge campaign keeps these in `docs/PROJECT_ORIENTATION.md` <!-- lint-ok: intentional pre-consolidation path --> and
-`docs/VERIFICATION_PLAN.md` — lint-ok: names the retired layout on purpose.)*
+only against the metric.
 
 **A campaign with no scoreboard rows yet is in setup, not stalled.** Its status IS the mechanical
 check: run `python scripts/run_campaign.py --preflight --backend <active harness>` and report its output verbatim — the
@@ -152,18 +147,19 @@ Flag anything wrong; do not silently fix it.
     checks have been unavailable on *every* experiment: that is a standing blind spot, and one that has
     been silently unavailable for forty runs is worth more attention than one that failed once.
   - a check that is **absent entirely** (no `checks_<NN>.json` beside a `result_<NN>.json`) means that
-    experiment predates this artifact or bypassed the runner. Say which.
+    experiment either predates the artifact (compare its date with the campaign's scaffold or upgrade
+    stamp) or bypassed the runner. Say which.
   - the **`levers`** check is HARD GATE 2 as data: a `fail` names a config key that moved without being
     declared in the config's `_levers`; `unavailable` on every experiment means the campaign's configs
-    never declare their levers (pre-`_levers` configs read that way, legitimately).
+    never declare their levers (or, for experiments older than the campaign's upgrade stamp, predate the
+    field).
   - the **`self_check`** block is the worker's own record (written through `--self-check`, never by
     hand): report how many experiments have it `recorded` versus `absent`, and, for the recorded ones,
     whether every change the runner listed under `changes` was considered (`changes_unconsidered`
     empty). A campaign whose workers never record a self-check is one whose lightest label is
     `unverified` on every row; a self-check that ignores what the unit changed is decoration.
   - the **`label`** on each artifact (`unverified` · `self-checked` · `self-verified` · `self-refuted` ·
-    `<VERDICT>/peer` · `<VERDICT>/verifier` · `<VERDICT>/audit`; an old `/review` or `/re-execution`
-    reads as `/verifier`) is what every exported claim carries: tally them, and name any result whose
+    `<VERDICT>/peer` · `<VERDICT>/verifier` · `<VERDICT>/audit`) is what every exported claim carries: tally them, and name any result whose
     `verification.owed` check never landed (a survived best still unchecked, an owed self-verify absent).
   Do not fix a flag by editing the checks file — it is the runner's output, not a worksheet.
 - **What the promotion guard denied.** `results/guard_denials.log` holds one line per denial (utc, the
@@ -185,8 +181,7 @@ Flag anything wrong; do not silently fix it.
 - **The enforcement layer is wired.** Assert all of it, loudly. An imported, hand-built, or relocated tree
   can lose the gates, leaving the doctrine unenforced. Check each:
   - `.claude/settings.json` exists and registers the promotion-guard PreToolUse hook
-    (`guard_promotion.py`; `guard_discoveries.py` in a pre-V6 tree — lint-ok: names the retired hook
-    on purpose);
+    (`guard_promotion.py`);
   - the registered guard script is present and current (the verdict-artifact version);
   - `results/verdicts/` exists and **every ledger `finding` cell cites a verdict artifact that resolves**
     (exists, CONFIRMED, named refuter; kill findings carry a graduating tier) — except a metric-epoch
@@ -196,8 +191,8 @@ Flag anything wrong; do not silently fix it.
   - `configs/loop.json` `verify.preset` is one of `none` · `minimal` · `light` · `heavy` · `intensive`
     (`docs/reference/verification-presets.md`; the driver's preflight line prints the table it resolves
     to, and every `checks_<NN>.json` stamps the preset it ran under — report a mid-campaign change of
-    preset as a fact about the record, with the units on each side). A leftover `campaign.verification`
-    key, or the old name `moderate`, is refused at preflight: the loop cannot run until it is fixed;
+    preset as a fact about the record, with the units on each side). Any other preset name is refused at
+    preflight: the loop cannot run until it is fixed;
   - `results/driver_state.json` holds the owed independent checks, and none is accumulating:
     `awaiting_survival` (new bests whose check waits for the next unit — normally one at most),
     `peer_due` (peer checks the next worker owes first; one that stays across spawns means workers are
@@ -285,8 +280,8 @@ Flag anything wrong; do not silently fix it.
 - **Resume anchors reflect the latest session (stale-digest guard).** The source of truth for resuming is
   physkit's own record: the newest `handoff` (in `archive/`), the JOURNAL, and the scoreboard. Confirm the
   latest handoff covers the most recent work; a handoff that read only the campaign tree can misstate its
-  own state. Any external resume digest (for example a user-maintained `_claude-archive/INDEX.md`) is
-  advisory only. If its stated latest or "Active range" date lags the newest session log or JOURNAL update,
+  own state. Any external resume digest or notes file is advisory
+  only. If its stated latest or "Active range" date lags the newest session log or JOURNAL update,
   flag it stale ("digest ends `<date>`, work ran to `<date>`") and advise regenerating it with whatever
   produced it. Never let an external digest override physkit's own handoff or journal on resume.
 - **Dispute records are intact** (the logbook's `Disputes & responses` lines) — never trimmed.
@@ -329,13 +324,13 @@ forward what did not change. There is no cap and the driver cuts nothing; this s
    verdict behind each line. A stale NEXT is the failure this step exists to catch: the next worker
    resumes from it.
 3. **The full record is safe, so edit freely.** Every narrative already exists verbatim in
-   `results*/logbook.md` (append-only) and every number in `results*/scoreboard.tsv`. Editing the JOURNAL
+   `results/logbook.md` (append-only) and every number in `results/scoreboard.tsv`. Editing the JOURNAL
    loses nothing. Say this to yourself before editing — an agent that treats the JOURNAL as the record
    edits too timidly and the working memory stays unusable.
 4. **Preserve the NEXT pointer** at the top, so the loop resumes cleanly.
 
-**Never edit or trim the append-only files** — `results*/logbook.md`, `results*/scoreboard.tsv` and the
-`results*/diagnostics/` logs hold the record permanently. Negative-result lessons and dispute records
+**Never edit or trim the append-only files** — `results/logbook.md`, `results/scoreboard.tsv` and the
+`results/diagnostics/` logs hold the record permanently. Negative-result lessons and dispute records
 live there for good; keep the open ones in the JOURNAL until resolved, but editing the JOURNAL
 never loses them.
 

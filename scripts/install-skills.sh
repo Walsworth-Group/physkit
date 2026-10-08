@@ -7,9 +7,10 @@
 # location Codex, OpenCode, and Gemini CLI all scan), so those harnesses auto-discover them the same
 # way Claude Code does through its plugin.
 #
-# This script does NOT touch Claude Code. Install PhysKit on Claude Code the usual way:
-#     claude plugin marketplace add <path-to-kit>
-#     claude plugin install physkit@physkit
+# This is a skills-only copy for the general science toolkit; campaigns need the full plugin. For Claude
+# Code or Codex, install the plugin instead (README.md, Install):
+#     claude plugin marketplace add Walsworth-Group/physkit && claude plugin install physkit@physkit
+#     codex plugin marketplace add Walsworth-Group/physkit && codex plugin add physkit@physkit
 #
 # The kit's ../skills/ directory stays the single source of truth; this only copies (or links) it
 # outward. Re-run after updating the kit to refresh the installed copy.

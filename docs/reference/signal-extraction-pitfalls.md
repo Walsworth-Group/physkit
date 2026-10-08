@@ -4,8 +4,6 @@ kind: reference
 layer: operating
 load: on-demand
 frozen: false
-addresses: [2, 4, 5]
-status: active
 ---
 
 # Signal-extraction pitfalls — before you trust a feature, distrust the extraction

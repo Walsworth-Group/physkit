@@ -15,7 +15,8 @@ reproducibility. {{APPROACH_SUMMARY}}
 - **Rules bind automatically.** Byte-identical [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](AGENTS.md)
   give Claude Code and Codex the same §Where things live map; their matching project twins live two
   levels above. What is FROZEN stays frozen: do not edit this campaign to satisfy a
-  newer kit or validator (see the kit's `docs/MIGRATING.md` instead).
+  newer kit or validator (upgrade it with the kit's `skills/new-campaign/scripts/upgrade_campaign.py`
+  instead).
 - **Results live in `results/`**: `scoreboard.tsv` is the numeric record (one row per experiment),
   `JOURNAL.md` the campaign's working memory (NEXT pointer, where we stand, what to try next),
   `logbook.md` the full narrative record — the runner writes both records; the agent's record goes

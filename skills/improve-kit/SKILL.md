@@ -13,10 +13,10 @@ quietly breaks you. So this skill keeps the human on the high-stakes calls via *
 **freezes the integrity core** so speed never erodes rigor (the constitution in `docs/CORE.md`).
 
 > **Stance.** *You are editing the thing that steers every future campaign.* Change the **kit source**
-> (`templates/…`, `skills/…`, `docs/…`), never a generated campaign's copy (that is a historical record).
-> Match the surrounding altitude and voice; keep the slim core slim. **Thread coherently** — when a concept
-> changes, update every place it appears (field lists, checklists, cross-references) so no stale text
-> survives. Every change **cites the run/finding that motivated it** — close the loop back to the review.
+> (`templates/…`, `skills/…`, `docs/…`), never a generated campaign's copy (that is a historical record),
+> and write it the way `docs/reference/kit-development.md` describes: altitude and voice, one statement
+> per rule, every place a concept appears threaded, outside material cited and adapted, never reproduced.
+> Every change **cites the run/finding that motivated it** — close the loop back to the review.
 
 ## Find the copy you will edit (first)
 Paths in this skill are relative to the **kit root**: the folder holding `.claude-plugin/`, `skills/`,
@@ -34,7 +34,7 @@ Paths in this skill are relative to the **kit root**: the folder holding `.claud
   newer upstream release without losing them, and gives every change a commit to cite.
 - **Know what campaigns inherit.** A change reaches new campaigns at scaffold time. An existing campaign keeps
   the kit version stamped in its `campaign.md` header until it is upgraded deliberately
-  (`skills/new-campaign/scripts/upgrade_campaign.py`, `docs/MIGRATING.md`).
+  (`skills/new-campaign/scripts/upgrade_campaign.py`).
 
 ## Inputs
 - **The proposed changes** — ideally the keeper table from a `campaign-review` report (`kit_review.md` in the
@@ -75,18 +75,17 @@ The **honesty / verification / integrity doctrine is frozen** (the CORE constitu
 change that would relax integrity, loosen verification, make a metric gameable, or remove a guard is
 **rejected outright** — not bucketed, not applied even with sign-off — unless the user is explicitly and
 deliberately re-deciding doctrine (then it is a SIGN-OFF with a loud flag and a `record-decision` entry).
-When self-improving the doctrine, **evaluate the change on held-out tasks**, not only on the incident that
-motivated it, so a gain on one case can't silently regress rigor elsewhere.
+Outside CORE, the frozen core's working text lives in `verify` (§2, §5b, the verdicts, campaign-mode
+promotion) and `report` (Standard 2, Honest); those passages may only be tightened. Context economy is
+doctrine but not frozen: how much context helps tracks model capability. When self-improving the
+doctrine, **evaluate the change on held-out tasks**, not only on the incident that motivated it, so a gain
+on one case can't silently regress rigor elsewhere.
 
 ## Apply discipline
-- **Edit the authoritative source.** A rule that ships to new campaigns lives in `templates/…` or `docs/…`; a
-  skill's behavior lives in `skills/<name>/SKILL.md`. Never patch only a generated campaign's copy — that
-  doesn't propagate and desyncs the source.
-- **Thread it.** Update every coupled location: a renamed/added concept usually touches a `SKILL.md` body + its
-  checklist + a template + `docs/CORE.md` or a reference doc + cross-references (`docs/DOCTRINE_INDEX.md` is the
-  map). Grep for the old wording and fix all hits.
-- **Stay at altitude.** Read the neighbors first; write at the same density and voice. Don't bloat the
-  always-loaded core — depth belongs in the skill, not the spine.
+- **Write it per the guide.** Read `docs/reference/kit-development.md` before the first edit: where a rule
+  lives (the kit source, one statement per rule, CORE's routing table as the map), how kit text is written
+  (rules as behaviors, why first, altitude, readable by someone outside the work), threading every place a
+  concept appears, and bringing in outside material (cite and adapt, never reproduce).
 - **Record the why** for any non-obvious change to doctrine or a default — the reason, its provenance (the
   motivating run), and a revisit-if trigger, in the `record-decision` format — in that change's
   `LOCAL_CHANGES.md` entry.
@@ -101,9 +100,8 @@ motivated it, so a gain on one case can't silently regress rigor elsewhere.
   left `pending` after you acted on it — or a change applied without being recorded against its keeper — is
   the leak this skill exists to prevent: an unfolded keeper lets the same bug recur in the next campaign. The
   loop is closed only when every consumed keeper reads applied/rejected.
-- **Validate** when templates changed: scaffold a throwaway test campaign and run
-  `python skills/new-campaign/scripts/validate_campaign.py <test campaign>` (or at minimum confirm no stray
-  `{{…}}` / `[[OPTIONAL` / `[PROPOSED]` were introduced).
+- **Check it** as the guide's *Checking a change* section says: templates through the campaign validator,
+  doctrine on held-out tasks with a fresh-agent review, prompts and roles through the prompt-surface audit.
 - **Note the kit version** (commit) the change landed in, so a future `campaign-review` targets current text.
   A new campaign stamps the plugin version and the checkout's commit, so edits left uncommitted are invisible
   in that stamp: offer to commit them on the user's branch before the next scaffold, or note in
@@ -113,6 +111,7 @@ motivated it, so a gain on one case can't silently regress rigor elsewhere.
 ## Composition
 - Consumes **`campaign-review`** output (the keeper table).
 - Uses the **`record-decision`** format for the change rationale + provenance (kept in `LOCAL_CHANGES.md`).
+- Follows **`docs/reference/kit-development.md`** for how the change is written, sourced, and checked.
 - Pairs with version control (`docs/reference/version-control.md`) — the change log is the baseline even
   without a commit.
 
@@ -121,7 +120,7 @@ motivated it, so a gain on one case can't silently regress rigor elsewhere.
 - [ ] Every change **triaged** into auto / sign-off / more-context; sign-off changes **approved before** editing.
 - [ ] Every keeper passed the **generality test** — it covers a failure class beyond its motivating incident (progressive), not an ad hoc patch (degenerating).
 - [ ] **No change weakens** the honesty/verification/integrity core (rejected, not bucketed).
-- [ ] Edited the **kit source**, not a generated campaign copy.
+- [ ] Edited the **kit source**, not a generated campaign copy, written per `kit-development.md`.
 - [ ] **Threaded** — grepped for the old wording; no stale references left behind.
-- [ ] **Logged** with motivating evidence; consumed keepers marked applied/rejected; templates **validated**.
+- [ ] **Logged** with motivating evidence; consumed keepers marked applied/rejected; the change **checked**.
 - [ ] Non-obvious doctrine/default changes carry their **why, provenance, and revisit-if** in the log.

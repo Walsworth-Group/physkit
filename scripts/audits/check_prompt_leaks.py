@@ -1,7 +1,6 @@
 """check_prompt_leaks.py - sealed-value scan of the loop-visible prompt surface.
 
-Ported from the Co-scientist's G-1 leak check (2026-07-05) and retargeted at PhysKit's rendered
-surfaces. The provenance claim a blind campaign can actually make is NOT "the prompt author
+It scans PhysKit's rendered surfaces. The provenance claim a blind campaign can actually make is NOT "the prompt author
 never saw the truth" - it is **"no withheld value appears in any loop-visible artifact, verified
 by these greps"**. This script is that verification.
 
@@ -10,9 +9,7 @@ by these greps"**. This script is that verification.
 
 ## The withheld list must live outside the campaign tree
 
-The token list IS the sealed information. The Co-scientist could keep it in a source file
-because that repo was not the blinded surface; here the campaign tree is exactly what the loop
-reads, so a `configs/blinding.json` would leak the very values it exists to protect - the
+The token list IS the sealed information. The campaign tree is exactly what the loop reads, so a `configs/blinding.json` would leak the very values it exists to protect - the
 checker would become the leak. **This script refuses to run if the withheld file is inside the
 campaign tree**, and it never echoes a token: hits are reported by source, line, and a masked
 token, with the matched line shown only under --show-lines.

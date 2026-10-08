@@ -1,15 +1,14 @@
 """audit_prompt_surface.py - verify every relied-upon rule is physically present in each
 role's RENDERED context.
 
-Ported from the Co-scientist's rung-3 audit (2026-07-07) and retargeted at PhysKit's surfaces:
-`--show-prompt <role>` + `CLAUDE.md` + the files the prompt names. The doctrine is
-`docs/reference/prompt-surface-audit.md`: doctrine only governs an agent whose rendered context
-contains it. Two rung-1/2 holes in the deployed loop entered exactly here.
+It checks PhysKit's surfaces: `--show-prompt <role>` + `CLAUDE.md` + the files the prompt names. The
+doctrine is `docs/reference/prompt-surface-audit.md`: doctrine only governs an agent whose rendered
+context contains it, and a rule missing from a role's render is a hole the loop walks straight through.
 
     python audit_prompt_surface.py <campaign_dir> [--rules docs/prompt_rules.json] [--strict]
 
 Rules come from the campaign's own `docs/prompt_rules.json` when it has one - the campaign's
-charter rules ARE the checklist - and otherwise from the kit-doctrine defaults below, which are
+own rules ARE the checklist - and otherwise from the kit-doctrine defaults below, which are
 the disciplines the shipped driver assumes each role obeys. Rule file shape:
 
     {"rules": [{"name": "...", "tokens": ["..."], "roles": ["worker"], "tier": "spawn"}]}
@@ -73,7 +72,7 @@ DEFAULT_RULES = [
      "tokens": ["metric_version"], "roles": ["worker"], "tier": "named"},
     {"name": "a-priori bound / plausibility is a gate",
      "tokens": ["plausib"], "roles": ["worker"], "tier": "named"},
-    # --- verifier (added when v0.10.0 introduced the role; discovered, not assumed) ---
+    # --- verifier (the role is discovered from the driver, not assumed) ---
     {"name": "verification is INDEPENDENT of the generating reasoning",
      "tokens": ["never saw the generating reasoning"], "roles": ["verifier"], "tier": "spawn"},
     {"name": "a verdict ARTIFACT is required, with the refuter named",
@@ -92,8 +91,8 @@ DEFAULT_RULES = [
      "tokens": ["refuted or inconclusive"], "roles": ["verifier"], "tier": "spawn"},
     {"name": "a verified kill of the metric is what a metric epoch cites",
      "tokens": ["metric epoch"], "roles": ["verifier"], "tier": "spawn"},
-    # --- all roles: the project's standing constraints ride IN the spawn string (v0.10.1) ---
-    {"name": "standing constraints delivered by value, not by reference (v0.10.1+)",
+    # --- all roles: the project's standing constraints ride IN the spawn string ---
+    {"name": "standing constraints delivered by value, not by reference",
      "tokens": ["standing constraints"], "roles": ["worker", "verifier"],
      "tier": "spawn"},
 ]

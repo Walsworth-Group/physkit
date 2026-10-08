@@ -9,8 +9,6 @@ load_trigger: Always loaded. The slim spine — read once at the start of any se
   so it never falls out of context the way an opened doc does. This file is the single source. Do not
   maintain a duplicate copy; a duplicate drifts and forks the doctrine.
 frozen: true
-addresses: [1, 2, 7, 8, 9]
-status: new
 review: living
 ---
 
@@ -173,7 +171,6 @@ Skill: `/physkit:report` (in a campaign, its capstone mode).
 | debugging | `debug` skill |
 | establishing which mechanism caused a signature | `attribute-mechanism` skill |
 | extracting a feature from a trace/spectrum | `docs/reference/signal-extraction-pitfalls.md` |
-| building a capability from an external source (paper / package / repo) | `docs/reference/ip-and-attribution.md` |
 | recording a non-obvious decision | `record-decision` skill |
 | writing any report or document | `report` skill (+ `cite-check`) |
 | standing up an autoresearch campaign | `new-campaign` skill (campaign layer) — creates its project home (`new-project`) if none exists |
@@ -184,8 +181,8 @@ Skill: `/physkit:report` (in a campaign, its capstone mode).
 | a bug invalidated a campaign's findings | `fork-campaign` (campaign layer) |
 | closing a campaign | `claim-audit`, then `report` in campaign mode (campaign layer) |
 | improving the kit itself from a finished campaign | `campaign-review`, then `improve-kit` |
+| editing the kit's skills, templates, or docs (incl. adapting outside material) | `docs/reference/kit-development.md` |
 | a discovery / next-experiment / model-discrimination campaign (archetypes G / H / I) | `discovery-loop` / `experiment-design` / `model-selection` (campaign layer) |
-| the map of all files | `docs/DOCTRINE_INDEX.md` |
 
 Surface it to the user: flag a skill the user would not know to ask for, or the next one for the project's
 stage. Give one most-relevant suggestion with its provenance, not a menu.

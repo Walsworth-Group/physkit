@@ -5,8 +5,6 @@ layer: shared
 load: on-demand
 load_trigger: A problem with multiple coordinate frames, non-trivial sign/handedness/orientation conventions, or projected/rotated vectors and gradients — invoked by frame-problem, verify (frame-consistency check), and dimensional-analysis. Not a cover-to-cover preload.
 frozen: false
-addresses: [5]
-status: new
 review: living
 ---
 

@@ -1,12 +1,11 @@
 """audit_input_liveness.py - every quantity the prompts tell the loop to reason about must have
 a LIVE data path feeding it.
 
-Ported from the Co-scientist's rung-3c audit (2026-07-22). The prompt-surface audit verifies the
-RULE is present. Six defects in that campaign shared a different failure: the rule was present
-and the QUANTITY it relies on was wired to nothing, or to the wrong input, or silently zero. The
-rule reads perfectly and steers on a number that never arrives.
+The prompt-surface audit verifies the RULE is present. This one catches a different failure: the
+rule is present and the QUANTITY it relies on is wired to nothing, or to the wrong input, or is
+silently zero. The rule reads perfectly and steers on a number that never arrives.
 
-For each quantity this audit checks, in the Co-scientist's own order:
+For each quantity this audit checks, in order:
 
   (a) STATIC  - some producer under `scripts/` actually writes the field, and
   (b) LIVE    - at least one stored result carries it NON-NULL and NOT-ALWAYS-ZERO.
@@ -87,8 +86,8 @@ def derive_quantities(campaign: Path, res: list[dict]) -> tuple[list[str], str]:
     qs: list[str] = []
     sb = campaign / "results" / "scoreboard.tsv"
     if sb.is_file():
-        # The header is the first NON-COMMENT line. v0.10 opens the scoreboard with a `#`
-        # description line; taking line 1 blindly turned that whole sentence into a "column"
+        # The header is the first NON-COMMENT line. The scoreboard opens with `#` description
+        # lines; taking line 1 blindly turned that whole sentence into a "column"
         # and then failed it for having no producer. A comment is not a quantity.
         for line in sb.read_text(encoding="utf-8").splitlines():
             if not line.strip() or line.lstrip().startswith("#"):

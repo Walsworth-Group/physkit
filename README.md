@@ -12,6 +12,10 @@ has two layers:
 Once installed, the skills appear as `/physkit:<name>` in Claude Code and `$physkit:<name>` in Codex;
 both harnesses may also select a matching skill automatically.
 
+> **Pre-release.** PhysKit is in active development (every version so far is 0.x), and its skills, templates,
+> and doctrine still change between versions. Use the latest version; earlier versions remain tagged only
+> so that work which cites them can be traced, and are not maintained.
+
 ## Start here — the five skills to know
 
 The agent routes to the right skill on its own, and suggests the non-obvious one when the work calls for
@@ -50,7 +54,7 @@ They group into nine pillars, led by the one that improves all the others. The t
 | **Traceability** | per-experiment snapshots + append-only results ledger in the scaffold; a provenance-tag convention | tag every fact (PINNED / REPORTED / INFERRED …); `cite-check` verifies each reference against its source |
 | **Autonomy & supervision** | `new-campaign` front-loads clarification; `run-campaign` launches, watches, and steers the supervised loop; `campaign-status` runs periodic health checks | clarify first; continue past the first plateau; escalate genuine forks; confirm before irreversible actions |
 | **Communication & specification** | each skill is written *why*-first; the campaign definition (`campaign.md`) streams goal + context to the agent | `record-decision`, `handoff`, `report` carry the reasoning, not just the result |
-| **Focus** (context economy) | tiered doctrine — `docs/CORE.md` always loaded, the rest on demand via `docs/DOCTRINE_INDEX.md` | delegate bounded subtasks to sub-agents on the lightest capable model; keep context small |
+| **Focus** (context economy) | tiered doctrine — `docs/CORE.md` always loaded, the rest on demand via its routing table | delegate bounded subtasks to sub-agents on the lightest capable model; keep context small |
 
 **What's permanent, and what isn't.** Most of this doctrine is meant to evolve; that is the first pillar.
 Only two things are fixed: the commitment to careful self-improvement itself, and a **frozen core** of kernels
@@ -63,66 +67,91 @@ The doctrine is stated in [`docs/CORE.md`](docs/CORE.md), which is always loaded
 
 ## Install
 
-PhysKit's skills follow the open **Agent Skills** standard (`SKILL.md`), so the same skills run on
-Claude Code, Codex, and OpenCode. Per-harness detail (plus Gemini CLI) lives in
-[docs/INSTALL_MULTI_HARNESS.md](docs/INSTALL_MULTI_HARNESS.md).
+PhysKit installs as a plugin in **Claude Code** or **Codex**. The repository is its own plugin
+marketplace, so you add it once and install from it. Campaigns need the full plugin, not a copy of the
+`skills/` folder, because scaffolding reads the bundled templates, docs, scripts, and validators.
 
 ### Claude Code
 
-**Quick test** (no install, picks up edits live):
+In a Claude Code session:
 ```
-claude --plugin-dir "<path-to-this-folder>"
-```
-
-**Persistent install** (from GitHub, or a local/shared-drive copy):
-
-**macOS/Linux** — inside the Claude Code REPL:
-```
-/plugin marketplace add <OWNER>/<REPO>          # or  "<path-to-this-folder>"
+/plugin marketplace add Walsworth-Group/physkit
 /plugin install physkit@physkit
 ```
-
-**Windows** — the `/plugin` slash command isn't recognized inside the REPL. Run the CLI form from a regular shell instead:
+`/plugin install` opens the plugin's details; choose a scope there: you (every project on this machine),
+everyone working in this repository, or this repository only. Or, from your shell:
 ```
-claude plugin marketplace add "<path>\physkit-internal\kit"
-claude plugin install physkit@physkit
+claude plugin marketplace add Walsworth-Group/physkit
+claude plugin install physkit@physkit                    # add --scope project to share with collaborators
 ```
-Then run `/reload-plugins` and confirm with `/plugin list`. Skills appear as `/physkit:<name>`.
+Type `/physkit:` to see the skills, or run `claude plugin list`. In the desktop app's Code tab, use
+**+ → Plugins → Add plugin**; in VS Code, type `/plugins`. An install at user scope is shared by the
+terminal, the desktop app, and VS Code on the same computer.
 
-### Codex — full campaign-capable package
+- **Update.** This marketplace does not auto-update unless you turn it on (`/plugin` → **Marketplaces** →
+  **Enable auto-update**). To update now: `claude plugin update physkit@physkit`, then `/reload-plugins` in
+  an open session.
+- **Pin a version.** Add the release tag to the marketplace source:
+  `/plugin marketplace add Walsworth-Group/physkit#v0.12.3`.
+- **Share with a team.** Install at project scope and commit the `.claude/settings.json` it writes. Each
+  collaborator then adds the marketplace and runs `claude plugin install physkit@physkit --scope project`
+  once.
+- **Remove.** `claude plugin uninstall physkit@physkit` (or `disable` to keep it installed but off).
 
-Register the local PhysKit marketplace and install the plugin:
+### Codex
 
+From your shell:
 ```
-codex plugin marketplace add "<path-to-this-folder>"
+codex plugin marketplace add Walsworth-Group/physkit
 codex plugin add physkit@physkit
 ```
+Or run `/plugins` in the Codex CLI to browse and install. Start a new session afterwards; skills load at
+session start and appear as `$physkit:<name>`. Check with `codex plugin list`.
 
-Confirm with `codex plugin list`, then start a new Codex task so the refreshed plugin context is loaded.
-This full-package route includes the templates, doctrine, validators, and scripts required by
-`new-campaign`, `run-campaign`, and the closed loop.
+- **Update.** `codex plugin marketplace upgrade physkit`, then `codex plugin add physkit@physkit` to refresh
+  the installed copy, and start a new session.
+- **Pin a version.** `codex plugin marketplace add Walsworth-Group/physkit --ref v0.12.3`.
+- **Remove.** `codex plugin remove physkit@physkit`.
 
-After updating this local checkout, refresh the installed copy with
-`codex plugin add physkit@physkit`, confirm it with
-`codex plugin list --marketplace physkit`, and start a new task. You do not need to register the same
-marketplace again.
+### Keep the doctrine loaded
 
-### Skills-only projection — general use, not campaigns
+The plugin makes the skills available. To keep PhysKit's rules (`docs/CORE.md`) in context on every turn
+of ordinary work, copy the body of `docs/CORE.md` into your project's `CLAUDE.md` (Claude Code) or
+`AGENTS.md` (Codex), and refresh it when you update the plugin. A campaign scaffolded by
+`/physkit:new-campaign` writes its own and needs nothing from you.
 
-Codex, OpenCode, and Gemini CLI can read standalone skills from `~/.agents/skills`. Project the skill
-folders there with the bundled installer:
+### Modifying the kit
+
+To change PhysKit for your own work, clone or fork this repository and load your copy directly:
+```
+claude --plugin-dir ./physkit        # one session, reads the files live; /reload-plugins after edits
+```
+For Codex, add your clone as a local marketplace (`codex plugin marketplace add ./physkit`, then
+`codex plugin add physkit@physkit`) and re-run the add after each edit. `/physkit:campaign-review` and
+`/physkit:improve-kit` turn a finished campaign into reviewed changes to your copy.
+
+### Other agents (general skills only)
+
+OpenCode and Gemini CLI read the same `SKILL.md` format from `~/.agents/skills`. The bundled installer
+copies the skills there:
 ```
 scripts/install-skills.sh                                            # macOS / Linux
 powershell -ExecutionPolicy Bypass -File scripts\install-skills.ps1  # Windows
 ```
-
-Restart the harness; it auto-discovers them (verify with `/skills` in Codex, or `opencode debug skill`
-in OpenCode). This projection does not include package-level `templates/` or `docs/`; use it for the
-general science toolkit only. A campaign skill discovered from this projection must not scaffold from a
-source-tree fallback—install the full Codex plugin above instead.
+This copy has no templates or docs, so it covers the general science toolkit, not campaigns. Details and
+caveats (skill-name collisions): [docs/INSTALL_MULTI_HARNESS.md](docs/INSTALL_MULTI_HARNESS.md).
 
 See [GETTING_STARTED.md](GETTING_STARTED.md) for the full walkthrough, including how to stand up and
 launch an autonomous campaign.
+
+## Sources and acknowledgments
+
+PhysKit's doctrine draws on the verification, validation and uncertainty-quantification literature (cited
+in `docs/SIMULATION_VALIDATION.md`), the agentic-research literature, and the authors' experience running
+research agents. Its rules are written as behaviors tied to the failures they prevent, after Zimmer et
+al., *The Agentic Researcher* (arXiv:2603.15914); `docs/CORE.md`'s Stage 0 ("clarify the goal") adapts
+"Think Before Coding" from the Karpathy skills collection. The bundled REVTeX 4.2 files in
+`skills/report/assets/` keep their own license (LPPL); the MIT license covers the rest.
 
 ## Layout
 
@@ -131,7 +160,7 @@ launch an autonomous campaign.
 .codex-plugin/    Codex plugin.json (points at the same skills/)
 .agents/          vendor-neutral Codex marketplace entry
 skills/           the 26 skills (general + campaign + kit improvement), each a SKILL.md
-scripts/          install-skills.{sh,ps1} — skills-only projection for general cross-harness use
+scripts/          install-skills.{sh,ps1} (skills-only copy for other agents); hardware/ and audits/ helpers
 docs/             always-on spine (CORE) + on-demand reference docs
 templates/        project + campaign scaffolds materialized by /physkit:new-project + new-campaign
 ```
