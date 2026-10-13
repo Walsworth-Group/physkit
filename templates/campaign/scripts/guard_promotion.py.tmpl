@@ -425,6 +425,49 @@ def _written_text(ti) -> str:
     return "\n".join(new for new, _ in _edit_chunks(ti))
 
 
+def _post_write_text(ti) -> str:
+    """The file as it will read after this write: a Write's content, or the current file with each edit
+    applied. Falls back to the written chunks when the file cannot be read or an edit does not apply."""
+    if ti.get("content") is not None:
+        return str(ti.get("content", ""))
+    try:
+        text = Path(str(ti.get("file_path", ""))).read_text(encoding="utf-8-sig")
+    except Exception:
+        return _written_text(ti)
+    for new, old in _edit_chunks(ti):
+        if not old or old not in text:
+            return _written_text(ti)
+        text = text.replace(old, new) if ti.get("replace_all") else text.replace(old, new, 1)
+    return text
+
+
+_JSON_FIELD = lambda key: re.compile(r'"' + key + r'"\s*:\s*"([^"]*)"')
+_PROMOTED_FROM_RE, _CONFIG_RE, _EXP_NAME_RE = (_JSON_FIELD("_promoted_from"), _JSON_FIELD("config"),
+                                                _JSON_FIELD("exp_name"))
+
+
+def promotion_subjects(ti) -> set[str]:
+    """The experiment id(s) THIS WRITE PROMOTES.
+
+    RECOMMENDED.json names exactly one, in its subject field - `_promoted_from`, else the stem of its
+    `config`, else an `exp_name` that is an experiment's: the runner's `_recommended_subject`, which the
+    driver follows and rolls back by. Never a free-text field: an experiment named in `_comment` (the
+    template's own "mirrors exp000", a "vs exp012") is not a subject, or its label and verdict would stand
+    in for the promoted one's. A scoreboard write promotes the experiments on the rows it touches."""
+    if "RECOMMENDED" in str(ti.get("file_path", "")).upper():
+        text = _post_write_text(ti)
+        m = _PROMOTED_FROM_RE.search(text)
+        named = m.group(1).strip() if m else ""
+        if not named:
+            m = _CONFIG_RE.search(text)
+            named = Path(m.group(1).strip()).stem if m and m.group(1).strip() else ""
+        if not named:
+            m = _EXP_NAME_RE.search(text)
+            named = m.group(1).strip() if m and m.group(1).strip().upper() != "RECOMMENDED" else ""
+        return {_eid(named)} if named and SUBJECT_RE.fullmatch(named) else set()
+    return {_eid(t) for t in SUBJECT_RE.findall(_written_text(ti))}
+
+
 def _read_correctness(root: Path | None) -> dict | None:
     """The recorded correctness-suite state dict, or None if there is no readable state file."""
     if root is None:
@@ -568,13 +611,12 @@ def promotion_subject_problem(root: Path | None, ti) -> str | None:
     if root is None:
         return ("cannot resolve the campaign root for this write - promote from inside the campaign "
                 "tree so the gate can find results/verdicts/")
-    toks = {t.lower() for t in SUBJECT_RE.findall(_written_text(ti))}
-    if not toks:
+    ids = promotion_subjects(ti)
+    if not ids:
         return ("cannot tell WHICH experiment this write promotes - the written content names no exp "
                 "id. Write the file so it names its experiment (RECOMMENDED.json carries its config "
                 "path; a promotion token belongs on its experiment's scoreboard row), then the gate "
                 "can match the verdict.")
-    ids = {_eid(t) for t in toks}
     vdir = root / "results" / "verdicts"
     problems = []
     if vdir.is_dir():
@@ -593,7 +635,7 @@ def promotion_subject_problem(root: Path | None, ti) -> str | None:
     if problems:
         return " | ".join(problems)
     return (f"no verdict artifact in results/verdicts/ matches the promoted experiment(s) "
-            f"{', '.join(sorted(toks))}. A promotion needs THAT experiment's CONFIRMED verdict with a "
+            f"{', '.join('exp' + i for i in sorted(ids))}. A promotion needs THAT experiment's CONFIRMED verdict with a "
             "named independent refuter (hard gate #1) - run the verify skill for it (in supervised "
             "runs the driver's verification service writes it for every unit the preset owes one), "
             "then promote.")
@@ -615,7 +657,7 @@ def promotion_row_problem(root: Path | None, ti) -> str | None:
     checks = (st or {}).get("checks") if isinstance(st, dict) else None
     if not isinstance(checks, dict) or not checks:
         return None
-    ids = {_eid(t) for t in SUBJECT_RE.findall(_written_text(ti))}
+    ids = promotion_subjects(ti)
     problems = []
     for eid in sorted(ids):
         art = root / "results" / f"checks_{eid}.json"
@@ -664,8 +706,11 @@ def verification_gate_problem(root: Path | None, ti) -> tuple:
     malformed or carries no `verification.owed` gets the strict rule: its CONFIRMED verdict (needs_verdict)."""
     if root is None:
         return None, True, False
-    text = _written_text(ti)
-    ids = {_eid(t) for t in SUBJECT_RE.findall(text)}
+    # The pointer is judged as it will read after the write (an Edit that moves `_promoted_from` keeps the
+    # label already in the file); a scoreboard token is judged on the rows the write touches.
+    rec = "RECOMMENDED" in str(ti.get("file_path", "")).upper()
+    text = _post_write_text(ti) if rec else _written_text(ti)
+    ids = promotion_subjects(ti)
     if not ids:
         return None, True, False
     problems, needs_verdict, relaxed = [], False, True
@@ -687,7 +732,7 @@ def verification_gate_problem(root: Path | None, ti) -> tuple:
             problems.append(f"exp{eid} carries the label {label!r} - a refuted result is no one's best and "
                             "never promotes; promote the best result that was not refuted")
             continue
-        if "RECOMMENDED" in str(ti.get("file_path", "")).upper():
+        if rec:
             if not written:
                 problems.append(f"exp{eid} is promoted without its label - carry \"verification_label\": "
                                 f"\"{label}\" in RECOMMENDED.json (the label on its card, from "
@@ -713,7 +758,7 @@ def contest_problem(root: Path | None, ti) -> str | None:
     cdir = root / "results" / "contests"
     if not cdir.is_dir():
         return None
-    ids = {_eid(t) for t in SUBJECT_RE.findall(_written_text(ti))}
+    ids = promotion_subjects(ti)
     if not ids:
         return None
     for p in sorted(cdir.glob("*.json")):

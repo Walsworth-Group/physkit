@@ -2,16 +2,16 @@
   "name": "physkit",
   "owner": {
     "name": "Walsworth Group",
-    "email": "walsworthgroup@gmail.com"
+    "email": "walsworth@umd.edu"
   },
   "metadata": {
-    "description": "PhysKit: rigorous physics-research skills (framing, verification, simulation V&V, debugging, reporting) plus an autonomous-research campaign layer."
+    "description": "PhysKit: a plugin for agentic research in experimental physics."
   },
   "plugins": [
     {
       "name": "physkit",
       "source": "./",
-      "description": "PhysKit — general physics-research skills + an autonomous-campaign layer."
+      "description": "PhysKit: skills, templates, and campaign tooling for agentic research in experimental physics."
     }
   ]
 }

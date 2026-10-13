@@ -1,11 +1,11 @@
 {
   "name": "physkit",
   "displayName": "PhysKit",
-  "version": "0.12.3",
-  "description": "A dual-use toolkit for rigorous physical-science work: a general layer of skills for framing problems, verifying results, designing simulations, debugging, and reporting; and a campaign layer that scaffolds and runs autonomous-research loops. Honesty and independent verification are the frozen core.",
+  "version": "0.12.4",
+  "description": "A framework for agentic research in experimental physics: skills, a core prompt, templates, and code for framing problems, verifying results, designing simulations, debugging, and reporting, plus closed-loop research campaigns with frozen metrics and independent verification.",
   "author": {
     "name": "Walsworth Group",
-    "email": "walsworthgroup@gmail.com"
+    "email": "walsworth@umd.edu"
   },
   "keywords": [
     "research",

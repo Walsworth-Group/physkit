@@ -4,10 +4,9 @@
 # preferred-citation once the preprint is posted.
 cff-version: 1.2.0
 message: >-
-  If you use PhysKit, please cite the paper below, and the software version you used (each release has
-  its own DOI on Zenodo).
+  If you use PhysKit, please cite the paper below and the version of PhysKit you used.
 type: software
-title: "PhysKit: agent skills for rigorous research in the physical sciences"
+title: "PhysKit"
 authors:
   - family-names: Reed
     given-names: Niko R.
@@ -32,7 +31,7 @@ authors:
     affiliation: "Quantum Technology Center, University of Maryland, College Park, Maryland 20742, USA"
 contact:
   - name: Walsworth Group
-    email: walsworthgroup@gmail.com
+    email: walsworth@umd.edu
 repository-code: "https://github.com/Walsworth-Group/physkit"
 license: MIT
 keywords:

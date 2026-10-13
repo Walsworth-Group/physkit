@@ -1438,7 +1438,11 @@ def write_checks(exp_id: str, label: str, score: float, diags: dict, cfg: dict,
     # Is it a NEW BEST? The fact the one check it is owed turns on, and what the per-result
     # gates wait for. Then the POST-solve invocation: the gates, and whatever the preset holds back for a
     # new best, run now that there is a result to gate. Their outcome lands in correctness_suite.
-    new_best, new_best_why = _new_best(score, props, inc, comparable=comparability["status"] != "fail")
+    current_result = _read_json(RESULTS / f"result_{exp_id}.json", {}) or {}
+    if not _comparand(current_result):
+        new_best, new_best_why = False, "current result is excluded from incumbent selection"
+    else:
+        new_best, new_best_why = _new_best(score, props, inc, comparable=comparability["status"] != "fail")
     owed = _owed_check(vrows["rows"], new_best, checks, props)
     candidate = new_best
     post = _due_checks(_read_json(CORRECTNESS_STATE, None), vrows["rows"], props,
@@ -2388,7 +2392,7 @@ _LAST_CODEX_OBSERVER = None
 
 
 def _permission_flags(mode: str) -> list[str]:
-    """`--permission-mode <mode>` for spawned agents (default 'auto' - see _driver_knobs).
+    """`--permission-mode <mode>` for spawned agents (default 'bypassPermissions' - see _driver_knobs).
     Passed ONLY to the default claude CLI: a custom AUTORESEARCH_AGENT_CMD (e.g. the test stub) is handed
     no permission flag it may not understand. An empty mode disables the flag entirely."""
     if not mode or "AUTORESEARCH_AGENT_CMD" in os.environ:
@@ -2907,16 +2911,16 @@ def _driver_knobs(loop_cfg: dict) -> dict:
         "hb_stale_s": float(d.get("heartbeat_stale_min", 5)) * 60,
         "grace_s": float(d.get("detached_grace_min", 60)) * 60,
         "inactivity_s": float(w.get("inactivity_timeout_min", 30)) * 60,
-        # The spawned roles' permission mode. Default "auto" - the standard classifier: it ALLOWS local file
-        # ops in project scope, reads, and killing a subprocess THIS session created by its tracked PID,
-        # and DENIES (cleanly, no prompt in a headless spawn - verified) the dangerous ones: killing a
-        # process it did not create, secret writes, exfiltration, spawning bypass agents. Set
-        # "bypassPermissions" for a campaign that genuinely needs a soft-denied action (an irreversible
-        # overwrite of a pre-existing untracked file, a cross-session kill, a force-push). Env override:
+        # The spawned roles' permission mode. Default "bypassPermissions": a spawn is headless, and the
+        # claude CLI's "auto" classifier denies a headless spawn its Write and Bash, so no unit can run
+        # under it. The sandbox is the campaign root, the promotion-guard hook and the runner's gates.
+        # "auto" stays available for a CLI whose classifier allows a headless worker's tools (it cleanly
+        # denies the dangerous ones: killing a process it did not create, secret writes, exfiltration);
+        # the driver halts on the first spawn whose tools were denied. Env override:
         # AUTORESEARCH_PERMISSION_MODE. Choices are the claude CLI's: auto, bypassPermissions, acceptEdits,
         # dontAsk, manual, plan.
         "permission_mode": (os.environ.get("AUTORESEARCH_PERMISSION_MODE")
-                            or str(d.get("permission_mode", "auto"))).strip() or "auto",
+                            or str(d.get("permission_mode", "bypassPermissions"))).strip() or "bypassPermissions",
         # names (default): spawns list every skill by name only; full: the harness's own listing.
         "skill_listing": (os.environ.get("AUTORESEARCH_SKILL_LISTING")
                           or str(d.get("skill_listing", "names"))).strip().lower() or "names",
@@ -3782,7 +3786,7 @@ def preflight(smoke: bool = False) -> list[str]:
                 except Exception:
                     sk = _driver_knobs({})
                 cmd = (AGENT_CMD
-                       + _permission_flags(os.environ.get("AUTORESEARCH_PERMISSION_MODE") or "auto")
+                       + _permission_flags(sk["permission_mode"])
                        + _settings_flags(sk["skill_listing"], sk["auto_memory"])
                        + _mcp_flags(sk["mcp_servers"])
                        + [smoke_prompt])
