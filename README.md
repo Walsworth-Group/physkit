@@ -35,9 +35,7 @@ DRAFT: full rewrite of the public README. Before release:
 
 ## What PhysKit is
 
-PhysKit is a research framework that turns a general-purpose AI coding agent into a careful collaborator
-for experimental and applied physics. It installs as a plugin in popular agent harnesses, currently
-**Claude Code** and **Codex**, and adds:
+PhysKit is tool to aid in collaborative agentic research in experimental and applied physics. It installs as a plugin in **Claude Code** and **Codex**, and adds:
 
 - **skills**: written procedures for recurring research tasks, such as framing a problem, verifying a
   result, designing a simulation, or writing a report;
@@ -46,15 +44,12 @@ for experimental and applied physics. It installs as a plugin in popular agent h
 - **code**: the scripts that run campaigns, score results with a frozen metric, and block a result from
   being promoted without the verification it is owed.
 
-The agent supplies the hypotheses, the code, and the interpretation. PhysKit supplies the structure:
-what to check, what to record, and when to stop and ask. The researcher directs the work and remains
-responsible for its results.
-
 PhysKit is described in our paper, *Principles and Techniques for Agentic Research in Experimental
 Physics* ([arXiv:2610.17193](https://arxiv.org/abs/2610.17193)), which sets out the principles it is built
 on and reports six case studies from the [Walsworth Group](https://walsworth.umd.edu/) at the University
 of Maryland. The case studies cover device design, hardware control, neural-network optimization,
 physical-model identification, and data analysis.
+
 
 ## Install
 
@@ -275,8 +270,7 @@ Interactive sessions in the campaign folder are not affected by any of these.
 
 ## Verification
 
-PhysKit cannot guarantee a correct result, and no framework can. It is designed to make errors less
-likely to survive, and much quicker for you to find. Verification works at several levels.
+PhysKit is designed to reduce the probability of errors and reduce the burden of verification. 
 
 **The `verify` skill.** Before a result is relied on, `verify` tries to refute it. It recomputes the
 result from code rather than repeating it, tests it against trivial baselines, limits, and bounds, and
@@ -308,8 +302,7 @@ labels: a refuted result is never promoted, and a label is never softened. At th
 the claim audit re-checks the final best result. Full details:
 [`docs/reference/verification-presets.md`](docs/reference/verification-presets.md).
 
-**Reports built for human checking.** The final check is yours. PhysKit's reports are written so it takes
-less time:
+**Reports built for human checking.** PhysKit's reports are designed to make it easier for researchers to check agent work:
 
 - Every number is labeled by where it came from (for example analytic, computed, fitted, literature,
   user-given, or assumed), and every parameter table states its source.
