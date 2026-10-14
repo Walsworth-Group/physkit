@@ -35,7 +35,7 @@ DRAFT: full rewrite of the public README. Before release:
 
 ## What PhysKit is
 
-PhysKit is tool to aid in collaborative agentic research in experimental and applied physics. It installs as a plugin in **Claude Code** and **Codex**, and adds:
+PhysKit is a tool to aid in collaborative agentic research in experimental and applied physics. It installs as a plugin in **Claude Code** and **Codex**, and adds:
 
 - **skills**: written procedures for recurring research tasks, such as framing a problem, verifying a
   result, designing a simulation, or writing a report;
