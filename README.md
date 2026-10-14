@@ -1,6 +1,5 @@
 <!--
 DRAFT: full rewrite of the public README. Before release:
-  - add the physkit.org badge and link once the site is live
   - check every claim below against the kit version being released
 -->
 <p align="center">
@@ -17,10 +16,12 @@ DRAFT: full rewrite of the public README. Before release:
   <a href="https://github.com/Walsworth-Group/physkit/tags"><img alt="Version" src="https://img.shields.io/github/v/tag/Walsworth-Group/physkit?label=version&color=0f8f7e&labelColor=11302b"></a>
   <a href="#install"><img alt="Plugin for Claude Code and Codex" src="https://img.shields.io/badge/plugin-Claude_Code_%7C_Codex-0f8f7e?labelColor=11302b"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-0f8f7e?labelColor=11302b"></a>
+  <a href="https://physkit.org"><img alt="Website" src="https://img.shields.io/badge/web-physkit.org-0f8f7e?labelColor=11302b"></a>
 </p>
 
 <p align="center">
   <a href="https://arxiv.org/abs/2610.17193"><b>Paper</b></a> ·
+  <a href="https://physkit.org"><b>Website</b></a> ·
   <a href="#install"><b>Install</b></a> ·
   <a href="GETTING_STARTED.md"><b>Getting started</b></a> ·
   <a href="#how-to-cite"><b>Cite</b></a> ·
