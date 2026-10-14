@@ -369,7 +369,9 @@ If you use PhysKit in your research, please cite the paper and the version of th
                    and Walsworth, Ronald L. and Blanchard, John W. and Ang, Daniel},
   year          = {2026},
   eprint        = {2610.17193},
-  archivePrefix = {arXiv}
+  archivePrefix = {arXiv},
+  primaryClass  = {physics.comp-ph},
+  doi           = {10.48550/arXiv.2610.17193}
 }
 ```
 

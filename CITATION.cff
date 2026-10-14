@@ -45,11 +45,14 @@ preferred-citation:
   status: preprint
   title: "Principles and Techniques for Agentic Research in Experimental Physics"
   year: 2026
+  doi: "10.48550/arXiv.2610.17193"
   url: "https://arxiv.org/abs/2610.17193"
   identifiers:
+    - type: doi
+      value: "10.48550/arXiv.2610.17193"
+      description: "arXiv:2610.17193 [physics.comp-ph]"
     - type: url
       value: "https://arxiv.org/abs/2610.17193"
-      description: "arXiv:2610.17193"
   authors:
     - family-names: Reed
       given-names: Niko R.
