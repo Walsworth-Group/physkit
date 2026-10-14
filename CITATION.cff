@@ -1,7 +1,6 @@
 # How to cite PhysKit. The author list matches the paper's. GitHub shows this file as "Cite this
 # repository"; Zenodo reads it when it archives a release. The version is deliberately absent: each
-# tagged release is the version, and its Zenodo DOI pins it. Add the arXiv identifier to
-# preferred-citation once the preprint is posted.
+# tagged release is the version, and its Zenodo DOI pins it.
 cff-version: 1.2.0
 message: >-
   If you use PhysKit, please cite the paper below and the version of PhysKit you used.
@@ -43,8 +42,14 @@ keywords:
   - Claude Code
 preferred-citation:
   type: article
-  status: in-preparation
+  status: preprint
   title: "Principles and Techniques for Agentic Research in Experimental Physics"
+  year: 2026
+  url: "https://arxiv.org/abs/2610.17193"
+  identifiers:
+    - type: url
+      value: "https://arxiv.org/abs/2610.17193"
+      description: "arXiv:2610.17193"
   authors:
     - family-names: Reed
       given-names: Niko R.
